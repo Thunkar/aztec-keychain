@@ -56,6 +56,8 @@ char* getReason(ErrorCode code) {
       return "JSON parse";
     case INVALID_PK:
       return "Invalid public key";
+    case FAILED_VERIFICATION:
+      return "Failed verification";
     default:
       return "Unknown error";
   }

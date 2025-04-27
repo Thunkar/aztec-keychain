@@ -39,5 +39,10 @@ void generateKeyPair(KeyPair *keyPair) {
 }
 
 void sign(KeyPair *keyPair, uint8_t *message, uint8_t *signature) {
-  uECC_sign(keyPair->sk, message, 32, signature, curve);
+  uECC_sign(keyPair->sk, message, 64, signature, curve);
+  int result = uECC_verify(keyPair->pk, message, 64, signature, curve);
+  if(!result) {
+    Serial.println("Failed to verify!");
+    setError(FAILED_VERIFICATION);
+  }
 }

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <uECC.h>
 #include "board.h"
+#include "stats.h"
 
 struct KeyPair {
     uint8_t sk[32];

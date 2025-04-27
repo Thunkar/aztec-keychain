@@ -11,7 +11,7 @@ enum KeyChainStatus {
 
 struct CurrentSignatureRequest {
     int index;
-    uint8_t msg[32];
+    uint8_t msg[64];
 };
 
 struct State {

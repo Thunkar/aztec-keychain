@@ -4,12 +4,13 @@
 #include "board.h"
 #include "state.h"
 
-const int ERROR_TYPES = 3;
+const int ERROR_TYPES = 4;
 
 enum ErrorCode {
     UNKNOWN,
     JSON_PARSE,
-    INVALID_PK
+    INVALID_PK,
+    FAILED_VERIFICATION
 };
 
 struct Stats {

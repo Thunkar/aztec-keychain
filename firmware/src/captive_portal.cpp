@@ -12,11 +12,11 @@ void configureKeysHandler() {
   keysHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
     KeyPair keyPair;
     if(request->method() == HTTP_POST) {
-      //state.status = GENERATING_KEY;
+      state.status = GENERATING_KEY;
       int index = json.as<JsonObject>()["index"];
       generateKeyPair(&keyPair);
       writeKeyPair(index, &keyPair);
-      //state.status = IDLE;
+      state.status = IDLE;
       request->send(200, "text/plain", "Ok");
     } else {
       AsyncJsonResponse *response = new AsyncJsonResponse();
@@ -36,19 +36,19 @@ void configureKeysHandler() {
 
 static AsyncCallbackJsonWebHandler *signatureHandler = new AsyncCallbackJsonWebHandler("/signature");
 void configureSignatureHandler() {
-  keysHandler->setMethod(HTTP_POST | HTTP_GET);
-  keysHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
+  signatureHandler->setMethod(HTTP_POST | HTTP_GET);
+  signatureHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
     KeyPair keyPair;
     JsonDocument response;
 
     if(request->method() == HTTP_POST) {
-      bool accepted = request->getParam("accepted")->value().toInt();
-      if(accepted) {
+      bool approve = json.as<JsonObject>()["approve"];
+      if(approve) {
         KeyPair keyPair;
         readKeyPair(state.currentSignatureRequest.index, &keyPair);
         uint8_t signature[64];
         sign(&keyPair, state.currentSignatureRequest.msg, signature);
-        response[F("type")] = SIGNATURE_REQUEST_ACCEPTED;
+        response[F("type")] = SIGNATURE;
         JsonArray jsonSignature = response[F("data")][F("signature")].to<JsonArray>();
         for(int i = 0; i < 64; i++) {
           jsonSignature[i] = signature[i];
@@ -70,7 +70,7 @@ void configureSignatureHandler() {
       for(int i = 0; i < 64; i++) {
         pk[i] = keyPair.pk[i];
       }
-      for(int i = 0; i < 32; i++) {
+      for(int i = 0; i < 64; i++) {
         msg[i] = state.currentSignatureRequest.msg[i];
       }
       root["index"] = state.currentSignatureRequest.index;

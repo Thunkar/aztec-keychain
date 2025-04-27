@@ -22,6 +22,15 @@ const MESSAGE_TO_SIGN = "amessagewith32charactersforsure1"
   .split("")
   .map((char) => char.charCodeAt(0));
 
+export enum CommandType {
+  SIGNATURE_REQUESTED,
+  SIGNATURE_REQUEST_REJECTED,
+  GET_KEY_REQUESTED,
+  GET_KEY,
+  ERROR,
+  SIGNATURE,
+}
+
 async function main() {
   const logger = pino({
     transport: {
@@ -38,15 +47,15 @@ async function main() {
     });
 
     const signRequest = {
-      type: 0, // 0 -> sign
+      type: CommandType.SIGNATURE_REQUESTED,
       data: {
         index: 0,
         pk: [
-          48, 168, 141, 176, 41, 177, 184, 221, 197, 48, 91, 58, 26, 192, 122,
-          155, 251, 228, 76, 87, 101, 192, 82, 239, 37, 216, 52, 91, 129, 87,
-          55, 132, 83, 234, 49, 249, 44, 139, 117, 245, 48, 161, 160, 140, 211,
-          121, 86, 141, 34, 225, 20, 255, 1, 212, 149, 128, 192, 96, 51, 189,
-          25, 248, 42, 23,
+          69, 99, 176, 132, 253, 126, 44, 31, 46, 251, 206, 200, 141, 31, 158,
+          154, 97, 98, 69, 225, 42, 40, 218, 130, 71, 119, 248, 66, 10, 7, 141,
+          38, 57, 143, 99, 96, 106, 33, 149, 19, 227, 91, 159, 149, 237, 135,
+          76, 81, 79, 20, 154, 92, 137, 252, 165, 188, 172, 216, 111, 229, 26,
+          240, 223, 211,
         ],
         msg: MESSAGE_TO_SIGN,
       },

@@ -14,17 +14,16 @@ TaskResult readCommands(unsigned long now) {
 
     JsonDocument response;
     Command type = doc[F("type")]; 
-    char output[512];
+    char output[256];
 
 
     switch (type) {
       case SIGNATURE_REQUESTED: {
         int keyIndex = doc[F("data")][F("index")];
-        uint8_t signature[64];
         KeyPair keyPair;
         readKeyPair(keyIndex, &keyPair);
         JsonArray pk_array = doc[F("data")][F("pk")];
-        for(int i = 0; i < 32; i++) {
+        for(int i = 0; i < 64; i++) {
           if(pk_array[i] != keyPair.pk[i]) {
             setError(INVALID_PK);
             response[F("type")] = ERROR;
@@ -35,14 +34,23 @@ TaskResult readCommands(unsigned long now) {
           }
         }
         JsonArray data_array = doc[F("data")][F("msg")];
-        uint8_t data[32];
-        for (int i = 0; i < 32; i++) {
-          data[i] = data_array[i];
+        for (int i = 0; i < 64; i++) {
+          state.currentSignatureRequest.msg[i] = data_array[i];
         }
 
-        state.currentSignatureRequest = { index: keyIndex, *data };
+        state.currentSignatureRequest.index = keyIndex;
         state.status = SIGNING;
-        response[F("type")] = SIGNATURE_REQUEST_ACCEPTED;
+        break;
+      } 
+      case GET_KEY_REQUESTED: {
+        int keyIndex = doc[F("data")][F("index")];
+        KeyPair keyPair;
+        readKeyPair(keyIndex, &keyPair);
+        response[F("type")] = KEY;
+        JsonArray pk_array = response[F("data")][F("pk")].to<JsonArray>();
+        for (int i = 0; i < 64; i++) {
+          pk_array[i] = keyPair.pk[i];
+        }
         serializeJson(response, output);
         Serial.println(output);
         break;
