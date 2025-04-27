@@ -8,7 +8,7 @@ import {
   ThemeOptions,
   ThemeProvider,
 } from "@mui/material";
-import { DataContextContainer } from "./components/dataContextContainer.tsx";
+import { DataContextContainer } from "./components/DataContextContainer.tsx";
 import { colors } from "./styles.ts";
 
 const themeOptions: ThemeOptions = {

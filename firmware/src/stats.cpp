@@ -54,6 +54,8 @@ char* getReason(ErrorCode code) {
   switch(code) {
     case JSON_PARSE:
       return "JSON parse";
+    case INVALID_PK:
+      return "Invalid public key";
     default:
       return "Unknown error";
   }

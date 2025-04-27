@@ -6,7 +6,6 @@ void writeKeyPair(int index, KeyPair *keyPair){
   }
   for(int i = 0; i < 64; i++) {
     EEPROM.write(PUBLIC_KEYS_OFFSET + index * 64 + i, keyPair->pk[i] & 0xFF);
-    Serial.println(keyPair->pk[i]);
   }
   EEPROM.commit();
 }

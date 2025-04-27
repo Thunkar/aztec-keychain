@@ -1,8 +1,10 @@
-#include "wifi_setup.h"
+#include "captive_portal.h"
 
 DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/");
+
+
 
 static AsyncCallbackJsonWebHandler *keysHandler = new AsyncCallbackJsonWebHandler("/keys");
 void configureKeysHandler() {
@@ -10,13 +12,11 @@ void configureKeysHandler() {
   keysHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
     KeyPair keyPair;
     if(request->method() == HTTP_POST) {
+      //state.status = GENERATING_KEY;
       int index = json.as<JsonObject>()["index"];
       generateKeyPair(&keyPair);
-      for(int i = 0; i < 64; i++) {
-        auto what = keyPair.pk[i];
-        Serial.println(what);
-      }
       writeKeyPair(index, &keyPair);
+      //state.status = IDLE;
       request->send(200, "text/plain", "Ok");
     } else {
       AsyncJsonResponse *response = new AsyncJsonResponse();
@@ -28,6 +28,52 @@ void configureKeysHandler() {
         root["pk"][i] = keyPair.pk[i];
       }
       root["index"] = index;
+      response->setLength();
+      request->send(response);
+    }
+  });
+}
+
+static AsyncCallbackJsonWebHandler *signatureHandler = new AsyncCallbackJsonWebHandler("/signature");
+void configureSignatureHandler() {
+  keysHandler->setMethod(HTTP_POST | HTTP_GET);
+  keysHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
+    KeyPair keyPair;
+    JsonDocument response;
+
+    if(request->method() == HTTP_POST) {
+      bool accepted = request->getParam("accepted")->value().toInt();
+      if(accepted) {
+        KeyPair keyPair;
+        readKeyPair(state.currentSignatureRequest.index, &keyPair);
+        uint8_t signature[64];
+        sign(&keyPair, state.currentSignatureRequest.msg, signature);
+        response[F("type")] = SIGNATURE_REQUEST_ACCEPTED;
+        JsonArray jsonSignature = response[F("data")][F("signature")].to<JsonArray>();
+        for(int i = 0; i < 64; i++) {
+          jsonSignature[i] = signature[i];
+        }
+      } else {
+        response[F("type")] = SIGNATURE_REQUEST_REJECTED;
+      }
+      char output[512];
+      serializeJson(response, output);
+      Serial.println(output);
+      state.status = IDLE;
+      request->send(200, "text/plain", "Ok");
+    } else {
+      AsyncJsonResponse *response = new AsyncJsonResponse();
+      JsonObject root = response->getRoot().to<JsonObject>();
+      readKeyPair(state.currentSignatureRequest.index, &keyPair);
+      JsonArray pk = root["pk"].to<JsonArray>();
+      JsonArray msg = root["msg"].to<JsonArray>();
+      for(int i = 0; i < 64; i++) {
+        pk[i] = keyPair.pk[i];
+      }
+      for(int i = 0; i < 32; i++) {
+        msg[i] = state.currentSignatureRequest.msg[i];
+      }
+      root["index"] = state.currentSignatureRequest.index;
       response->setLength();
       request->send(response);
     }
@@ -71,11 +117,13 @@ void setupServer(){
   dnsServer.start(53, "*", WiFi.softAPIP());
 
   configureKeysHandler();
+  configureSignatureHandler();
 
   ws.onEvent(onEvent);
   server.addHandler(&ws);
   server.addHandler(new CaptivePortalHandler()).setFilter(ON_AP_FILTER);
   server.addHandler(keysHandler);
+  server.addHandler(signatureHandler);
   server.onNotFound([&](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/index.html", String(), false);
   });

@@ -11,6 +11,7 @@
 #include "config.h"
 #include "state.h"
 #include "scheduler.h"
+#include "serial_commands.h"
 
 void setupServer();
 

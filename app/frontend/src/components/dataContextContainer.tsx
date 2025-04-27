@@ -1,7 +1,11 @@
 import { DataContext } from "../utils/context";
 import { useEffect, useState, type ReactNode } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
-import { loadKey, requestNewKey } from "../utils/requests";
+import {
+  loadCurrentSignatureRequest,
+  loadKey,
+  requestNewKey,
+} from "../utils/requests";
 
 const MAX_KEYS = 5;
 
@@ -17,6 +21,11 @@ export const KeyChainStatus: KeyChainStatusType[] = [
   "SIGNING",
 ] as const;
 
+export type CurrentSignatureRequest = {
+  index: number;
+  msg: number[];
+};
+
 export const DataContextContainer = function ({
   children,
 }: {
@@ -29,6 +38,11 @@ export const DataContextContainer = function ({
   const [keyChainStatus, setKeyChainStatus] =
     useState<KeyChainStatusType>("IDLE");
   const [keys, setKeys] = useState<Key[]>([]);
+
+  const [currentSignatureRequest, setCurrentSignatureRequest] =
+    useState<CurrentSignatureRequest | null>(null);
+
+  const [lastKeyChainStatus, setLastKeyChainStatus] = useState(0);
 
   const { lastMessage, readyState } = useWebSocket(
     import.meta.env.VITE_WS_URL ?? `ws://${window.location.hostname}`,
@@ -53,7 +67,8 @@ export const DataContextContainer = function ({
 
   useEffect(() => {
     const [status] = lastMessage?.data.split(",") ?? [];
-    if (status !== undefined) {
+    if (status !== undefined && parseInt(status) !== lastKeyChainStatus) {
+      setLastKeyChainStatus(parseInt(status));
       switch (parseInt(status)) {
         case 0: {
           setKeyChainStatus("IDLE");
@@ -70,6 +85,16 @@ export const DataContextContainer = function ({
       }
     }
   }, [lastMessage]);
+
+  useEffect(() => {
+    const refreshCurrentSignatureRequest = async () => {
+      const currentSignatureRequest = await loadCurrentSignatureRequest();
+      setCurrentSignatureRequest(currentSignatureRequest);
+    };
+    if (keyChainStatus === "SIGNING") {
+      refreshCurrentSignatureRequest();
+    }
+  }, [keyChainStatus]);
 
   const loadKeys = async () => {
     let keys = [];
@@ -96,6 +121,7 @@ export const DataContextContainer = function ({
     websocketStatus,
     keys,
     keyChainStatus,
+    currentSignatureRequest,
     generateKeyPair,
   };
 

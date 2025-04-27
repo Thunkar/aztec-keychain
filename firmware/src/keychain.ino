@@ -3,8 +3,8 @@
 #include "state.h"
 #include "stats.h"
 #include "scheduler.h"
-#include "readCommands.h"
-#include "wifi_setup.h"
+#include "serial_commands.h"
+#include "captive_portal.h"
 
 #define DEBUG
 
@@ -39,9 +39,9 @@ void setup() {
     state.activeTasks[1] = true;
   }
 
-  #ifdef DEBUG
   Serial.begin(115200);
-  #endif
+  Serial.setRxBufferSize(512);
+  Serial.setTxBufferSize(512);
 
   if(state.activeTasks[1]) {
     if(!SPIFFS.begin(true)){

@@ -7,6 +7,7 @@ import Button from "@mui/material/Button";
 import { keyToShortStr } from "./utils/format";
 import { css } from "@emotion/react";
 import { colors } from "./styles";
+import { SignDialog } from "./components/SignDialog";
 
 const keyBox = css({
   display: "flex",
@@ -38,8 +39,13 @@ function App() {
     }
   };
 
-  const { generateKeyPair, keyChainStatus, websocketStatus, keys } =
-    useContext(DataContext);
+  const {
+    generateKeyPair,
+    keyChainStatus,
+    websocketStatus,
+    keys,
+    currentSignatureRequest,
+  } = useContext(DataContext);
 
   return (
     <>
@@ -49,6 +55,9 @@ function App() {
       ></pre>
       <Typography variant="subtitle1">
         Websocket status: {websocketStatus}
+      </Typography>
+      <Typography variant="subtitle1">
+        Keychain status: {keyChainStatus}
       </Typography>
       <Box
         sx={{
@@ -60,7 +69,10 @@ function App() {
       >
         {keys.map((key, index) => (
           <Box css={keyBox} key={index}>
-            <Typography variant="overline" sx={{ fontSize: "1rem" }}>
+            <Typography
+              variant="overline"
+              sx={{ fontSize: "1rem", textTransform: "unset" }}
+            >
               {index}. {keyToShortStr(key)}
             </Typography>
             <Button
@@ -74,6 +86,9 @@ function App() {
           </Box>
         ))}
       </Box>
+      {keyChainStatus === "SIGNING" && currentSignatureRequest !== null && (
+        <SignDialog />
+      )}
     </>
   );
 }
