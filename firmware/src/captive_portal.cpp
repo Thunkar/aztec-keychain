@@ -48,13 +48,13 @@ void configureSignatureHandler() {
         readKeyPair(state.currentSignatureRequest.index, &keyPair);
         uint8_t signature[64];
         sign(&keyPair, state.currentSignatureRequest.msg, signature);
-        response[F("type")] = SIGNATURE;
+        response[F("type")] = SIGNATURE_ACCEPTED_RESPONSE;
         JsonArray jsonSignature = response[F("data")][F("signature")].to<JsonArray>();
         for(int i = 0; i < 64; i++) {
           jsonSignature[i] = signature[i];
         }
       } else {
-        response[F("type")] = SIGNATURE_REQUEST_REJECTED;
+        response[F("type")] = SIGNATURE_REJECTED_RESPONSE;
       }
       char output[512];
       serializeJson(response, output);

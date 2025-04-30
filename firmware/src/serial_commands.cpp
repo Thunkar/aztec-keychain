@@ -14,11 +14,11 @@ TaskResult readCommands(unsigned long now) {
 
     JsonDocument response;
     Command type = doc[F("type")]; 
-    char output[256];
+    char output[512];
 
 
     switch (type) {
-      case SIGNATURE_REQUESTED: {
+      case SIGNATURE_REQUEST: {
         int keyIndex = doc[F("data")][F("index")];
         KeyPair keyPair;
         readKeyPair(keyIndex, &keyPair);
@@ -46,7 +46,7 @@ TaskResult readCommands(unsigned long now) {
         int keyIndex = doc[F("data")][F("index")];
         KeyPair keyPair;
         readKeyPair(keyIndex, &keyPair);
-        response[F("type")] = KEY;
+        response[F("type")] = GET_KEY_RESPONSE;
         JsonArray pk_array = response[F("data")][F("pk")].to<JsonArray>();
         for (int i = 0; i < 64; i++) {
           pk_array[i] = keyPair.pk[i];
@@ -54,6 +54,23 @@ TaskResult readCommands(unsigned long now) {
         serializeJson(response, output);
         Serial.println(output);
         break;
+      }
+      case GET_ARTIFACT_REQUEST: {
+          File artifact = SPIFFS.open("/EcdsaRAccount.json.gz", "r");
+          JsonDocument responseStart;
+          responseStart[F("type")] = GET_ARTIFACT_RESPONSE_START;
+          responseStart[F("data")][F("size")] = artifact.size();
+          serializeJson(responseStart, output);
+          Serial.println(output);
+          ReadBufferingStream bufferedFile{artifact, 64};  
+          char buffer[256];
+          while(bufferedFile.available()) {
+            size_t bytesRead = bufferedFile.readBytes(buffer, sizeof(buffer));
+            Serial.write(buffer, bytesRead);
+          }
+          artifact.close();
+          Serial.println("");
+          break;
       }
       default:
         // Unknown command
