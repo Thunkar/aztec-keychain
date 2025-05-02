@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <Preferences.h>
 #include "curve.h"
 #include "board.h"
 
@@ -21,9 +22,13 @@ extern Config config;
 void readKeyPair(int index, KeyPair *keyPair);
 void readSecretKey(int index, uint8_t *msk);
 void readSalt(int index, uint8_t *salt);
+bool readPassword(char *password);
+void readSSID(char *ssid);
 
 void writeKeyPair(int index, KeyPair *keyPair);
 void writeSecretKey(int index, uint8_t *msk);
 void writeSalt(int index, uint8_t *salt);
+void writePassword(const char *password);
+void writeSSID(const char *ssid);
 
-void setupEEPROM();
+void setupStorage();

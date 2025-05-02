@@ -33,7 +33,7 @@ void setup() {
 
   ONSequence();
   setupCurve();
-  setupEEPROM();
+  setupStorage();
 
   if(state.setupMode) {
     state.activeTasks[1] = true;
@@ -48,7 +48,16 @@ void setup() {
       Serial.println(F("An Error has occurred while mounting SPIFFS"));
       return;
     }
-    WiFi.softAP("Aztec keychain");
+    char SSID[32];
+    readSSID(SSID);
+
+    char password[32];
+
+    if(!readPassword(password)) {
+      WiFi.softAP(String(SSID).c_str());
+    } else {
+      WiFi.softAP(String(SSID).c_str(), String(password).c_str());
+    }
     setupServer();
     #ifdef DEBUG
     Serial.println(F("Setup mode"));

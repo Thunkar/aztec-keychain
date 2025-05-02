@@ -9,11 +9,17 @@ export const DataContext = createContext<{
   accounts: Account[];
   keyChainStatus: string;
   currentSignatureRequest: CurrentSignatureRequest | null;
+  SSID: string;
+  password: string;
+  storeSettings: (SSID: string, password: string) => Promise<void>;
   generateAccount: (index: number) => Promise<void>;
 }>({
   websocketStatus: "Uninstantiated",
   keyChainStatus: "IDLE",
   currentSignatureRequest: null,
   accounts: [],
+  SSID: "",
+  password: "",
+  storeSettings: (_SSID: string, _password: string) => Promise.resolve(),
   generateAccount: (_index: number) => Promise.resolve(),
 });

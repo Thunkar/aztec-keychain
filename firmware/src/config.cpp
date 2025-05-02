@@ -1,5 +1,7 @@
 #include "config.h"
 
+Preferences preferences;
+
 void writeKeyPair(int index, KeyPair *keyPair){ 
   for(int i = 0; i < 32; i++) {
     EEPROM.write(index * 32 + i, keyPair->sk[i] & 0xFF);
@@ -31,6 +33,21 @@ void readSalt(int index, uint8_t *salt) {
   }
 }
 
+bool readPassword(char *password) {
+  String pass = preferences.getString("password", "");
+  if(pass.length() == 0) {
+    return false;
+  } else {
+    pass.toCharArray(password, 32);
+    return true;
+  }
+}
+
+void readSSID(char *SSID) {
+  String SSIDStr = preferences.getString("SSID", "Aztec keychain");
+  SSIDStr.toCharArray(SSID, 32);
+}
+
 void writeSecretKey(int index, uint8_t *msk) {
   for(int i = 0; i < 32; i++) {
     EEPROM.write(SECRET_KEYS_OFFSET + index * 32 + i, msk[i] & 0xFF);
@@ -45,6 +62,15 @@ void writeSalt(int index, uint8_t *salt) {
   EEPROM.commit();
 }
 
-void setupEEPROM() {
+void writePassword(const char *password) {
+  preferences.putString("password", password);
+}
+
+void writeSSID(const char *ssid) {
+  preferences.putString("SSID", ssid);
+}
+
+void setupStorage() {
   EEPROM.begin(MAX_ACCOUNTS * (32+64+32+32));
+  preferences.begin("keychain", false);
 }

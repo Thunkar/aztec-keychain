@@ -16,7 +16,6 @@ TaskResult readCommands(unsigned long now) {
     Command type = doc[F("type")]; 
     char output[1024];
 
-
     switch (type) {
       case SIGNATURE_REQUEST: {
         int keyIndex = doc[F("data")][F("index")];
@@ -76,10 +75,9 @@ TaskResult readCommands(unsigned long now) {
           serializeJson(responseStart, output);
           Serial.println(output);
           ReadBufferingStream bufferedFile{artifact, 64};  
-          char buffer[256];
           while(bufferedFile.available()) {
-            size_t bytesRead = bufferedFile.readBytes(buffer, sizeof(buffer));
-            Serial.write(buffer, bytesRead);
+            size_t bytesRead = bufferedFile.readBytes(output, sizeof(output));
+            Serial.write(output, bytesRead);
           }
           artifact.close();
           Serial.println("");

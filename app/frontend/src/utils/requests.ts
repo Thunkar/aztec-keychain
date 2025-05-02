@@ -1,6 +1,7 @@
 import {
   CurrentSignatureRequest,
   Account,
+  Settings,
 } from "../components/DataContextContainer";
 
 function buildUrl(path: string): URL {
@@ -46,6 +47,26 @@ export async function finishSignatureRequest(approve: boolean) {
   await fetch(url, {
     method: "POST",
     body: JSON.stringify({ approve }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+export async function loadSettings(): Promise<Settings> {
+  const url = buildUrl("settings");
+
+  const response = await fetch(url);
+  const body = await response.json();
+  return body;
+}
+
+export async function writeSettings(settings: Settings) {
+  const url = buildUrl("settings");
+
+  await fetch(url, {
+    method: "POST",
+    body: JSON.stringify(settings),
     headers: {
       "Content-Type": "application/json",
     },

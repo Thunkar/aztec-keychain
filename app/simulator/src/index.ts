@@ -219,6 +219,15 @@ async function main() {
       currentSignatureRequest: { index: 0, msg: MESSAGE_TO_SIGN },
     };
 
+    type Settings = {
+      SSID: string;
+      password: string;
+    };
+    const settings: Settings = {
+      SSID: "Aztec keychain",
+      password: "",
+    };
+
     app.post(
       "/accounts",
       (req: Request<any, any, AccountIndex>, res: Response) => {
@@ -271,6 +280,16 @@ async function main() {
         res.status(200).json(state.currentSignatureRequest);
       }
     );
+
+    app.post("/settings", (req: Request<any, any, Settings>, res: Response) => {
+      settings.SSID = req.body.SSID;
+      settings.password = req.body.password;
+      res.status(200).send("Ok");
+    });
+
+    app.get("/settings", (req: Request, res: Response<Settings>) => {
+      res.status(200).json(settings);
+    });
 
     const server = createServer(app);
     const wss = new WebSocketServer({ server });

@@ -4,6 +4,31 @@ DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/");
 
+static AsyncCallbackJsonWebHandler *settingsHandler = new AsyncCallbackJsonWebHandler("/settings");
+void configureSettingsHandler() {
+  settingsHandler->setMethod(HTTP_POST | HTTP_GET);
+  settingsHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
+    if(request->method() == HTTP_POST) {
+      const char* SSID = json.as<JsonObject>()["SSID"];
+      const char* password = json.as<JsonObject>()["password"];
+      writeSSID(SSID);
+      writePassword(password);
+      request->send(200, "text/plain", "Ok");
+    } else {
+      AsyncJsonResponse *response = new AsyncJsonResponse();
+      JsonObject root = response->getRoot().to<JsonObject>();
+      char SSID[32];
+      char password[32];
+      readSSID(SSID);
+      readPassword(password);
+      root["SSID"] = SSID;
+      root["password"] = password;
+      response->setLength();
+      request->send(response);
+    }
+  });
+}
+
 static AsyncCallbackJsonWebHandler *accountsHandler = new AsyncCallbackJsonWebHandler("/accounts");
 void configureaccountsHandler() {
   accountsHandler->setMethod(HTTP_POST | HTTP_GET);
@@ -134,12 +159,14 @@ void setupServer(){
 
   configureaccountsHandler();
   configureSignatureHandler();
+  configureSettingsHandler();
 
   ws.onEvent(onEvent);
   server.addHandler(&ws);
   server.addHandler(new CaptivePortalHandler()).setFilter(ON_AP_FILTER);
   server.addHandler(accountsHandler);
   server.addHandler(signatureHandler);
+  server.addHandler(settingsHandler);
   server.onNotFound([&](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/index.html", String(), false);
   });

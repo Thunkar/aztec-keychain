@@ -5,6 +5,8 @@ import {
   loadCurrentSignatureRequest,
   loadAccount,
   requestNewAccount,
+  loadSettings,
+  writeSettings,
 } from "../utils/requests";
 
 const MAX_ACCOUNTS = 5;
@@ -29,6 +31,11 @@ export type CurrentSignatureRequest = {
   msg: number[];
 };
 
+export type Settings = {
+  SSID: string;
+  password: string;
+};
+
 export const DataContextContainer = function ({
   children,
 }: {
@@ -47,11 +54,17 @@ export const DataContextContainer = function ({
 
   const [lastKeyChainStatus, setLastKeyChainStatus] = useState(0);
 
+  const [SSID, setSSID] = useState("");
+  const [password, setPassword] = useState("");
+
   const { lastMessage, readyState } = useWebSocket(
     import.meta.env.VITE_WS_URL ?? `ws://${window.location.hostname}`,
     {
-      reconnectAttempts: 10,
-      reconnectInterval: 3000,
+      share: true,
+      retryOnError: true,
+      reconnectAttempts: 10e5,
+      reconnectInterval: 1000,
+      shouldReconnect: () => true,
     },
     connectWebSocket
   );
@@ -109,8 +122,20 @@ export const DataContextContainer = function ({
     setConnectWebSocket(true);
   };
 
+  const reloadSettings = async () => {
+    const { SSID, password } = await loadSettings();
+    setSSID(SSID);
+    setPassword(password);
+  };
+
+  const storeSettings = async (SSID: string, password: string) => {
+    await writeSettings({ SSID, password });
+    await reloadSettings();
+  };
+
   useEffect(() => {
     loadAccounts();
+    reloadSettings();
   }, []);
 
   const generateAccount = async (index: number) => {
@@ -125,6 +150,9 @@ export const DataContextContainer = function ({
     accounts,
     keyChainStatus,
     currentSignatureRequest,
+    SSID,
+    password,
+    storeSettings,
     generateAccount,
   };
 
