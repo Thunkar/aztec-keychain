@@ -40,8 +40,8 @@ void setup() {
   }
 
   Serial.begin(115200);
-  Serial.setRxBufferSize(512);
-  Serial.setTxBufferSize(512);
+  Serial.setRxBufferSize(1024);
+  Serial.setTxBufferSize(1024);
 
   if(state.activeTasks[1]) {
     if(!SPIFFS.begin(true)){

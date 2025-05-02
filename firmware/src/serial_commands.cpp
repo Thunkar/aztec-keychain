@@ -14,7 +14,7 @@ TaskResult readCommands(unsigned long now) {
 
     JsonDocument response;
     Command type = doc[F("type")]; 
-    char output[512];
+    char output[1024];
 
 
     switch (type) {
@@ -42,14 +42,27 @@ TaskResult readCommands(unsigned long now) {
         state.status = SIGNING;
         break;
       } 
-      case GET_KEY_REQUESTED: {
-        int keyIndex = doc[F("data")][F("index")];
-        KeyPair keyPair;
-        readKeyPair(keyIndex, &keyPair);
-        response[F("type")] = GET_KEY_RESPONSE;
+      case GET_ACCOUNT_REQUESTED: {
+        int index = doc[F("data")][F("index")];
+        response[F("type")] = GET_ACCOUNT_RESPONSE;
         JsonArray pk_array = response[F("data")][F("pk")].to<JsonArray>();
+        JsonArray msk_array = response[F("data")][F("msk")].to<JsonArray>();
+        JsonArray salt_array = response[F("data")][F("salt")].to<JsonArray>();
+
+        KeyPair keyPair;
+        readKeyPair(index, &keyPair);
         for (int i = 0; i < 64; i++) {
           pk_array[i] = keyPair.pk[i];
+        }
+        uint8_t msk[32];
+        readSecretKey(index, msk);
+        for(int i = 0; i < 32; i++) {
+          msk_array[i] = msk[i];
+        }
+        uint8_t salt[32];
+        readSalt(index, salt);
+        for(int i = 0; i < 32; i++) {
+          salt_array[i] = salt[i];
         }
         serializeJson(response, output);
         Serial.println(output);

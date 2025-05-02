@@ -10,7 +10,7 @@ import Button from "@mui/material/Button";
 import { finishSignatureRequest } from "../utils/requests";
 
 export function SignDialog() {
-  const { currentSignatureRequest, keyChainStatus, keys } =
+  const { currentSignatureRequest, keyChainStatus, accounts } =
     useContext(DataContext);
   return (
     <Dialog
@@ -31,7 +31,7 @@ export function SignDialog() {
         </Typography>
         <Typography variant="subtitle1">Key:</Typography>
         <Typography variant="subtitle2">
-          {keyToShortStr(keys[currentSignatureRequest!.index])}
+          {keyToShortStr(accounts[currentSignatureRequest!.index].pk)}
         </Typography>
       </DialogContent>
       <DialogActions>

@@ -9,6 +9,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { SerialPort } from "serialport";
 import { inflate } from "pako";
+import { randomBytes } from "crypto";
 
 const argv = await yargs(hideBin(process.argv))
   .options({
@@ -27,8 +28,8 @@ export enum CommandType {
   SIGNATURE_REQUEST,
   SIGNATURE_ACCEPTED_RESPONSE,
   SIGNATURE_REJECTED_RESPONSE,
-  GET_KEY_REQUESTED,
-  GET_KEY_RESPONSE,
+  GET_ACCOUNT_REQUESTED,
+  GET_ACCOUNT_RESPONSE,
   GET_ARTIFACT_REQUEST,
   GET_ARTIFACT_RESPONSE_START,
   ERROR,
@@ -49,7 +50,7 @@ const signRequest = {
 };
 
 const keyRequest = {
-  type: CommandType.GET_KEY_REQUESTED,
+  type: CommandType.GET_ACCOUNT_REQUESTED,
   data: {
     index: 0,
   },
@@ -186,20 +187,30 @@ async function main() {
     const MAX_KEYS = 5;
     const PK_LENGTH = 64;
     const SK_LENGTH = 32;
+    const MSK_LENGTH = 32;
+    const SALT_LENGTH = 32;
 
-    type KeyIndex = { index: number };
-    type Key = { sk: number[]; pk: number[]; index: number };
+    type AccountIndex = { index: number };
+    type Account = {
+      salt: number[];
+      msk: number[];
+      sk: number[];
+      pk: number[];
+      index: number;
+    };
     type CurrentSignatureRequest = { index: number; msg: number[] };
 
     type State = {
-      keys: Key[];
-      status: 0 | 1 | 2; // 0 -> IDLE, 1 -> GENERATING KEY, 2 -> SIGNING
+      accounts: Account[];
+      status: 0 | 1 | 2; // 0 -> IDLE, 1 -> GENERATING_ACCOUNT, 2 -> SIGNING
       currentSignatureRequest: CurrentSignatureRequest;
     };
     const state: State = {
-      keys: Array(MAX_KEYS)
+      accounts: Array(MAX_KEYS)
         .fill(0)
         .map((_, i) => ({
+          salt: Array(SALT_LENGTH).fill(255),
+          msk: Array(MSK_LENGTH).fill(255),
           pk: Array(PK_LENGTH).fill(255),
           sk: Array(SK_LENGTH).fill(255),
           index: i,
@@ -208,25 +219,39 @@ async function main() {
       currentSignatureRequest: { index: 0, msg: MESSAGE_TO_SIGN },
     };
 
-    app.post("/keys", (req: Request<any, any, KeyIndex>, res: Response) => {
-      const { index } = req.body;
-      state.status = 1;
-      const sk = secp256r1.utils.randomPrivateKey();
-      const pk = secp256r1.getPublicKey(sk);
-      state.keys[index] = { sk: Array.from(sk), pk: Array.from(pk), index };
-      state.status = 0;
-      res.status(200).send("Ok");
-    });
+    app.post(
+      "/accounts",
+      (req: Request<any, any, AccountIndex>, res: Response) => {
+        const { index } = req.body;
+        state.status = 1;
+        const sk = secp256r1.utils.randomPrivateKey();
+        const pk = secp256r1.getPublicKey(sk);
+        state.accounts[index] = {
+          msk: Array.from(randomBytes(MSK_LENGTH)),
+          salt: Array.from(randomBytes(SALT_LENGTH)),
+          sk: Array.from(sk),
+          pk: Array.from(pk),
+          index,
+        };
+        state.status = 0;
+        res.status(200).send("Ok");
+      }
+    );
 
     app.get(
-      "/keys",
+      "/accounts",
       (
-        req: Request<any, any, any, KeyIndex>,
-        res: Response<Omit<Key, "sk">>
+        req: Request<any, any, any, AccountIndex>,
+        res: Response<Omit<Account, "sk">>
       ) => {
         const { index } = req.query;
-        const key = state.keys[index];
-        res.status(200).json({ index, pk: key.pk });
+        const account = state.accounts[index];
+        res.status(200).json({
+          index,
+          pk: account.pk,
+          salt: account.salt,
+          msk: account.msk,
+        });
       }
     );
 

@@ -3,13 +3,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import {
   loadCurrentSignatureRequest,
-  loadKey,
-  requestNewKey,
+  loadAccount,
+  requestNewAccount,
 } from "../utils/requests";
 
-const MAX_KEYS = 5;
+const MAX_ACCOUNTS = 5;
 
-export type Key = {
+export type Account = {
+  salt: number[];
+  msk: number[];
+  sk: number[];
   pk: number[];
   index: number;
 };
@@ -37,7 +40,7 @@ export const DataContextContainer = function ({
   const [connectWebSocket, setConnectWebSocket] = useState<boolean>(false);
   const [keyChainStatus, setKeyChainStatus] =
     useState<KeyChainStatusType>("IDLE");
-  const [keys, setKeys] = useState<Key[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
   const [currentSignatureRequest, setCurrentSignatureRequest] =
     useState<CurrentSignatureRequest | null>(null);
@@ -96,33 +99,33 @@ export const DataContextContainer = function ({
     }
   }, [keyChainStatus]);
 
-  const loadKeys = async () => {
-    let keys = [];
-    for (let i = 0; i < MAX_KEYS; i++) {
-      const key = await loadKey(i);
-      keys.push(key);
+  const loadAccounts = async () => {
+    let accounts = [];
+    for (let i = 0; i < MAX_ACCOUNTS; i++) {
+      const account = await loadAccount(i);
+      accounts.push(account);
     }
-    setKeys(keys);
+    setAccounts(accounts);
     setConnectWebSocket(true);
   };
 
   useEffect(() => {
-    loadKeys();
+    loadAccounts();
   }, []);
 
-  const generateKeyPair = async (index: number) => {
-    await requestNewKey(index);
-    const key = await loadKey(index);
-    keys.splice(index, 1, key);
-    setKeys(keys);
+  const generateAccount = async (index: number) => {
+    await requestNewAccount(index);
+    const account = await loadAccount(index);
+    accounts.splice(index, 1, account);
+    setAccounts(accounts);
   };
 
   const initialData = {
     websocketStatus,
-    keys,
+    accounts,
     keyChainStatus,
     currentSignatureRequest,
-    generateKeyPair,
+    generateAccount,
   };
 
   return (

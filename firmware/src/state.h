@@ -5,7 +5,7 @@
 
 enum KeyChainStatus {
     IDLE,
-    GENERATING_KEY,
+    GENERATING_ACCOUNT,
     SIGNING
 };
 

@@ -4,30 +4,46 @@ DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/");
 
-
-
-static AsyncCallbackJsonWebHandler *keysHandler = new AsyncCallbackJsonWebHandler("/keys");
-void configureKeysHandler() {
-  keysHandler->setMethod(HTTP_POST | HTTP_GET);
-  keysHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
+static AsyncCallbackJsonWebHandler *accountsHandler = new AsyncCallbackJsonWebHandler("/accounts");
+void configureaccountsHandler() {
+  accountsHandler->setMethod(HTTP_POST | HTTP_GET);
+  accountsHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
     KeyPair keyPair;
+    uint8_t msk[32];
+    uint8_t salt[32];
     if(request->method() == HTTP_POST) {
-      state.status = GENERATING_KEY;
+      state.status = GENERATING_ACCOUNT;
       int index = json.as<JsonObject>()["index"];
       generateKeyPair(&keyPair);
       writeKeyPair(index, &keyPair);
+      RNG(msk, 32);
+      RNG(salt, 32);
+      writeSecretKey(index, msk);
+      writeSalt(index, salt);
       state.status = IDLE;
       request->send(200, "text/plain", "Ok");
     } else {
       AsyncJsonResponse *response = new AsyncJsonResponse();
       JsonObject root = response->getRoot().to<JsonObject>();
+      JsonArray pk_array = root[F("pk")].to<JsonArray>();
+      JsonArray msk_array = root[F("msk")].to<JsonArray>();
+      JsonArray salt_array = root[F("salt")].to<JsonArray>();
+
       int index = request->getParam("index")->value().toInt();
-      readKeyPair(index, &keyPair);
-      root["pk"].to<JsonArray>();
-      for(int i = 0; i < 64; i++) {
-        root["pk"][i] = keyPair.pk[i];
-      }
       root["index"] = index;
+
+      readKeyPair(index, &keyPair);
+      for(int i = 0; i < 64; i++) {
+        pk_array[i] = keyPair.pk[i];
+      }
+      readSecretKey(index, msk);
+      for(int i = 0; i < 32; i++) {
+        msk_array[i] = msk[i];
+      }
+      readSalt(index, salt);
+      for(int i = 0; i < 32; i++) {
+        salt_array[i] = salt[i];
+      }
       response->setLength();
       request->send(response);
     }
@@ -116,13 +132,13 @@ void setupServer(){
   dnsServer.setTTL(300);
   dnsServer.start(53, "*", WiFi.softAPIP());
 
-  configureKeysHandler();
+  configureaccountsHandler();
   configureSignatureHandler();
 
   ws.onEvent(onEvent);
   server.addHandler(&ws);
   server.addHandler(new CaptivePortalHandler()).setFilter(ON_AP_FILTER);
-  server.addHandler(keysHandler);
+  server.addHandler(accountsHandler);
   server.addHandler(signatureHandler);
   server.onNotFound([&](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/index.html", String(), false);

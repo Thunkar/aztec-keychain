@@ -1,6 +1,6 @@
 import {
   CurrentSignatureRequest,
-  Key,
+  Account,
 } from "../components/DataContextContainer";
 
 function buildUrl(path: string): URL {
@@ -11,8 +11,8 @@ function buildUrl(path: string): URL {
   );
 }
 
-export async function loadKey(index: number): Promise<Key> {
-  const url = buildUrl("keys");
+export async function loadAccount(index: number): Promise<Account> {
+  const url = buildUrl("accounts");
   url.searchParams.append("index", index.toString());
 
   const response = await fetch(url);
@@ -20,8 +20,8 @@ export async function loadKey(index: number): Promise<Key> {
   return body;
 }
 
-export async function requestNewKey(index: number): Promise<void> {
-  const url = buildUrl("keys");
+export async function requestNewAccount(index: number): Promise<void> {
+  const url = buildUrl("accounts");
 
   await fetch(url, {
     method: "POST",

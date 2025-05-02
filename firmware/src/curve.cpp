@@ -2,7 +2,7 @@
 
 uECC_Curve curve;
 
-static int RNG(uint8_t *dest, unsigned size) {
+int RNG(uint8_t *dest, unsigned size) {
   // Use the least-significant bits from the ADC for an unconnected pin (or connected to a source of 
   // random noise). This can take a long time to generate random data if the result of analogRead(0) 
   // doesn't change very frequently.
@@ -42,7 +42,6 @@ void sign(KeyPair *keyPair, uint8_t *message, uint8_t *signature) {
   uECC_sign(keyPair->sk, message, 64, signature, curve);
   int result = uECC_verify(keyPair->pk, message, 64, signature, curve);
   if(!result) {
-    Serial.println("Failed to verify!");
     setError(FAILED_VERIFICATION);
   }
 }

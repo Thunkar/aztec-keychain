@@ -40,10 +40,10 @@ function App() {
   };
 
   const {
-    generateKeyPair,
+    generateAccount,
     keyChainStatus,
     websocketStatus,
-    keys,
+    accounts,
     currentSignatureRequest,
   } = useContext(DataContext);
 
@@ -67,19 +67,19 @@ function App() {
           flexDirection: "column",
         }}
       >
-        {keys.map((key, index) => (
+        {accounts.map((account, index) => (
           <Box css={keyBox} key={index}>
             <Typography
               variant="overline"
               sx={{ fontSize: "1rem", textTransform: "unset" }}
             >
-              {index}. {keyToShortStr(key)}
+              {index}. {keyToShortStr(account.pk)}
             </Typography>
             <Button
               variant="contained"
               color="secondary"
               sx={{ marginLeft: "auto", borderRadius: "1rem" }}
-              onClick={() => generateKeyPair(index)}
+              onClick={() => generateAccount(index)}
             >
               Regenerate
             </Button>
