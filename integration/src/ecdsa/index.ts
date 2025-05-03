@@ -4,21 +4,15 @@
  *
  * @packageDocumentation
  */
-import { AccountManager, type Salt } from "@aztec/aztec.js/account";
-import { type AccountWallet, getWallet } from "@aztec/aztec.js/wallet";
-import { Fr } from "@aztec/aztec.js/fields";
-import {
-  type ContractArtifact,
-  loadContractArtifact,
-} from "@aztec/aztec.js/abi";
-import { AztecAddress } from "@aztec/aztec.js/addresses";
-import type { PXE } from "@aztec/aztec.js/interfaces";
+import { AccountManager, type Salt } from '@aztec/aztec.js/account';
+import { type AccountWallet, getWallet } from '@aztec/aztec.js/wallet';
+import { Fr } from '@aztec/aztec.js/fields';
+import { type ContractArtifact, loadContractArtifact } from '@aztec/aztec.js/abi';
+import { AztecAddress } from '@aztec/aztec.js/addresses';
+import type { PXE } from '@aztec/aztec.js/interfaces';
 
-import {
-  CommandType,
-  sendCommandAndParseResponse,
-} from "../utils/web_serial.js";
-import { EcdsaRSerialBaseAccountContract } from "./account_contract.js";
+import { CommandType, sendCommandAndParseResponse } from '../utils/web_serial.js';
+import { EcdsaRSerialBaseAccountContract } from './account_contract.js';
 
 /**
  * Account contract that authenticates transactions using ECDSA signatures
@@ -56,19 +50,14 @@ export async function getEcdsaRSerialAccount(
   pxe: PXE,
   secretKey: Fr,
   index: number,
-  salt?: Salt
+  salt?: Salt,
 ): Promise<AccountManager> {
   const signingPublicKeyResponse = await sendCommandAndParseResponse({
     type: CommandType.GET_KEY_REQUESTED,
     data: { index },
   });
   const signingPublicKey = Buffer.from(signingPublicKeyResponse.data.pk);
-  return AccountManager.create(
-    pxe,
-    secretKey,
-    new EcdsaRSerialAccountContract(signingPublicKey),
-    salt
-  );
+  return AccountManager.create(pxe, secretKey, new EcdsaRSerialAccountContract(signingPublicKey), salt);
 }
 
 /**
@@ -81,11 +70,7 @@ export async function getEcdsaRSerialAccount(
 export function getEcdsaRSerialWallet(
   pxe: PXE,
   address: AztecAddress,
-  signingPublicKey: Buffer
+  signingPublicKey: Buffer,
 ): Promise<AccountWallet> {
-  return getWallet(
-    pxe,
-    address,
-    new EcdsaRSerialAccountContract(signingPublicKey)
-  );
+  return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey));
 }

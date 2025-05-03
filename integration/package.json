@@ -1,7 +1,7 @@
 {
   "name": "@thunkar/aztec-keychain-accounts",
-  "homepage": "https://github.com/AztecProtocol/aztec-packages/tree/master/yarn-project/accounts",
-  "description": "Implementation of sample account contracts for Aztec Network",
+  "homepage": "https://github.com/Thunkar/aztec-keychain",
+  "description": "Implementation ",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -15,30 +15,29 @@
     "tsconfig": "./tsconfig.json"
   },
   "scripts": {
-    "build": "yarn clean && yarn generate && tsc -b",
-    "generate": "yarn generate:noir-contracts",
-    "generate:noir-contracts": "./scripts/copy-contracts.sh",
+    "build": "yarn clean && tsc -b",
     "build:dev": "tsc -b --watch",
     "build:ts": "tsc -b",
     "clean": "rm -rf ./dest .tsbuildinfo ./artifacts",
-    "formatting": "run -T prettier --check ./src && run -T eslint ./src",
-    "formatting:fix": "run -T eslint --fix ./src && run -T prettier -w ./src",
-    "test": "NODE_NO_WARNINGS=1 node --experimental-vm-modules ../node_modules/.bin/jest --passWithNoTests --maxWorkers=${JEST_MAX_WORKERS:-8}"
+    "formatting": "prettier --check ./src && run -T eslint ./src",
+    "formatting:fix": "eslint --fix ./src && run -T prettier -w ./src"
   },
   "dependencies": {
-    "@aztec/aztec.js": "0.85.0-alpha-testnet.5",
     "@aztec/accounts": "0.85.0-alpha-testnet.5",
+    "@aztec/aztec.js": "0.85.0-alpha-testnet.5",
     "@aztec/stdlib": "0.85.0-alpha-testnet.5",
     "pako": "^2.1.0",
     "tslib": "^2.4.0"
   },
   "devDependencies": {
-    "@aztec/noir-contracts.js": "0.85.0-alpha-testnet.5",
+    "@eslint/js": "^9.26.0",
     "@types/node": "^18.7.23",
     "@types/pako": "^2.0.3",
-    "ts-loader": "^9.4.4",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.0.4"
+    "eslint": "^9.26.0",
+    "eslint-config-prettier": "^10.1.2",
+    "prettier": "^3.5.3",
+    "typescript": "^5.0.4",
+    "typescript-eslint": "^8.31.1"
   },
   "files": [
     "dest",

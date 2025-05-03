@@ -84,7 +84,7 @@ export async function sendCommandAndParseResponse(command: Command) {
                 reader.releaseLock();
               }
             }
-          } catch (err) {
+          } catch {
             console.log(maybeCommand.toString('utf-8').trim());
           }
         } else {
@@ -102,7 +102,7 @@ export async function sendCommandAndParseResponse(command: Command) {
           if (currentDataBytesLeft <= 0) {
             portMode = 'command';
             currentDataTransfer = currentDataTransfer.subarray(0, currentCommand?.data.size);
-            const uncompressed = await inflate(currentDataTransfer, {
+            const uncompressed = inflate(currentDataTransfer, {
               to: 'string',
             });
             const jsonStart = uncompressed.indexOf('{');

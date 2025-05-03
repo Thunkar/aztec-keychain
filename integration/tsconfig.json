@@ -5,6 +5,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "rootDir": "./src",
     "declaration": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
@@ -17,10 +18,7 @@
     "skipLibCheck": true,
     "noImplicitOverride": true,
     "allowArbitraryExtensions": true,
-    "verbatimModuleSyntax": true,
-    "outDir": "dest",
-    "rootDir": "src",
-    "tsBuildInfoFile": ".tsbuildinfo"
+    "verbatimModuleSyntax": true
   },
   "include": ["src", "artifacts/*.d.json.ts"],
   "exclude": ["node_modules", "**/node_modules", "**/.*/"]

@@ -1,17 +1,13 @@
-import type { AuthWitnessProvider } from "@aztec/aztec.js/account";
-import { EcdsaSignature, sha256 } from "@aztec/foundation/crypto";
-import type { Fr } from "@aztec/aztec.js/fields";
+import type { AuthWitnessProvider } from '@aztec/aztec.js/account';
+import { EcdsaSignature, sha256 } from '@aztec/foundation/crypto';
+import type { Fr } from '@aztec/aztec.js/fields';
 
-import {
-  CommandType,
-  sendCommandAndParseResponse,
-} from "../utils/web_serial.js";
-import type { CompleteAddress } from "@aztec/aztec.js/addresses";
-import { DefaultAccountContract } from "@aztec/accounts/defaults";
-import { AuthWitness } from "@aztec/aztec.js";
+import { CommandType, sendCommandAndParseResponse } from '../utils/web_serial.js';
+import type { CompleteAddress } from '@aztec/aztec.js/addresses';
+import { DefaultAccountContract } from '@aztec/accounts/defaults';
+import { AuthWitness } from '@aztec/aztec.js';
 
-const secp256r1N =
-  115792089210356248762697446949407573529996955224135760342422259061068512044369n;
+const secp256r1N = 115792089210356248762697446949407573529996955224135760342422259061068512044369n;
 /**
  * Account contract that authenticates transactions using ECDSA signatures
  * verified against a secp256r1 public key stored in an immutable encrypted note.
@@ -26,17 +22,14 @@ export abstract class EcdsaRSerialBaseAccountContract extends DefaultAccountCont
     super();
   }
 
-  getDeploymentFunctionAndArgs() {
+  override getDeploymentFunctionAndArgs() {
     return Promise.resolve({
-      constructorName: "constructor",
-      constructorArgs: [
-        this.signingPublicKey.subarray(0, 32),
-        this.signingPublicKey.subarray(32, 64),
-      ],
+      constructorName: 'constructor',
+      constructorArgs: [this.signingPublicKey.subarray(0, 32), this.signingPublicKey.subarray(32, 64)],
     });
   }
 
-  getAuthWitnessProvider(_address: CompleteAddress): AuthWitnessProvider {
+  override getAuthWitnessProvider(_address: CompleteAddress): AuthWitnessProvider {
     return new SerialEcdsaRAuthWitnessProvider(this.signingPublicKey);
   }
 }
@@ -50,12 +43,12 @@ class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
     const r = Buffer.from(data.slice(0, 32));
     let s = Buffer.from(data.slice(32, 64));
 
-    const maybeHighS = BigInt(`0x${s.toString("hex")}`);
+    const maybeHighS = BigInt(`0x${s.toString('hex')}`);
 
     // ECDSA signatures must have a low S value so they can be used as a nullifier. BB forces a value of 27 for v, so
     // only one PublicKey can verify the signature (and not its negated counterpart) https://ethereum.stackexchange.com/a/55728
     if (maybeHighS > secp256r1N / 2n + 1n) {
-      s = Buffer.from((secp256r1N - maybeHighS).toString(16), "hex");
+      s = Buffer.from((secp256r1N - maybeHighS).toString(16), 'hex');
     }
 
     return new EcdsaSignature(r, s, Buffer.from([0]));
@@ -75,7 +68,7 @@ class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
 
     if (response.type !== CommandType.SIGNATURE_ACCEPTED_RESPONSE) {
       throw new Error(
-        `Unexpected response type from HW wallet: ${response.type}. Expected ${CommandType.SIGNATURE_ACCEPTED_RESPONSE}`
+        `Unexpected response type from HW wallet: ${response.type}. Expected ${CommandType.SIGNATURE_ACCEPTED_RESPONSE}`,
       );
     }
 
