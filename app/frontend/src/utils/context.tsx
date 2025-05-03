@@ -11,6 +11,7 @@ export const DataContext = createContext<{
   currentSignatureRequest: CurrentSignatureRequest | null;
   SSID: string;
   password: string;
+  initialized: boolean;
   storeSettings: (SSID: string, password: string) => Promise<void>;
   generateAccount: (index: number) => Promise<void>;
 }>({
@@ -20,6 +21,7 @@ export const DataContext = createContext<{
   accounts: [],
   SSID: "",
   password: "",
+  initialized: false,
   storeSettings: (_SSID: string, _password: string) => Promise.resolve(),
   generateAccount: (_index: number) => Promise.resolve(),
 });

@@ -7,6 +7,7 @@ import {
   requestNewAccount,
   loadSettings,
   writeSettings,
+  finishSignatureRequest,
 } from "../utils/requests";
 
 const MAX_ACCOUNTS = 5;
@@ -54,6 +55,8 @@ export const DataContextContainer = function ({
 
   const [lastKeyChainStatus, setLastKeyChainStatus] = useState(0);
 
+  const [initialized, setInitialized] = useState(false);
+
   const [SSID, setSSID] = useState("");
   const [password, setPassword] = useState("");
 
@@ -95,7 +98,13 @@ export const DataContextContainer = function ({
           break;
         }
         case 2: {
-          setKeyChainStatus("SIGNING");
+          if (
+            accounts.some((account) => account.pk.some((byte) => byte !== 255))
+          ) {
+            setKeyChainStatus("SIGNING");
+          } else {
+            finishSignatureRequest(false);
+          }
           break;
         }
       }
@@ -126,6 +135,8 @@ export const DataContextContainer = function ({
     const { SSID, password } = await loadSettings();
     setSSID(SSID);
     setPassword(password);
+    const isInitialized = password.length >= 8;
+    setInitialized(isInitialized);
   };
 
   const storeSettings = async (SSID: string, password: string) => {
@@ -134,8 +145,11 @@ export const DataContextContainer = function ({
   };
 
   useEffect(() => {
-    loadAccounts();
-    reloadSettings();
+    const load = async () => {
+      await loadAccounts();
+      await reloadSettings();
+    };
+    load();
   }, []);
 
   const generateAccount = async (index: number) => {
@@ -152,6 +166,7 @@ export const DataContextContainer = function ({
     currentSignatureRequest,
     SSID,
     password,
+    initialized,
     storeSettings,
     generateAccount,
   };

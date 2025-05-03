@@ -25,9 +25,12 @@ export function Settings({ SSID, password }: SettingsProps) {
   const [dirty, setDirty] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [error, setError] = useState(false);
+
   useEffect(() => {
     const isDirty = SSID !== currentSSID || password !== currentPassword;
     setDirty(isDirty);
+    setError(currentPassword.length < 8);
   }, [currentPassword, currentSSID, SSID, password]);
 
   const handleChange = async () => {
@@ -52,26 +55,23 @@ export function Settings({ SSID, password }: SettingsProps) {
         fullWidth
         label="SSID"
       />
-      <OutlinedInput
-        value={currentPassword}
-        onChange={(event) => setCurrentPassword(event.target.value)}
-        fullWidth
-        type={showPassword ? "text" : "password"}
-        label="Password"
-        endAdornment={
-          <InputAdornment position="end">
-            <IconButton
-              aria-label={
-                showPassword ? "hide the password" : "display the password"
-              }
-              onClick={() => setShowPassword(!showPassword)}
-              edge="end"
-            >
-              {showPassword ? <VisibilityOff /> : <Visibility />}
-            </IconButton>
-          </InputAdornment>
-        }
-      />
+      <div css={{ display: "flex", alignItems: "center" }}>
+        <TextField
+          value={currentPassword}
+          onChange={(event) => setCurrentPassword(event.target.value)}
+          fullWidth
+          type={showPassword ? "text" : "password"}
+          label="Password"
+          error={error}
+          helperText={error ? "Password must be at least 8 characters" : ""}
+        />
+        <IconButton
+          css={{ marginLeft: "0.5rem", marginTop: error ? "-1.25rem" : "0" }}
+          onClick={() => setShowPassword(!showPassword)}
+        >
+          {showPassword ? <VisibilityOff /> : <Visibility />}
+        </IconButton>
+      </div>
       <Typography css={{ marginTop: "0.5rem" }} variant="subtitle2">
         Reset the device for changes to take effect
       </Typography>
@@ -79,7 +79,7 @@ export function Settings({ SSID, password }: SettingsProps) {
       <Button
         variant="outlined"
         sx={{ mt: "auto" }}
-        disabled={!dirty}
+        disabled={!dirty || error}
         onClick={() => handleChange()}
       >
         Update

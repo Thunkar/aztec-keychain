@@ -5,7 +5,7 @@ import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import Tab from "@mui/material/Tab";
 import { smallSlant, useAsciiText } from "react-ascii-text";
-import { ReactNode, useContext, useState } from "react";
+import { ReactNode, useContext, useEffect, useState } from "react";
 import { DataContext } from "./utils/context";
 import Button from "@mui/material/Button";
 import { keyToShortStr } from "./utils/format";
@@ -73,6 +73,8 @@ function App() {
 
   const [tab, setTab] = useState("0");
 
+  const [debounceInit, setDebounceInit] = useState(0);
+
   // Using a ref callback to bridge the type mismatch.
   const refCallback = (element: HTMLPreElement | null) => {
     if (asciiTextRef) {
@@ -88,7 +90,17 @@ function App() {
     currentSignatureRequest,
     SSID,
     password,
+    initialized,
   } = useContext(DataContext);
+
+  useEffect(() => {
+    if (!initialized) {
+      const debounceInit = setTimeout(() => setTab("1"), 500);
+      setDebounceInit(debounceInit);
+    } else {
+      clearInterval(debounceInit);
+    }
+  }, [initialized]);
 
   return (
     <>
@@ -137,7 +149,7 @@ function App() {
               variant="fullWidth"
               onChange={(_event, tab) => setTab(tab)}
             >
-              <Tab label="Accounts" value="0" />
+              <Tab label="Accounts" value="0" disabled={!initialized} />
               <Tab label="Configuration" value="1" />
             </TabList>
           </Box>
@@ -162,7 +174,7 @@ function App() {
                   }}
                 >
                   {account.pk.every((byte) => byte === 255)
-                    ? "Generate"
+                    ? "Initialize"
                     : "Regenerate"}
                 </Button>
               </Box>
@@ -173,9 +185,9 @@ function App() {
           </CustomTabPanel>
         </TabContext>
       </Box>
-      {keyChainStatus === "SIGNING" && currentSignatureRequest !== null && (
-        <SignDialog />
-      )}
+      {initialized &&
+        keyChainStatus === "SIGNING" &&
+        currentSignatureRequest !== null && <SignDialog />}
       {regenerateDialogOpen && (
         <RegenerateDialog
           open={regenerateDialogOpen}
