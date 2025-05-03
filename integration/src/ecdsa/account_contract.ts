@@ -5,7 +5,7 @@ import type { Fr } from '@aztec/aztec.js/fields';
 import { CommandType, sendCommandAndParseResponse } from '../utils/web_serial.js';
 import type { CompleteAddress } from '@aztec/aztec.js/addresses';
 import { DefaultAccountContract } from '@aztec/accounts/defaults';
-import { AuthWitness } from '@aztec/aztec.js';
+import { AuthWitness } from '@aztec/stdlib/auth-witness';
 
 const secp256r1N = 115792089210356248762697446949407573529996955224135760342422259061068512044369n;
 /**

@@ -23,18 +23,23 @@ import { EcdsaRSerialBaseAccountContract } from './account_contract.js';
  * Lazily loads the contract artifact
  */
 export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract {
+  private static _artifact: ContractArtifact | undefined;
+
   constructor(signingPublicKey: Buffer) {
     super(signingPublicKey);
   }
 
   override async getContractArtifact(): Promise<ContractArtifact> {
-    const {
-      data: { data },
-    } = await sendCommandAndParseResponse({
-      type: CommandType.GET_ARTIFACT_REQUEST,
-      data: {},
-    });
-    return loadContractArtifact(data);
+    if (!EcdsaRSerialAccountContract._artifact) {
+      const {
+        data: { data },
+      } = await sendCommandAndParseResponse({
+        type: CommandType.GET_ARTIFACT_REQUEST,
+        data: {},
+      });
+      EcdsaRSerialAccountContract._artifact = loadContractArtifact(data);
+    }
+    return EcdsaRSerialAccountContract._artifact;
   }
 }
 
@@ -48,12 +53,12 @@ export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract
  */
 export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<AccountManager> {
   const accountResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_ACCOUNT_REQUEST,
+    type: CommandType.GET_ACCOUNT_REQUESTED,
     data: { index },
   });
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
-  const secretKey = Fr.fromBufferReduce(accountResponse.data.msk);
-  const salt = Fr.fromBufferReduce(accountResponse.data.salt);
+  const secretKey = Fr.fromBufferReduce(Buffer.from(accountResponse.data.msk));
+  const salt = Fr.fromBufferReduce(Buffer.from(accountResponse.data.salt));
   return AccountManager.create(pxe, secretKey, new EcdsaRSerialAccountContract(signingPublicKey), salt);
 }
 
@@ -66,7 +71,7 @@ export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<A
  */
 export async function getEcdsaRSerialWallet(pxe: PXE, address: AztecAddress, index: number): Promise<AccountWallet> {
   const accountResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_ACCOUNT_REQUEST,
+    type: CommandType.GET_ACCOUNT_REQUESTED,
     data: { index },
   });
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
