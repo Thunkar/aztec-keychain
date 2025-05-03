@@ -18,7 +18,8 @@
     "skipLibCheck": true,
     "noImplicitOverride": true,
     "allowArbitraryExtensions": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "outDir": "./dest"
   },
   "include": ["src", "artifacts/*.d.json.ts"],
   "exclude": ["node_modules", "**/node_modules", "**/.*/"]
