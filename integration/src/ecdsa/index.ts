@@ -4,7 +4,7 @@
  *
  * @packageDocumentation
  */
-import { AccountManager, type Salt } from '@aztec/aztec.js/account';
+import { AccountManager } from '@aztec/aztec.js/account';
 import { type AccountWallet, getWallet } from '@aztec/aztec.js/wallet';
 import { Fr } from '@aztec/aztec.js/fields';
 import { type ContractArtifact, loadContractArtifact } from '@aztec/aztec.js/abi';
