@@ -4,8 +4,8 @@ export enum CommandType {
   SIGNATURE_REQUEST,
   SIGNATURE_ACCEPTED_RESPONSE,
   SIGNATURE_REJECTED_RESPONSE,
-  GET_KEY_REQUESTED,
-  GET_KEY_RESPONSE,
+  GET_ACCOUNT_REQUEST,
+  GET_ACCOUNT_RESPONSE,
   GET_ARTIFACT_REQUEST,
   GET_ARTIFACT_RESPONSE_START,
   ERROR,
@@ -92,12 +92,6 @@ export async function sendCommandAndParseResponse(command: Command) {
             const chunk = accumulatedData.shift()!;
             currentDataBytesLeft -= chunk.length;
             currentDataTransfer = Buffer.concat([currentDataTransfer, chunk]);
-            console.log(
-              'Chunk size %d, current data transfer size: %d, remaining bytes: %d',
-              chunk.length,
-              currentDataTransfer.length,
-              currentDataBytesLeft,
-            );
           }
           if (currentDataBytesLeft <= 0) {
             portMode = 'command';
@@ -107,11 +101,11 @@ export async function sendCommandAndParseResponse(command: Command) {
             });
             const jsonStart = uncompressed.indexOf('{');
             const jsonEnd = uncompressed.lastIndexOf('}');
-            console.log('Uncompressed data: %s', uncompressed.slice(jsonStart, jsonEnd + 1));
             currentCommand!.data = {
               ...currentCommand!.data,
               data: JSON.parse(uncompressed.slice(jsonStart, jsonEnd + 1)),
             };
+            console.log('Data transfer complete, enriching response');
             response = currentCommand;
             reader.releaseLock();
           }

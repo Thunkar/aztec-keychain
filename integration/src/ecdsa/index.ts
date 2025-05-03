@@ -46,17 +46,14 @@ export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract
  * @param salt - Deployment salt.
  * @returns An account manager initialized with the account contract and its deployment params
  */
-export async function getEcdsaRSerialAccount(
-  pxe: PXE,
-  secretKey: Fr,
-  index: number,
-  salt?: Salt,
-): Promise<AccountManager> {
-  const signingPublicKeyResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_KEY_REQUESTED,
+export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<AccountManager> {
+  const accountResponse = await sendCommandAndParseResponse({
+    type: CommandType.GET_ACCOUNT_REQUEST,
     data: { index },
   });
-  const signingPublicKey = Buffer.from(signingPublicKeyResponse.data.pk);
+  const signingPublicKey = Buffer.from(accountResponse.data.pk);
+  const secretKey = Fr.fromBufferReduce(accountResponse.data.msk);
+  const salt = Fr.fromBufferReduce(accountResponse.data.salt);
   return AccountManager.create(pxe, secretKey, new EcdsaRSerialAccountContract(signingPublicKey), salt);
 }
 
@@ -67,10 +64,11 @@ export async function getEcdsaRSerialAccount(
  * @param signingPrivateKey - ECDSA key used for signing transactions.
  * @returns A wallet for this account that can be used to interact with a contract instance.
  */
-export function getEcdsaRSerialWallet(
-  pxe: PXE,
-  address: AztecAddress,
-  signingPublicKey: Buffer,
-): Promise<AccountWallet> {
+export async function getEcdsaRSerialWallet(pxe: PXE, address: AztecAddress, index: number): Promise<AccountWallet> {
+  const accountResponse = await sendCommandAndParseResponse({
+    type: CommandType.GET_ACCOUNT_REQUEST,
+    data: { index },
+  });
+  const signingPublicKey = Buffer.from(accountResponse.data.pk);
   return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey));
 }
