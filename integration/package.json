@@ -1,7 +1,7 @@
 {
   "name": "@thunkar/aztec-keychain-accounts",
   "homepage": "https://github.com/Thunkar/aztec-keychain",
-  "description": "Implementation ",
+  "description": "TS implementation for the aztec-keychain account wallet",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -18,7 +18,7 @@
     "build": "yarn clean && tsc -b",
     "build:dev": "tsc -b --watch",
     "build:ts": "tsc -b",
-    "clean": "rm -rf ./dest .tsbuildinfo ./artifacts",
+    "clean": "rm -rf ./dest tsconfig.tsbuildinfo",
     "formatting": "prettier --check ./src && run -T eslint ./src",
     "formatting:fix": "eslint --fix ./src && run -T prettier -w ./src"
   },
@@ -36,7 +36,7 @@
     "eslint": "^9.26.0",
     "eslint-config-prettier": "^10.1.2",
     "prettier": "^3.5.3",
-    "typescript": "^5.0.4",
+    "typescript": "^5.8.3",
     "typescript-eslint": "^8.31.1"
   },
   "files": [
@@ -47,5 +47,6 @@
   ],
   "engines": {
     "node": ">=18"
-  }
+  },
+  "packageManager": "yarn@1.22.22"
 }
