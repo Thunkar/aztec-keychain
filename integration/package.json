@@ -23,11 +23,13 @@
     "formatting:fix": "eslint --fix ./src && run -T prettier -w ./src"
   },
   "dependencies": {
-    "@aztec/accounts": "0.85.0-alpha-testnet.5",
-    "@aztec/aztec.js": "0.85.0-alpha-testnet.5",
-    "@aztec/stdlib": "0.85.0-alpha-testnet.5",
     "pako": "^2.1.0",
     "tslib": "^2.4.0"
+  },
+  "peerDependencies": {
+    "@aztec/accounts": "0.85.0-alpha-testnet.5",
+    "@aztec/aztec.js": "0.85.0-alpha-testnet.5",
+    "@aztec/stdlib": "0.85.0-alpha-testnet.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",
