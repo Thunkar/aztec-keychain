@@ -25,9 +25,23 @@ yarn build
 cd ../../firmware
 mkdir -p data
 cp ../app/frontend/dist/index.html ./data/index.html
-docker run --name keychain-copy aztecprotocol/aztec:$AZTEC_VERSION 
-docker cp keychain-copy:/usr/src/yarn-project/noir-contracts.js/artifacts/ecdsa_r_account_contract-EcdsaRAccount.json ./data/EcdsaRAccount.json
-docker rm -f keychain-copy
-cd data
+mkdir -p tmp
+cd tmp
+npm init -y
+npm install @aztec/noir-contracts.js@$AZTEC_VERSION
+cp node_modules/@aztec/noir-contracts.js/artifacts/ecdsa_r_account_contract-EcdsaRAccount.json ../data/EcdsaRAccount.json
+cd ../data
+rm -rf ../tmp
 tar -czvf ./EcdsaRAccount.json.gz ./EcdsaRAccount.json
 rm ./EcdsaRAccount.json
+cd ../
+
+platformio run --target buildfs --environment esp32-c3-devkitm-1
+
+MERGED_BIN_PATH=merged.bin pio run -t mergebin
+
+# Landing page
+
+cd ../landing
+mkdir -p firmware
+mv ../firmware/merged.bin ./firmware/merged.bin
