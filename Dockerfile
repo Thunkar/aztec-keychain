@@ -8,6 +8,7 @@ RUN export DEBIAN_FRONTEND="noninteractive" \
       git \
       curl \
       python3 \
+      python3-venv \
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -36,6 +37,16 @@ RUN npm install --global corepack && corepack enable && corepack install --globa
 
 RUN curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
 RUN python3 get-platformio.py
+
+ENV PIO_PATH=/root/.platformio/penv/bin
+ENV PATH=$PIO_PATH:$PATH 
+
+RUN git clone --recursive https://github.com/igrr/mkspiffs.git \
+    && cd mkspiffs \     
+    && make clean \
+    && make dist BUILD_CONFIG_NAME="-arduino-esp32" \
+    CPPFLAGS="-DSPIFFS_OBJ_META_LEN=4" \
+    && cp mkspiffs /root/.platformio/penv/bin/mkspiffs_espressif32_arduino
 
 COPY . /usr/src
 
