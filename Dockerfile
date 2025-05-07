@@ -1,4 +1,4 @@
-FROM ubuntu:noble AS build
+FROM ubuntu:noble AS base
 
 RUN export DEBIAN_FRONTEND="noninteractive" \
     && apt update && apt install --no-install-recommends -y \
@@ -48,8 +48,13 @@ RUN git clone --recursive https://github.com/igrr/mkspiffs.git \
     CPPFLAGS="-DSPIFFS_OBJ_META_LEN=4" \
     && cp mkspiffs /root/.platformio/penv/bin/mkspiffs_espressif32_arduino
 
-COPY . /usr/src
-
 WORKDIR /usr/src
+COPY ./firmware/platformio.ini ./firmware/sdkconfig.esp32-c3-devkitm-1 /usr/src/firmware/
+
+RUN cd firmware && platformio pkg install --environment esp32-c3-devkitm-1 
+
+FROM base AS build
+
+COPY ./ /usr/src
 
 RUN ./bootstrap.sh

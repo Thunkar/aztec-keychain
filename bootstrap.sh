@@ -36,7 +36,7 @@ tar -czvf ./EcdsaRAccount.json.gz ./EcdsaRAccount.json
 rm ./EcdsaRAccount.json
 cd ../
 
-platformio run --target buildfs --environment esp32-c3-devkitm-1 -v
+platformio run --target buildfs --environment esp32-c3-devkitm-1
 
 MERGED_BIN_PATH=merged.bin pio run -t mergebin
 

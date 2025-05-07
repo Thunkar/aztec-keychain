@@ -3,4 +3,7 @@ node_modules/
 dest/
 tsconfig.tsbuildinfo
 firmware/data
+.pio/
+.vscode/
 tmp/
+cad/
