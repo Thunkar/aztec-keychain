@@ -43,7 +43,6 @@ MERGED_BIN_PATH=merged.bin pio run -t mergebin
 # Landing page
 
 cd ../landing
-mkdir -p firmware
 mv ../firmware/merged.bin ./assets/merged.bin
 yarn install
 yarn build
