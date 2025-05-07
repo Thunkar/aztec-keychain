@@ -7,6 +7,14 @@ import os
 Import("env", "projenv")
 
 board_config = env.BoardConfig()
+
+bootloader_offset = "0x0000"
+bootloader_bin = "${BUILD_DIR}/bootloader.bin"
+partitions_offset = "0x8000"
+partitions_bin = "${BUILD_DIR}/partitions.bin"
+boot_app0_offset = "0xe000"
+boot_app0_bin = "${PACKAGES_DIR}/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
+firmware_offset = "0x10000"
 firmware_bin = "${BUILD_DIR}/${PROGNAME}.bin"
 merged_bin = os.environ.get("MERGED_BIN_PATH", "${BUILD_DIR}/${PROGNAME}-merged.bin")
 spiffs_bin = "${BUILD_DIR}/spiffs.bin"
@@ -14,11 +22,14 @@ spiffs_offset = "0x290000"
 
 def merge_bin_action(source, target, env):
     flash_images = [
-        *env.Flatten(env.get("FLASH_EXTRA_IMAGES", [])),
+        bootloader_offset, 
+        bootloader_bin,
+        partitions_offset,
+        partitions_bin,
+        firmware_offset,
+        firmware_bin,
         spiffs_offset,
         spiffs_bin,
-        "$ESP32_APP_OFFSET",
-        source[0].get_abspath(),
     ]
     merge_cmd = " ".join(
         [
@@ -30,11 +41,11 @@ def merge_bin_action(source, target, env):
             "-o",
             merged_bin,
             "--flash_mode",
-            board_config.get("build.flash_mode", "dio"),
+            "dio",
             "--flash_freq",
-            "${__get_board_f_flash(__env__)}",
+            "80m",
             "--flash_size",
-            board_config.get("upload.flash_size", "4MB"),
+            "4MB",
             *flash_images,
         ]
     )

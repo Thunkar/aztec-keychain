@@ -1,0 +1,14 @@
+{
+    "name": "aztec-keychain",
+    "version": "0.1.0",
+    "new_install_prompt_erase": true,
+    "builds": [
+      {
+        "chipFamily": "ESP32-C3",
+        "improv": false,
+        "parts": [
+          { "path": "/assets/merged.bin", "offset": 0 }
+        ]
+      }
+    ]
+  }
