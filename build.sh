@@ -3,10 +3,12 @@ set -e
 
 AZTEC_VERSION=${AZTEC_VERSION:-"0.85.0-alpha-testnet.5"}
 
+# Root 
+yarn install
+
 # Integration package
 
 cd integration
-yarn install
 yarn build
 
 PUBLISH=${PUBLISH:-0}
@@ -18,7 +20,6 @@ fi
 # Captive portal
 
 cd ../app/frontend
-yarn install
 yarn build
 
 # ESP32 firmware
@@ -45,5 +46,4 @@ MERGED_BIN_PATH=merged.bin pio run -t mergebin
 
 cd ../landing
 mv ../firmware/merged.bin ./assets/merged.bin
-yarn install
 yarn build

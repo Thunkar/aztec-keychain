@@ -21,5 +21,3 @@ rm -rf mkspiffs
 cd firmware  
 platformio pkg install --environment esp32-c3-devkitm-1
 cd ../
-
-/bin/bash -l -c ./build.sh
