@@ -14,7 +14,8 @@ yarn build
 PUBLISH=${PUBLISH:-0}
 
 if [[ $PUBLISH == 1 ]]; then
-    yarn publish
+    VERSION=$(jq -r .version package.json)
+    yarn publish --new-version $VERSION --access public --non-interactive
 fi
 
 # Captive portal

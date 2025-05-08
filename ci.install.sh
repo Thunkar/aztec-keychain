@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-dnf install git make glibc-devel gcc g++ patch tar diffutils -y
+dnf install git make glibc-devel gcc g++ patch tar diffutils jq -y
 
 curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
 python3 get-platformio.py
