@@ -47,5 +47,5 @@ MERGED_BIN_PATH=merged.bin pio run -t mergebin
 # Landing page
 
 cd ../landing
-mv ../firmware/merged.bin ./assets/merged.bin
+mv ../firmware/merged.bin ./public/merged.bin
 yarn build
