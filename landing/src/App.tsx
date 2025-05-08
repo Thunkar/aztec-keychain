@@ -9,6 +9,8 @@ import BoltIcon from "@mui/icons-material/Bolt";
 import { IconButton } from "@mui/material";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import Article from "@mui/icons-material/Article";
+import AztecLogo from "../assets/aztec_logo.svg";
+import Wireframe from "../assets/wireframe.png?url";
 
 declare global {
   namespace JSX {
@@ -24,7 +26,7 @@ declare global {
 const container = css({
   width: "100%",
   height: "100%",
-  backgroundImage: `url(assets/wireframe.png)`,
+  backgroundImage: `url(${Wireframe})`,
   backgroundSize: "cover",
   backgroundPosition: "center",
 });
@@ -105,7 +107,7 @@ function App() {
             )
           )}
         </div>
-        <esp-web-install-button manifest="/assets/manifest.json">
+        <esp-web-install-button manifest="/manifest.json">
           <Button
             color="warning"
             css={{ margin: "auto", fontWeight: "bold", fontSize: "1.25rem" }}
@@ -138,7 +140,7 @@ function App() {
               height: "1.5rem",
               filter: "brightness(100)",
             }}
-            src="assets/aztec_logo.svg"
+            src={AztecLogo}
             alt="Aztec Logo"
           />
         </div>
