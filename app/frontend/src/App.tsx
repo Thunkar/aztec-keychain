@@ -96,7 +96,7 @@ function App() {
   useEffect(() => {
     if (!initialized) {
       const debounceInit = setTimeout(() => setTab("1"), 500);
-      setDebounceInit(debounceInit);
+      setDebounceInit(debounceInit as any);
     } else {
       clearInterval(debounceInit);
     }
