@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "WARNING: This will erase *all* untracked files, including hooks and submodules."
 echo -n "Continue? [y/n] "

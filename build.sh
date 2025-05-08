@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 AZTEC_VERSION=${AZTEC_VERSION:-"0.85.0-alpha-testnet.5"}
 
