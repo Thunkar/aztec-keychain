@@ -6,6 +6,9 @@ import Box from "@mui/material/Box";
 import { colors } from "./styles";
 import Typography from "@mui/material/Typography";
 import BoltIcon from "@mui/icons-material/Bolt";
+import { IconButton } from "@mui/material";
+import GitHubIcon from "@mui/icons-material/GitHub";
+import Article from "@mui/icons-material/Article";
 
 declare global {
   namespace JSX {
@@ -48,10 +51,16 @@ const blurredContainer = css({
   justifyContent: "center",
   alignItems: "center",
   padding: "1rem",
-  background: "rgba(255, 255, 255, 0.1)",
-  backdropFilter: "blur(4px)",
+  background: "rgba(15, 15, 15, 0.2)",
+  backdropFilter: "blur(10px)",
   height: "100vh",
   width: "100vw",
+});
+
+const linkBox = css({
+  position: "absolute",
+  top: "0.5rem",
+  right: "0.5rem",
 });
 
 function App() {
@@ -59,6 +68,13 @@ function App() {
     <>
       <Box css={container}></Box>
       <Box css={blurredContainer}>
+        <Box css={linkBox}>
+          <IconButton
+            onClick={() => window.open(import.meta.env.VITE_GITHUB_URL)}
+          >
+            <GitHubIcon />
+          </IconButton>
+        </Box>
         <div css={infoBuble}>
           <Typography variant="h2">Keychain</Typography>
           <Typography
@@ -68,7 +84,7 @@ function App() {
             _
           </Typography>
         </div>
-        <div css={{ flexGrow: 0.6, margin: "auto" }} />
+        <div css={{ flexGrow: 0.7, margin: "auto" }} />
         <div
           css={{
             display: "flex",
@@ -92,7 +108,7 @@ function App() {
         <esp-web-install-button manifest="/assets/manifest.json">
           <Button
             color="warning"
-            css={{ margin: "auto", fontWeight: "bold" }}
+            css={{ margin: "auto", fontWeight: "bold", fontSize: "1.25rem" }}
             variant="contained"
             slot="activate"
             endIcon={<BoltIcon />}
@@ -100,6 +116,18 @@ function App() {
             Flash now!
           </Button>
         </esp-web-install-button>
+        <Typography css={{ marginTop: "2rem" }} variant="caption">
+          or
+        </Typography>
+        <Button
+          color="secondary"
+          css={{ marginTop: "2rem", fontWeight: "bold" }}
+          variant="contained"
+          slot="activate"
+          endIcon={<Article />}
+        >
+          Read the docs
+        </Button>
         <div css={{ flexGrow: 1, margin: "auto" }} />
         <div css={infoBuble}>
           <Typography variant="overline">Built for </Typography>
