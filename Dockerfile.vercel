@@ -1,7 +1,0 @@
-FROM amazonlinux:2023.2.20231011.0 AS base
-
-COPY . /usr/src
-
-WORKDIR /usr/src
-
-RUN ./ci.sh
