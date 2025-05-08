@@ -3,8 +3,6 @@ set -e
 
 dnf install git make glibc-devel gcc g++ patch tar diffutils -y
 
-npm install --global corepack && corepack enable && corepack install --global yarn@1.22.22
-
 curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
 python3 get-platformio.py
 
