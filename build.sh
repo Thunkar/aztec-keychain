@@ -9,10 +9,10 @@ cd integration
 yarn install
 yarn build
 
-DEPLOY=${DEPLOY:-0}
+PUBLISH=${PUBLISH:-0}
 
-if [[ $DEPLOY == 1 ]]; then
-    yarn deploy
+if [[ $PUBLISH == 1 ]]; then
+    yarn publish
 fi
 
 # Captive portal
