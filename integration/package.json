@@ -11,7 +11,7 @@
     "entryPoints": [
       "./src/ecdsa/index.ts"
     ],
-    "name": "Accounts",
+    "name": "aztec-keychain-accounts",
     "tsconfig": "./tsconfig.json"
   },
   "scripts": {

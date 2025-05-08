@@ -1,3 +1,4 @@
+import { createLogger, type Logger } from '@aztec/aztec.js';
 import { inflate } from 'pako';
 
 export enum CommandType {
@@ -16,7 +17,10 @@ type Command = {
   data: any;
 };
 
-export async function sendCommandAndParseResponse(command: Command) {
+export async function sendCommandAndParseResponse(
+  command: Command,
+  logger: Logger = createLogger('aztec-keychain'),
+): Promise<Command> {
   if ('serial' in navigator) {
     let port;
     const existingPorts = await (navigator.serial as any).getPorts();
@@ -31,7 +35,6 @@ export async function sendCommandAndParseResponse(command: Command) {
     const writer = port.writable.getWriter();
     const message = Buffer.from(JSON.stringify(command));
     await writer.write(message);
-    // Allow the serial port to be closed later.
     writer.releaseLock();
 
     const reader = port.readable.getReader();
@@ -69,14 +72,14 @@ export async function sendCommandAndParseResponse(command: Command) {
               throw new Error('Invalid command');
             }
 
-            console.log('Command %o', currentCommand!);
+            logger.verbose('Command %o', currentCommand!);
 
             switch (currentCommand!.type) {
               case CommandType.GET_ARTIFACT_RESPONSE_START: {
                 currentDataTransfer = Buffer.alloc(0);
                 currentDataBytesLeft = currentCommand!.data.size;
                 portMode = 'data';
-                console.log('Starting data transfer, bytes left: %d', currentDataBytesLeft);
+                logger.verbose('Starting data transfer, bytes left: %d', currentDataBytesLeft);
                 break;
               }
               default: {
@@ -85,7 +88,7 @@ export async function sendCommandAndParseResponse(command: Command) {
               }
             }
           } catch {
-            console.log(maybeCommand.toString('utf-8').trim());
+            logger.verbose(maybeCommand.toString('utf-8').trim());
           }
         } else {
           while (currentDataBytesLeft > 0 && accumulatedData.length > 0) {
@@ -105,7 +108,7 @@ export async function sendCommandAndParseResponse(command: Command) {
               ...currentCommand!.data,
               data: JSON.parse(uncompressed.slice(jsonStart, jsonEnd + 1)),
             };
-            console.log('Data transfer complete, enriching response');
+            logger.verbose('Data transfer complete, enriching response');
             response = currentCommand;
             reader.releaseLock();
           }
