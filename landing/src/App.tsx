@@ -11,6 +11,7 @@ import GitHubIcon from "@mui/icons-material/GitHub";
 import Article from "@mui/icons-material/Article";
 import AztecLogo from "../assets/aztec_logo.svg";
 import Wireframe from "../assets/wireframe.png?url";
+import Logo from "../assets/logo.svg?url";
 
 declare global {
   namespace JSX {
@@ -61,7 +62,7 @@ const blurredContainer = css({
 
 const linkBox = css({
   position: "absolute",
-  top: "0.5rem",
+  bottom: "1.25rem",
   right: "0.5rem",
 });
 
@@ -78,9 +79,17 @@ function App() {
           </IconButton>
         </Box>
         <div css={infoBuble}>
-          <Typography variant="h2">Keychain</Typography>
+          {/* <img
+            css={{
+              height: "2.25rem",
+              filter: "invert(100%)",
+            }}
+            src={Logo}
+            alt="Keychain Logo"
+          /> */}
+          <Typography variant="h3">KeyChain</Typography>
           <Typography
-            variant="h2"
+            variant="h3"
             css={{ animation: `${blink} 1.25s steps(2) infinite` }}
           >
             _
@@ -92,7 +101,7 @@ function App() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            margin: "0.5rem",
+            margin: "2rem",
           }}
         >
           {["Lost funds", "Account redeployments", "No portability"].map(
@@ -119,7 +128,7 @@ function App() {
           </Button>
         </esp-web-install-button>
         <Typography css={{ marginTop: "2rem" }} variant="caption">
-          or
+          also
         </Typography>
         <Button
           color="secondary"
@@ -136,12 +145,13 @@ function App() {
           <img
             css={{
               marginLeft: "0.5rem",
-              marginTop: "-0.2rem",
+              marginTop: "-0.15rem",
               height: "1.5rem",
               filter: "brightness(100)",
             }}
             src={AztecLogo}
             alt="Aztec Logo"
+            onClick={() => window.open("https://aztec.network/")}
           />
         </div>
       </Box>
