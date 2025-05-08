@@ -12,9 +12,15 @@ cd integration
 yarn build
 
 PUBLISH=${PUBLISH:-0}
+PACKAGE_NAME=$(jq -r .name package.json)
+LAST_PUBLISHED_VERSION=$(yarn info $PACKAGE_NAME versions --json | jq -r '.data[-1]')
+VERSION=$(jq -r .version package.json)
 
-if [[ $PUBLISH == 1 ]]; then
-    VERSION=$(jq -r .version package.json)
+echo "Last published version: $LAST_PUBLISHED_VERSION"
+echo "Current version: $VERSION"
+
+if [[ $PUBLISH == 1 && $LAST_PUBLISHED_VERSION != $VERSION ]]; then
+    echo "Publishing $PACKAGE_NAME version $VERSION"
     yarn publish --new-version $VERSION --access public --non-interactive
 fi
 
