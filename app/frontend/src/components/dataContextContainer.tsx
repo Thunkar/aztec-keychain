@@ -122,7 +122,7 @@ export const DataContextContainer = function ({
   }, [keyChainStatus]);
 
   const loadAccounts = async () => {
-    let accounts = [];
+    const accounts = [];
     for (let i = 0; i < MAX_ACCOUNTS; i++) {
       const account = await loadAccount(i);
       accounts.push(account);

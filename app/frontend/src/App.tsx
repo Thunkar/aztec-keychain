@@ -168,9 +168,11 @@ function App() {
                   sx={{ marginLeft: "auto", borderRadius: "1rem" }}
                   onClick={() => {
                     setAccountIndexToRegenerate(index);
-                    account.pk.every((byte) => byte === 255)
-                      ? generateAccount(index)
-                      : setRegenerateDialogOpen(true);
+                    if (account.pk.every((byte) => byte === 255)) {
+                      generateAccount(index);
+                    } else {
+                      setRegenerateDialogOpen(true);
+                    }
                   }}
                 >
                   {account.pk.every((byte) => byte === 255)
