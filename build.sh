@@ -24,6 +24,7 @@ yarn build
 
 # ESP32 firmware
 
+PATH=$PATH:$HOME/.platformio/penv/bin
 cd ../../firmware
 mkdir -p data
 cp ../app/frontend/dist/index.html ./data/index.html
