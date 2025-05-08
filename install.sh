@@ -1,0 +1,19 @@
+#!/bin/bash
+
+npm install --global corepack && corepack enable && corepack install --global yarn@1.22.22
+
+curl -fsSL -o get-platformio.py https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py
+python3 get-platformio.py
+
+PIO_PATH=/root/.platformio/penv/bin
+PATH=$PIO_PATH:$PATH 
+
+git clone --recursive https://github.com/igrr/mkspiffs.git \
+    && cd mkspiffs \     
+    && make clean \
+    && make dist BUILD_CONFIG_NAME="-arduino-esp32" \
+    CPPFLAGS="-DSPIFFS_OBJ_META_LEN=4" \
+    && cp mkspiffs /root/.platformio/penv/bin/mkspiffs_espressif32_arduino
+
+
+cd firmware && platformio pkg install --environment esp32-c3-devkitm-1
