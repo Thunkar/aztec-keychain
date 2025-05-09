@@ -117,6 +117,22 @@ function App() {
           >
             Flash now!
           </Button>
+          <Box
+            slot="unsupported"
+            css={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+            }}
+          >
+            <Typography variant="subtitle1" color="warning">
+              Unfortunately this browser cannot be used as it doesn't support
+              the WebSerial API. Please use a desktop Chromium derivative
+              (Chrome, Edge, Brave, Opera...)
+            </Typography>
+          </Box>
         </esp-web-install-button>
         <Typography css={{ marginTop: "2rem" }} variant="caption">
           also
@@ -127,6 +143,7 @@ function App() {
           variant="contained"
           slot="activate"
           endIcon={<Article />}
+          onClick={() => window.open(import.meta.env.VITE_DOCS_URL)}
         >
           Read the docs
         </Button>

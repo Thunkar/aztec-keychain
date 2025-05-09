@@ -15,3 +15,9 @@ Based around the inexpensive ESP32 C3 chipset, in particular the Supermini board
 - The captive portal can be accessed with an auxiliary device (such a smartphone) to operate the interface, configure it and authorize/sign transactions.
 - The wallet exposes a serial interface to interact with applications.
 - Accounts are generated locally in the device and private signing keys are NEVER exposed through WiFi or serial.
+
+# I want one!
+
+1) [Assembly](./docs/assembly.md)
+2) [Usage](./docs/usage.md)
+3) [DApp integration](./docs/integration.md)
