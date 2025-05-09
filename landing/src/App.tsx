@@ -11,7 +11,6 @@ import GitHubIcon from "@mui/icons-material/GitHub";
 import Article from "@mui/icons-material/Article";
 import AztecLogo from "../assets/aztec_logo.svg";
 import Wireframe from "../assets/wireframe.png?url";
-import Logo from "../assets/logo.svg?url";
 
 declare global {
   namespace JSX {
@@ -79,14 +78,6 @@ function App() {
           </IconButton>
         </Box>
         <div css={infoBuble}>
-          {/* <img
-            css={{
-              height: "2.25rem",
-              filter: "invert(100%)",
-            }}
-            src={Logo}
-            alt="Keychain Logo"
-          /> */}
           <Typography variant="h3">KeyChain</Typography>
           <Typography
             variant="h3"
