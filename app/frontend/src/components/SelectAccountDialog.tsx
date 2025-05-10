@@ -31,7 +31,7 @@ export function SelectAccountDialog() {
             onClick={(index) => {
               selectAccount(index);
             }}
-            disabled={account.initialized}
+            disabled={!account.initialized}
             buttonText={"Connect"}
           />
         ))}

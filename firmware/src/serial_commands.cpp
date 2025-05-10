@@ -23,9 +23,9 @@ TaskResult readCommands(unsigned long now) {
         KeyPair keyPair;
         readKeyPair(keyIndex, &keyPair);
         JsonArray pk_array = doc[F("data")][F("pk")];
-        bool allZeros = true;
+        bool empty = true;
         for(int i = 0; i < 64; i++) {
-          allZeros &= (pk_array[i] == 0);
+          empty &= (pk_array[i] == 255);
           if(pk_array[i] != keyPair.pk[i]) {
             setError(INVALID_PK);
             response[F("type")] = ERROR;
@@ -35,7 +35,7 @@ TaskResult readCommands(unsigned long now) {
             return { false, 0 };
           }
         }
-        if (allZeros) {
+        if (empty) {
           setError(INVALID_PK);
           response[F("type")] = ERROR;
           response[F("data")][F("error")] = "Account not initialized";
