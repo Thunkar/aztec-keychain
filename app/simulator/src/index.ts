@@ -2,8 +2,8 @@ import { pino } from "pino";
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { initSerial } from "./modes/serial.js";
-import { initServer } from "./modes/web.js";
+import { initSerial } from "./modes/serial.ts";
+import { initServer } from "./modes/web.ts";
 
 const argv = await yargs(hideBin(process.argv))
   .options({

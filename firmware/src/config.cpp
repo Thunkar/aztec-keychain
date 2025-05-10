@@ -43,6 +43,14 @@ bool readPassword(char *password) {
   }
 }
 
+void readContractClassId(uint8_t *contractClassId) {
+  File artifact = SPIFFS.open("/EcdsaRAccount.txt", "r");
+  ReadBufferingStream bufferedFile{artifact, 32};  
+  while(bufferedFile.available()) {
+    bufferedFile.readBytes((char*)contractClassId, sizeof(contractClassId));
+  }
+}
+
 void readSSID(char *SSID) {
   String SSIDStr = preferences.getString("SSID", "Aztec keychain");
   SSIDStr.toCharArray(SSID, 32);
@@ -73,4 +81,9 @@ void writeSSID(const char *ssid) {
 void setupStorage() {
   EEPROM.begin(MAX_ACCOUNTS * (32+64+32+32));
   preferences.begin("keychain", false);
+}
+
+void closeStorage() {
+  preferences.end();
+  EEPROM.end();
 }

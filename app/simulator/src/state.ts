@@ -3,6 +3,7 @@ export const PK_LENGTH = 64;
 export const SK_LENGTH = 32;
 export const MSK_LENGTH = 32;
 export const SALT_LENGTH = 32;
+export const CONTRACT_CLASS_ID_LENGTH = 32;
 
 export const MESSAGE_TO_SIGN = "amessagewith32charactersforsure1"
   .split("")
@@ -14,6 +15,7 @@ export type Account = {
   msk: number[];
   sk: number[];
   pk: number[];
+  contractClassId: number[];
   index: number;
 };
 export type CurrentSignatureRequest = { index: number; msg: number[] };
@@ -32,6 +34,7 @@ export const state: State = {
       msk: Array(MSK_LENGTH).fill(255),
       pk: Array(PK_LENGTH).fill(255),
       sk: Array(SK_LENGTH).fill(255),
+      contractClassId: Array(SK_LENGTH).fill(255),
       index: i,
     })),
   status: 2,

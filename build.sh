@@ -29,22 +29,17 @@ fi
 cd ../app/frontend
 yarn build
 
+# Contracts
+cd ../../contracts
+yarn generate
+
 # ESP32 firmware
 
 PATH=$PATH:$HOME/.platformio/penv/bin
-cd ../../firmware
+cd ../firmware
 mkdir -p data
 cp ../app/frontend/dist/index.html ./data/index.html
-mkdir -p tmp
-cd tmp
-npm init -y
-npm install @aztec/noir-contracts.js@$AZTEC_VERSION
-cp node_modules/@aztec/noir-contracts.js/artifacts/ecdsa_r_account_contract-EcdsaRAccount.json ../data/EcdsaRAccount.json
-cd ../data
-rm -rf ../tmp
-tar -czvf ./EcdsaRAccount.json.gz ./EcdsaRAccount.json
-rm ./EcdsaRAccount.json
-cd ../
+cp ../contracts/artifacts/* ./data/
 
 platformio run --target buildfs --environment esp32-c3-devkitm-1
 

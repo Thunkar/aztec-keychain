@@ -1,8 +1,8 @@
-import { Logger } from "pino";
+import type { Logger } from "pino";
 
 import { SerialPort } from "serialport";
 import { inflate } from "pako";
-import { MESSAGE_TO_SIGN } from "../state.js";
+import { MESSAGE_TO_SIGN } from "../state.ts";
 
 export enum CommandType {
   SIGNATURE_REQUEST,

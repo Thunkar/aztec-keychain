@@ -3,19 +3,20 @@ import express, { type Request, type Response, json } from "express";
 import { pinoHttp } from "pino-http";
 import cors from "cors";
 import { secp256r1 } from "@noble/curves/p256";
-import { Logger } from "pino";
+import type { Logger } from "pino";
 import {
-  Account,
-  AccountIndex,
-  CurrentSignatureRequest,
+  type Account,
+  type AccountIndex,
+  type CurrentSignatureRequest,
   MSK_LENGTH,
   SALT_LENGTH,
-  Settings,
+  type Settings,
   settings,
   state,
-} from "../state.js";
+} from "../state.ts";
 import { randomBytes } from "crypto";
 import { WebSocketServer } from "ws";
+import { Fr } from "@aztec/aztec.js";
 
 export async function initServer(logger: Logger) {
   const app = express();
@@ -48,6 +49,7 @@ export async function initServer(logger: Logger) {
         salt: Array.from(randomBytes(SALT_LENGTH)),
         sk: Array.from(sk),
         pk: Array.from(pk),
+        contractClassId: Array.from(Fr.random().toBuffer()),
         index,
       };
       state.status = 0;
@@ -68,6 +70,7 @@ export async function initServer(logger: Logger) {
         pk: account.pk,
         salt: account.salt,
         msk: account.msk,
+        contractClassId: account.contractClassId,
       });
     }
   );

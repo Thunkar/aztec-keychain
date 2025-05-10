@@ -14,15 +14,20 @@ void configureSettingsHandler() {
       writeSSID(SSID);
       writePassword(password);
       request->send(200, "text/plain", "Ok");
+      closeStorage();
+      ESP.restart();
     } else {
       AsyncJsonResponse *response = new AsyncJsonResponse();
       JsonObject root = response->getRoot().to<JsonObject>();
       char SSID[32];
       char password[32];
       readSSID(SSID);
-      readPassword(password);
+      if(readPassword(password)) {
+        root["password"] = password;
+      } else {
+        root["password"] = "";
+      }
       root["SSID"] = SSID;
-      root["password"] = password;
       response->setLength();
       request->send(response);
     }
@@ -53,6 +58,7 @@ void configureaccountsHandler() {
       JsonArray pk_array = root[F("pk")].to<JsonArray>();
       JsonArray msk_array = root[F("msk")].to<JsonArray>();
       JsonArray salt_array = root[F("salt")].to<JsonArray>();
+      JsonArray contract_class_id_array = root[F("contractClassId")].to<JsonArray>();
 
       int index = request->getParam("index")->value().toInt();
       root["index"] = index;
@@ -68,6 +74,12 @@ void configureaccountsHandler() {
       readSalt(index, salt);
       for(int i = 0; i < 32; i++) {
         salt_array[i] = salt[i];
+      }
+
+      uint8_t contractClassId[32];
+      readContractClassId(contractClassId);
+      for(int i = 0; i < 32; i++) {
+        contract_class_id_array[i] = contractClassId[i];
       }
       response->setLength();
       request->send(response);

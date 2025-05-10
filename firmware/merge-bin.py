@@ -18,7 +18,7 @@ firmware_offset = "0x10000"
 firmware_bin = "${BUILD_DIR}/${PROGNAME}.bin"
 merged_bin = os.environ.get("MERGED_BIN_PATH", "${BUILD_DIR}/${PROGNAME}-merged.bin")
 spiffs_bin = "${BUILD_DIR}/spiffs.bin"
-spiffs_offset = "0x290000"
+spiffs_offset = "0x210000"
 
 def merge_bin_action(source, target, env):
     flash_images = [

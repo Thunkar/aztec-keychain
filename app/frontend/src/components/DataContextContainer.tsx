@@ -17,7 +17,9 @@ export type Account = {
   msk: number[];
   sk: number[];
   pk: number[];
+  contractClassId: number[];
   index: number;
+  initialized: boolean;
 };
 
 export type KeyChainStatusType = "IDLE" | "GENERATING_KEY" | "SIGNING";

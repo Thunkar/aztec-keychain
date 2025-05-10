@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <Preferences.h>
+#include <SPIFFS.h>
+#include <StreamUtils.h>
 #include "curve.h"
 #include "board.h"
 
@@ -24,6 +26,7 @@ void readSecretKey(int index, uint8_t *msk);
 void readSalt(int index, uint8_t *salt);
 bool readPassword(char *password);
 void readSSID(char *ssid);
+void readContractClassId(uint8_t *contractClassId);
 
 void writeKeyPair(int index, KeyPair *keyPair);
 void writeSecretKey(int index, uint8_t *msk);
@@ -32,3 +35,4 @@ void writePassword(const char *password);
 void writeSSID(const char *ssid);
 
 void setupStorage();
+void closeStorage();

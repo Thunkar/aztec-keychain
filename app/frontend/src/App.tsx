@@ -5,7 +5,7 @@ import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import Tab from "@mui/material/Tab";
 import { smallSlant, useAsciiText } from "react-ascii-text";
-import { ReactNode, useContext, useEffect, useState } from "react";
+import { ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { DataContext } from "./utils/context";
 import Button from "@mui/material/Button";
 import { keyToShortStr } from "./utils/format";
@@ -73,8 +73,6 @@ function App() {
 
   const [tab, setTab] = useState("0");
 
-  const [debounceInit, setDebounceInit] = useState(0);
-
   // Using a ref callback to bridge the type mismatch.
   const refCallback = (element: HTMLPreElement | null) => {
     if (asciiTextRef) {
@@ -88,19 +86,21 @@ function App() {
     websocketStatus,
     accounts,
     currentSignatureRequest,
-    SSID,
-    password,
     initialized,
   } = useContext(DataContext);
+  const initializedRef = useRef(initialized);
 
   useEffect(() => {
-    if (!initialized) {
-      const debounceInit = setTimeout(() => setTab("1"), 500);
-      setDebounceInit(debounceInit as any);
-    } else {
-      clearInterval(debounceInit);
-    }
+    initializedRef.current = initialized;
   }, [initialized]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      if (!initializedRef.current) {
+        setTab("1");
+      }
+    }, 1000);
+  }, []);
 
   return (
     <>
@@ -168,22 +168,21 @@ function App() {
                   sx={{ marginLeft: "auto", borderRadius: "1rem" }}
                   onClick={() => {
                     setAccountIndexToRegenerate(index);
-                    if (account.pk.every((byte) => byte === 255)) {
+                    if (!account.initialized) {
                       generateAccount(index);
                     } else {
                       setRegenerateDialogOpen(true);
                     }
                   }}
+                  disabled={keyChainStatus !== "IDLE" || !initialized}
                 >
-                  {account.pk.every((byte) => byte === 255)
-                    ? "Initialize"
-                    : "Regenerate"}
+                  {!account.initialized ? "Initialize" : "Regenerate"}
                 </Button>
               </Box>
             ))}
           </CustomTabPanel>
           <CustomTabPanel value="1" currentTab={tab}>
-            <Settings SSID={SSID} password={password} />
+            <Settings />
           </CustomTabPanel>
         </TabContext>
       </Box>

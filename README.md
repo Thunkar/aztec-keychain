@@ -4,8 +4,8 @@
 
 Low cost DIY hardware wallet for the Aztec network. This project should NOT be considered as a reference from a security standpoint, as it is a testbed for understanding how hardware wallets for Aztec could be designed and implemented.
 
-<img src="./media/finished.jpg" alt="keychain" style="height:500px;"/>
-<img src="./media/cad.jpg" alt="keychain" style="height:500px;"/>
+<img src="./media/finished.jpg" alt="keychain" style="height:350px;"/>
+<img src="./media/cad.jpg" alt="keychain" style="height:350px;"/>
 
 ## How
 

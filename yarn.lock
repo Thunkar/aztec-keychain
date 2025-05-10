@@ -124,6 +124,14 @@
   dependencies:
     tslib "^2.4.0"
 
+"@aztec/noir-contracts.js@0.85.0-alpha-testnet.5":
+  version "0.85.0-alpha-testnet.5"
+  resolved "https://registry.yarnpkg.com/@aztec/noir-contracts.js/-/noir-contracts.js-0.85.0-alpha-testnet.5.tgz#737925d4c7f5fad60ac5206d41873198a0f5349e"
+  integrity sha512-1kB6jjuPr6XYKUx9cs/dxBVifmFnpxtdZXFMfDXGaeRD398K7ytm7EoMrYJ+5qy2yIgShG4Il83Gd2PdLOuyfQ==
+  dependencies:
+    "@aztec/aztec.js" "0.85.0-alpha-testnet.5"
+    tslib "^2.4.0"
+
 "@aztec/noir-noirc_abi@0.85.0-alpha-testnet.5":
   version "0.85.0-alpha-testnet.5"
   resolved "https://registry.yarnpkg.com/@aztec/noir-noirc_abi/-/noir-noirc_abi-0.85.0-alpha-testnet.5.tgz#4e997bb79f078166d891a6b2aeb6d2cbe695acbe"

@@ -11,8 +11,8 @@ These screw [into M3xL3xOD4.5 brass inserts](https://es.aliexpress.com/item/1005
 
 Choose a case model from the cad folder. STL, STEP, F3D and 3MF files are provided.
 
-<img src="../media/finished.jpg" alt="case1" style="height:400px;"/>
-<img src="../media/case2.jpg" alt="case2" style="height:400px;"/>
+<img src="../media/finished.jpg" alt="case1" style="height:350px;"/>
+<img src="../media/case2.jpg" alt="case2" style="height:350px;"/>
 
 It can be printed in PLA or PETG, at 0.2mm layer height. It's recommended to use 10% gyroid infill.
 

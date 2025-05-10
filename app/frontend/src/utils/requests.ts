@@ -18,6 +18,7 @@ export async function loadAccount(index: number): Promise<Account> {
 
   const response = await fetch(url);
   const body = await response.json();
+  body.initialized = !body.pk.every((byte: number) => byte === 255);
   return body;
 }
 
