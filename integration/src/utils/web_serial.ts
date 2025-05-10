@@ -72,14 +72,14 @@ export async function sendCommandAndParseResponse(
               throw new Error('Invalid command');
             }
 
-            logger.verbose('Command %o', currentCommand!);
+            logger.verbose(`Parsed command of type ${currentCommand!.type}`, currentCommand!);
 
             switch (currentCommand!.type) {
               case CommandType.GET_ARTIFACT_RESPONSE_START: {
                 currentDataTransfer = Buffer.alloc(0);
                 currentDataBytesLeft = currentCommand!.data.size;
                 portMode = 'data';
-                logger.verbose('Starting data transfer, bytes left: %d', currentDataBytesLeft);
+                logger.verbose(`Starting data transfer, bytes left: ${currentDataBytesLeft}`);
                 break;
               }
               default: {
@@ -88,7 +88,7 @@ export async function sendCommandAndParseResponse(
               }
             }
           } catch {
-            logger.verbose(maybeCommand.toString('utf-8').trim());
+            logger.debug(maybeCommand.toString('utf-8').trim());
           }
         } else {
           while (currentDataBytesLeft > 0 && accumulatedData.length > 0) {
