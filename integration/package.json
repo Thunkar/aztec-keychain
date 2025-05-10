@@ -2,7 +2,7 @@
   "name": "@thunkar/aztec-keychain-accounts",
   "homepage": "https://github.com/Thunkar/aztec-keychain",
   "description": "TS implementation for the aztec-keychain account wallet",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "exports": {
     "./ecdsa": "./dest/ecdsa/index.js"

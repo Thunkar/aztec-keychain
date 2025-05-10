@@ -22,7 +22,7 @@ export type CurrentSignatureRequest = { index: number; msg: number[] };
 
 export type State = {
   accounts: Account[];
-  status: 0 | 1 | 2; // 0 -> IDLE, 1 -> GENERATING_ACCOUNT, 2 -> SIGNING
+  status: 0 | 1 | 2 | 3; // 0 -> IDLE, 1 -> GENERATING_ACCOUNT, 2 -> SELECTING_ACCOUNT, 3 -> SIGNING
   currentSignatureRequest: CurrentSignatureRequest;
 };
 

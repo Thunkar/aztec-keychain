@@ -6,6 +6,7 @@
 enum KeyChainStatus {
     IDLE,
     GENERATING_ACCOUNT,
+    SELECTING_ACCOUNT,
     SIGNING
 };
 

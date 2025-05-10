@@ -8,6 +8,7 @@ import {
   loadSettings,
   writeSettings,
   finishSignatureRequest,
+  confirmAccountSelection,
 } from "../utils/requests";
 
 const MAX_ACCOUNTS = 5;
@@ -22,11 +23,16 @@ export type Account = {
   initialized: boolean;
 };
 
-export type KeyChainStatusType = "IDLE" | "GENERATING_KEY" | "SIGNING";
+export type KeyChainStatusType =
+  | "IDLE"
+  | "GENERATING_KEY"
+  | "SIGNING"
+  | "SELECTING_ACCOUNT";
 export const KeyChainStatus: KeyChainStatusType[] = [
   "IDLE",
   "GENERATING_KEY",
   "SIGNING",
+  "SELECTING_ACCOUNT",
 ] as const;
 
 export type CurrentSignatureRequest = {
@@ -100,6 +106,10 @@ export const DataContextContainer = function ({
           break;
         }
         case 2: {
+          setKeyChainStatus("SELECTING_ACCOUNT");
+          break;
+        }
+        case 3: {
           if (
             accounts.some((account) => account.pk.some((byte) => byte !== 255))
           ) {
@@ -161,6 +171,10 @@ export const DataContextContainer = function ({
     setAccounts(accounts);
   };
 
+  const selectAccount = async (index: number) => {
+    await confirmAccountSelection(index);
+  };
+
   const initialData = {
     websocketStatus,
     accounts,
@@ -171,6 +185,7 @@ export const DataContextContainer = function ({
     initialized,
     storeSettings,
     generateAccount,
+    selectAccount,
   };
 
   return (

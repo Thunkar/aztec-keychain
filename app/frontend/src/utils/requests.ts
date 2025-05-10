@@ -34,6 +34,18 @@ export async function requestNewAccount(index: number): Promise<void> {
   });
 }
 
+export async function confirmAccountSelection(index: number): Promise<void> {
+  const url = buildUrl("accounts");
+
+  await fetch(url, {
+    method: "PUT",
+    body: JSON.stringify({ index }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
 export async function loadCurrentSignatureRequest(): Promise<CurrentSignatureRequest> {
   const url = buildUrl("signature");
 

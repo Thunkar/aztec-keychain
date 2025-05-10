@@ -14,6 +14,7 @@ export const DataContext = createContext<{
   initialized: boolean;
   storeSettings: (SSID: string, password: string) => Promise<void>;
   generateAccount: (index: number) => Promise<void>;
+  selectAccount: (index: number) => Promise<void>;
 }>({
   websocketStatus: "Uninstantiated",
   keyChainStatus: "IDLE",
@@ -24,4 +25,5 @@ export const DataContext = createContext<{
   initialized: false,
   storeSettings: (_SSID: string, _password: string) => Promise.resolve(),
   generateAccount: (_index: number) => Promise.resolve(),
+  selectAccount: (_index: number) => Promise.resolve(),
 });

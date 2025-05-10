@@ -36,7 +36,7 @@ void configureSettingsHandler() {
 
 static AsyncCallbackJsonWebHandler *accountsHandler = new AsyncCallbackJsonWebHandler("/accounts");
 void configureaccountsHandler() {
-  accountsHandler->setMethod(HTTP_POST | HTTP_GET);
+  accountsHandler->setMethod(HTTP_POST | HTTP_GET | HTTP_PUT);
   accountsHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
     KeyPair keyPair;
     uint8_t msk[32];
@@ -50,6 +50,11 @@ void configureaccountsHandler() {
       RNG(salt, 32);
       writeSecretKey(index, msk);
       writeSalt(index, salt);
+      state.status = IDLE;
+      request->send(200, "text/plain", "Ok");
+    } else if (request->method() == HTTP_PUT) {
+      int index = json.as<JsonObject>()["index"];
+      sendAccount(index); 
       state.status = IDLE;
       request->send(200, "text/plain", "Ok");
     } else {
@@ -91,30 +96,13 @@ static AsyncCallbackJsonWebHandler *signatureHandler = new AsyncCallbackJsonWebH
 void configureSignatureHandler() {
   signatureHandler->setMethod(HTTP_POST | HTTP_GET);
   signatureHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
-    KeyPair keyPair;
-    JsonDocument response;
-
     if(request->method() == HTTP_POST) {
       bool approve = json.as<JsonObject>()["approve"];
-      if(approve) {
-        KeyPair keyPair;
-        readKeyPair(state.currentSignatureRequest.index, &keyPair);
-        uint8_t signature[64];
-        sign(&keyPair, state.currentSignatureRequest.msg, signature);
-        response[F("type")] = SIGNATURE_ACCEPTED_RESPONSE;
-        JsonArray jsonSignature = response[F("data")][F("signature")].to<JsonArray>();
-        for(int i = 0; i < 64; i++) {
-          jsonSignature[i] = signature[i];
-        }
-      } else {
-        response[F("type")] = SIGNATURE_REJECTED_RESPONSE;
-      }
-      char output[512];
-      serializeJson(response, output);
-      Serial.println(output);
+      sendSignatureResponse(approve);
       state.status = IDLE;
       request->send(200, "text/plain", "Ok");
     } else {
+      KeyPair keyPair;
       AsyncJsonResponse *response = new AsyncJsonResponse();
       JsonObject root = response->getRoot().to<JsonObject>();
       readKeyPair(state.currentSignatureRequest.index, &keyPair);

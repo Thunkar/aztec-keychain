@@ -75,6 +75,14 @@ export async function initServer(logger: Logger) {
     }
   );
 
+  app.put(
+    "/accounts",
+    (req: Request<any, any, AccountIndex>, res: Response) => {
+      state.status = 0;
+      res.status(200).send("Ok");
+    }
+  );
+
   type SignatureRequestUserReponse = { accepted: boolean };
 
   app.post(

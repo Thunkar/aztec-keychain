@@ -12,17 +12,20 @@ TaskResult readCommands(unsigned long now) {
         return { false, 0 };
     }
 
-    JsonDocument response;
     Command type = doc[F("type")]; 
-    char output[1024];
 
     switch (type) {
       case SIGNATURE_REQUEST: {
+        JsonDocument response;
+        Command type = doc[F("type")]; 
+        char output[1024];
         int keyIndex = doc[F("data")][F("index")];
         KeyPair keyPair;
         readKeyPair(keyIndex, &keyPair);
         JsonArray pk_array = doc[F("data")][F("pk")];
+        bool allZeros = true;
         for(int i = 0; i < 64; i++) {
+          allZeros &= (pk_array[i] == 0);
           if(pk_array[i] != keyPair.pk[i]) {
             setError(INVALID_PK);
             response[F("type")] = ERROR;
@@ -31,6 +34,14 @@ TaskResult readCommands(unsigned long now) {
             Serial.println(output);
             return { false, 0 };
           }
+        }
+        if (allZeros) {
+          setError(INVALID_PK);
+          response[F("type")] = ERROR;
+          response[F("data")][F("error")] = "Account not initialized";
+          serializeJson(response, output);
+          Serial.println(output);
+          return { false, 0 };
         }
         JsonArray data_array = doc[F("data")][F("msg")];
         for (int i = 0; i < 64; i++) {
@@ -41,33 +52,17 @@ TaskResult readCommands(unsigned long now) {
         state.status = SIGNING;
         break;
       } 
-      case GET_ACCOUNT_REQUESTED: {
+      case GET_ACCOUNT_REQUEST: {
         int index = doc[F("data")][F("index")];
-        response[F("type")] = GET_ACCOUNT_RESPONSE;
-        JsonArray pk_array = response[F("data")][F("pk")].to<JsonArray>();
-        JsonArray msk_array = response[F("data")][F("msk")].to<JsonArray>();
-        JsonArray salt_array = response[F("data")][F("salt")].to<JsonArray>();
-
-        KeyPair keyPair;
-        readKeyPair(index, &keyPair);
-        for (int i = 0; i < 64; i++) {
-          pk_array[i] = keyPair.pk[i];
+        if(index == -1) {
+          state.status = SELECTING_ACCOUNT;
+        } else {
+          sendAccount(index);
         }
-        uint8_t msk[32];
-        readSecretKey(index, msk);
-        for(int i = 0; i < 32; i++) {
-          msk_array[i] = msk[i];
-        }
-        uint8_t salt[32];
-        readSalt(index, salt);
-        for(int i = 0; i < 32; i++) {
-          salt_array[i] = salt[i];
-        }
-        serializeJson(response, output);
-        Serial.println(output);
         break;
       }
       case GET_ARTIFACT_REQUEST: {
+          char output[1024];
           File artifact = SPIFFS.open("/EcdsaRAccount.json.gz", "r");
           JsonDocument responseStart;
           responseStart[F("type")] = GET_ARTIFACT_RESPONSE_START;
@@ -91,4 +86,55 @@ TaskResult readCommands(unsigned long now) {
 
   }
   return { true, 0 };
+}
+
+void sendAccount(int index) {
+    JsonDocument response;
+    if(index != -1) {
+      response[F("type")] = GET_ACCOUNT_RESPONSE;
+      JsonArray pk_array = response[F("data")][F("pk")].to<JsonArray>();
+      JsonArray msk_array = response[F("data")][F("msk")].to<JsonArray>();
+      JsonArray salt_array = response[F("data")][F("salt")].to<JsonArray>();
+
+      KeyPair keyPair;
+      readKeyPair(index, &keyPair);
+      for (int i = 0; i < 64; i++) {
+        pk_array[i] = keyPair.pk[i];
+      }
+      uint8_t msk[32];
+      readSecretKey(index, msk);
+      for(int i = 0; i < 32; i++) {
+        msk_array[i] = msk[i];
+      }
+      uint8_t salt[32];
+      readSalt(index, salt);
+      for(int i = 0; i < 32; i++) {
+        salt_array[i] = salt[i];
+      }
+    } else {
+      response[F("type")] = GET_ACCOUNT_REJECTED;
+    }
+    char output[1024];
+    serializeJson(response, output);
+    Serial.println(output);
+}
+
+void sendSignatureResponse(bool approve) {
+      JsonDocument response;
+      if(approve) {
+        KeyPair keyPair;
+        readKeyPair(state.currentSignatureRequest.index, &keyPair);
+        uint8_t signature[64];
+        sign(&keyPair, state.currentSignatureRequest.msg, signature);
+        response[F("type")] = SIGNATURE_ACCEPTED_RESPONSE;
+        JsonArray jsonSignature = response[F("data")][F("signature")].to<JsonArray>();
+        for(int i = 0; i < 64; i++) {
+          jsonSignature[i] = signature[i];
+        }
+      } else {
+        response[F("type")] = SIGNATURE_REJECTED_RESPONSE;
+      }
+      char output[1024];
+      serializeJson(response, output);
+      Serial.println(output);
 }

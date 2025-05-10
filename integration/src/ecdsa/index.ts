@@ -51,9 +51,14 @@ export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract
  */
 export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<AccountManager> {
   const accountResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_ACCOUNT_REQUESTED,
+    type: CommandType.GET_ACCOUNT_REQUEST,
     data: { index },
   });
+  if (accountResponse.type !== CommandType.GET_ACCOUNT_RESPONSE) {
+    throw new Error(
+      `Unexpected response type from HW wallet: ${accountResponse.type}. Expected ${CommandType.GET_ACCOUNT_RESPONSE}`,
+    );
+  }
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
   const secretKey = Fr.fromBufferReduce(Buffer.from(accountResponse.data.msk));
   const salt = Fr.fromBufferReduce(Buffer.from(accountResponse.data.salt));
@@ -68,9 +73,14 @@ export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<A
  */
 export async function getEcdsaRSerialWallet(pxe: PXE, address: AztecAddress, index: number): Promise<AccountWallet> {
   const accountResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_ACCOUNT_REQUESTED,
+    type: CommandType.GET_ACCOUNT_REQUEST,
     data: { index },
   });
+  if (accountResponse.type !== CommandType.GET_ACCOUNT_RESPONSE) {
+    throw new Error(
+      `Unexpected response type from HW wallet: ${accountResponse.type}. Expected ${CommandType.GET_ACCOUNT_RESPONSE}`,
+    );
+  }
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
   return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey));
 }

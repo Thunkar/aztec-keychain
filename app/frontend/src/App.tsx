@@ -7,22 +7,13 @@ import Tab from "@mui/material/Tab";
 import { smallSlant, useAsciiText } from "react-ascii-text";
 import { ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { DataContext } from "./utils/context";
-import Button from "@mui/material/Button";
-import { keyToShortStr } from "./utils/format";
 import { css } from "@emotion/react";
 import { colors } from "./styles";
 import { SignDialog } from "./components/SignDialog";
 import { RegenerateDialog } from "./components/RegenerateDialog";
 import { Settings } from "./components/Settings";
-
-const keyBox = css({
-  display: "flex",
-  borderRadius: "1rem",
-  background: colors.primary,
-  fontsize: "1.5rem",
-  padding: "0.5rem",
-  margin: "0.5rem 1rem",
-});
+import { AccountBox } from "./components/AccountBox";
+import { SelectAccountDialog } from "./components/SelectAccountDialog";
 
 const statusContainer = css({
   display: "flex",
@@ -154,31 +145,21 @@ function App() {
             </TabList>
           </Box>
           <CustomTabPanel value="0" currentTab={tab}>
-            {accounts.map((account, index) => (
-              <Box css={keyBox} key={index}>
-                <Typography
-                  variant="overline"
-                  sx={{ fontSize: "1rem", textTransform: "unset" }}
-                >
-                  {index}. {keyToShortStr(account.pk)}
-                </Typography>
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  sx={{ marginLeft: "auto", borderRadius: "1rem" }}
-                  onClick={() => {
-                    setAccountIndexToRegenerate(index);
-                    if (!account.initialized) {
-                      generateAccount(index);
-                    } else {
-                      setRegenerateDialogOpen(true);
-                    }
-                  }}
-                  disabled={keyChainStatus !== "IDLE" || !initialized}
-                >
-                  {!account.initialized ? "Initialize" : "Regenerate"}
-                </Button>
-              </Box>
+            {accounts.map((account) => (
+              <AccountBox
+                key={account.index}
+                account={account}
+                onClick={(index) => {
+                  setAccountIndexToRegenerate(index);
+                  if (!account.initialized) {
+                    generateAccount(index);
+                  } else {
+                    setRegenerateDialogOpen(true);
+                  }
+                }}
+                disabled={keyChainStatus !== "IDLE" || !initialized}
+                buttonText={!account.initialized ? "Initialize" : "Regenerate"}
+              />
             ))}
           </CustomTabPanel>
           <CustomTabPanel value="1" currentTab={tab}>
@@ -200,6 +181,7 @@ function App() {
           }}
         />
       )}
+      {keyChainStatus === "SELECTING_ACCOUNT" && <SelectAccountDialog />}
     </>
   );
 }

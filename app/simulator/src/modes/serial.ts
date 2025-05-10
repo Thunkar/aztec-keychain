@@ -8,8 +8,9 @@ export enum CommandType {
   SIGNATURE_REQUEST,
   SIGNATURE_ACCEPTED_RESPONSE,
   SIGNATURE_REJECTED_RESPONSE,
-  GET_ACCOUNT_REQUESTED,
+  GET_ACCOUNT_REQUEST,
   GET_ACCOUNT_RESPONSE,
+  GET_ACCOUNT_REJECTED,
   GET_ARTIFACT_REQUEST,
   GET_ARTIFACT_RESPONSE_START,
   ERROR,
@@ -29,10 +30,10 @@ const signRequest = {
   },
 };
 
-const keyRequest = {
-  type: CommandType.GET_ACCOUNT_REQUESTED,
+const accountRequest = {
+  type: CommandType.GET_ACCOUNT_REQUEST,
   data: {
-    index: 0,
+    index: -1,
   },
 };
 
@@ -49,7 +50,7 @@ export function initSerial(portName: string, logger: Logger) {
   });
 
   setTimeout(() => {
-    port.write(Buffer.from(JSON.stringify(artifactRequest)));
+    port.write(Buffer.from(JSON.stringify(accountRequest)));
     port.drain();
   }, 2000);
 
