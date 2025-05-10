@@ -11,15 +11,16 @@ import {} from "fs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Horrible, but required until aztec-packages is on node 22
-async function loadContractArtifactWithoutTypeAssertions(contractName: string) {
+async function loadContractArtifactJSONWithoutTypeAssertions(
+  contractName: string
+) {
   const contractPath = join(
     __dirname,
     "../../node_modules/@aztec/noir-contracts.js/artifacts",
     contractName
   );
   const file = await readFile(contractPath);
-  const artifact = JSON.parse(file.toString());
-  return loadContractArtifact(artifact);
+  return JSON.parse(file.toString());
 }
 
 async function main() {
@@ -29,17 +30,17 @@ async function main() {
   const contracts = [
     {
       name: "EcdsaRAccount",
-      artifact: await loadContractArtifactWithoutTypeAssertions(
+      json: await loadContractArtifactJSONWithoutTypeAssertions(
         "ecdsa_r_account_contract-EcdsaRAccount.json"
       ),
     },
   ];
 
   for (const contract of contracts) {
-    const compressed = await gzip(JSON.stringify(contract.artifact));
+    const compressed = await gzip(JSON.stringify(contract.json));
     await writeFile(join(outputFolder, `${contract.name}.json.gz`), compressed);
     const contractClassId = (
-      await getContractClassFromArtifact(contract.artifact)
+      await getContractClassFromArtifact(loadContractArtifact(contract.json))
     ).id;
     await writeFile(
       join(outputFolder, `${contract.name}.classId`),
