@@ -44,11 +44,9 @@ bool readPassword(char *password) {
 }
 
 void readContractClassId(uint8_t *contractClassId) {
-  File artifact = SPIFFS.open("/EcdsaRAccount.txt", "r");
-  ReadBufferingStream bufferedFile{artifact, 32};  
-  while(bufferedFile.available()) {
-    bufferedFile.readBytes((char*)contractClassId, sizeof(contractClassId));
-  }
+  File artifact = SPIFFS.open("/EcdsaRAccount.classId", "r");
+  artifact.readBytes((char*)contractClassId, 32);
+  artifact.close();
 }
 
 void readSSID(char *SSID) {
