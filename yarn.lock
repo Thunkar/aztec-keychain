@@ -64,6 +64,13 @@
   dependencies:
     tslib "^2.4.0"
 
+"@aztec/constants@^0.86.0":
+  version "0.86.0"
+  resolved "https://registry.yarnpkg.com/@aztec/constants/-/constants-0.86.0.tgz#fc73fd40f47ccb704109ab63ce7d8ac3ebb362c5"
+  integrity sha512-xNlaNkBGodgEeSfwee7yevPNgMvNCMl9jZ2j+gBAR+SrbGtMkdTo1aNg732gcQNFjW+3MN/rUNMqPodWD0KN4A==
+  dependencies:
+    tslib "^2.4.0"
+
 "@aztec/entrypoints@0.85.0-alpha-testnet.5":
   version "0.85.0-alpha-testnet.5"
   resolved "https://registry.yarnpkg.com/@aztec/entrypoints/-/entrypoints-0.85.0-alpha-testnet.5.tgz#2eec8279f7d27bbbfa26e4ca286c3ccd7d511ff6"
@@ -1430,7 +1437,7 @@
   dependencies:
     "@noble/hashes" "1.7.1"
 
-"@noble/curves@^1.2.0", "@noble/curves@^1.6.0", "@noble/curves@^1.8.2", "@noble/curves@~1.9.0":
+"@noble/curves@^1.2.0", "@noble/curves@^1.6.0", "@noble/curves@^1.8.2", "@noble/curves@^1.9.0", "@noble/curves@~1.9.0":
   version "1.9.0"
   resolved "https://registry.yarnpkg.com/@noble/curves/-/curves-1.9.0.tgz#13e0ca8be4a0ce66c113693a94514e5599f40cfc"
   integrity sha512-7YDlXiNMdO1YZeH6t/kvopHHbIZzlxrCV9WLqCY6QhcXOoXiNCMDqJIglZ9Yjx5+w7Dz30TITFrlTjnRg7sKEg==
@@ -1833,6 +1840,11 @@
   dependencies:
     "@types/node" "*"
 
+"@types/detect-node@^2.0.2":
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/@types/detect-node/-/detect-node-2.0.2.tgz#acca2b41de7a5ee88d9fd5081322b85f84b9604f"
+  integrity sha512-2r16DIvQ3dLcRHBPzbdlPsqUWvNaIE7g3fPlGcoA5IF0Nvv7gaONWleB2rhEmggvj/P5VvxseWchR2noncrgGg==
+
 "@types/estree@1.0.7", "@types/estree@^1.0.6":
   version "1.0.7"
   resolved "https://registry.yarnpkg.com/@types/estree/-/estree-1.0.7.tgz#4158d3105276773d5b7695cd4834b1722e4f37a8"
@@ -2082,6 +2094,11 @@
   integrity sha512-jYFUSXhwMCYsh/aQTgSGLIN3Foz5wMbH9ahb0Zva//UzwZYbMiZd7oT3AU9jHT9DLswYDswsRwPU9jVF3yA48Q==
   dependencies:
     "@swc/core" "^1.11.21"
+
+"@zkpassport/poseidon2@^0.6.1":
+  version "0.6.1"
+  resolved "https://registry.yarnpkg.com/@zkpassport/poseidon2/-/poseidon2-0.6.1.tgz#6c7d5345916d4632a3bfe25641605e9a6f6e0c2f"
+  integrity sha512-9jDOgCvZvrfZAoobPjDVKnBmcjE9HP2HwlCc/dpwAr87ERzGyV0WqY6y0AkomtlYEJIaAtAEjLeRgmKKNIqFCg==
 
 abitype@1.0.8, abitype@^1.0.6:
   version "1.0.8"
@@ -5014,7 +5031,7 @@ zod-to-json-schema@^3.24.1:
   resolved "https://registry.yarnpkg.com/zod-to-json-schema/-/zod-to-json-schema-3.24.5.tgz#d1095440b147fb7c2093812a53c54df8d5df50a3"
   integrity sha512-/AuWwMP+YqiPbsJx5D6TfgRTc4kTLjsh5SOcd4bLsfUg2RcEXrFMJl1DGgdHy2aCfsIA/cr/1JM0xcB2GZji8g==
 
-zod@^3.23.8, zod@^3.24.2:
+zod@^3.23.8, zod@^3.24.2, zod@^3.24.4:
   version "3.24.4"
   resolved "https://registry.yarnpkg.com/zod/-/zod-3.24.4.tgz#e2e2cca5faaa012d76e527d0d36622e0a90c315f"
   integrity sha512-OdqJE9UDRPwWsrHjLN2F8bPxvwJBK22EHLWtanu0LSYr5YqzsaaW3RMgmjwr8Rypg5k+meEJdSPXJZXE/yqOMg==

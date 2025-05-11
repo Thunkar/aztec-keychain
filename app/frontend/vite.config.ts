@@ -10,4 +10,9 @@ export default defineConfig({
     }),
     viteSingleFile(),
   ],
+  server: {
+    fs: {
+      allow: ["../contracts/artifacts"],
+    },
+  },
 });
