@@ -1832,6 +1832,11 @@
     "@types/connect" "*"
     "@types/node" "*"
 
+"@types/buffer-json@^2.0.3":
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/@types/buffer-json/-/buffer-json-2.0.3.tgz#2e812df8103defddcb40c038f8f0b0d61dcbfb83"
+  integrity sha512-ItD4UfF3Q5jA+PEV6ZUWEHvlWaXJbd0rpuBKOIrEebM053FHaJddKsgUf0vy7nLSTs44nqFj3Mh8J3TiT0xv4g==
+
 "@types/caseless@*":
   version "0.12.5"
   resolved "https://registry.yarnpkg.com/@types/caseless/-/caseless-0.12.5.tgz#db9468cb1b1b5a925b8f34822f1669df0c5472f5"
@@ -2448,6 +2453,11 @@ buffer-equal-constant-time@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/buffer-equal-constant-time/-/buffer-equal-constant-time-1.0.1.tgz#f8e71132f7ffe6e01a5c9697a4c6f3e48d5cc819"
   integrity sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==
+
+buffer-json@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/buffer-json/-/buffer-json-2.0.0.tgz#f73e13b1e42f196fe2fd67d001c7d7107edd7c23"
+  integrity sha512-+jjPFVqyfF1esi9fvfUs3NqM0pH1ziZ36VP4hmA/y/Ssfo/5w5xHKfTw9BwQjoJ1w/oVtpLomqwUHKdefGyuHw==
 
 buffer-xor@^1.0.3:
   version "1.0.3"

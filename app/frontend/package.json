@@ -20,6 +20,7 @@
     "@mui/material": "^6.4.4",
     "@noble/curves": "^1.9.0",
     "@zkpassport/poseidon2": "^0.6.1",
+    "buffer-json": "^2.0.0",
     "detect-node": "^2.1.0",
     "hash.js": "^1.1.7",
     "pako": "^2.1.0",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",
+    "@types/buffer-json": "^2.0.3",
     "@types/detect-node": "^2.0.2",
     "@types/pako": "^2.0.3",
     "@types/react": "^18.3.18",

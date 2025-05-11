@@ -6,6 +6,7 @@ import {
 } from "../components/DataContextContainer";
 import { computeAddressForAccount } from "./address";
 import { FunctionAbi } from "./address/abi/types";
+import { parse } from "buffer-json";
 
 function buildUrl(path: string): URL {
   return new URL(
@@ -25,7 +26,7 @@ export async function loadAccount(index: number): Promise<Account> {
   if (body.initialized) {
     const accountContractRes = await fetch(import.meta.env.VITE_INIT_FN_URL);
     const accountContractCompressed = await accountContractRes.arrayBuffer();
-    const accountContract = JSON.parse(
+    const accountContract = parse(
       await inflate(accountContractCompressed, { to: "string" })
     );
     const initFn = accountContract.functions

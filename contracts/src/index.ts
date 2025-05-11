@@ -3,11 +3,9 @@ import { writeFile, mkdir, readFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import {
-  getAllFunctionAbis,
   getContractClassFromArtifact,
   loadContractArtifact,
 } from "@aztec/aztec.js";
-import {} from "fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

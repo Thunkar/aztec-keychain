@@ -1,5 +1,6 @@
 import { createLogger, type Logger } from '@aztec/aztec.js';
 import { inflate } from 'pako';
+import { parse, stringify } from 'buffer-json';
 
 export enum CommandType {
   SIGNATURE_REQUEST,
@@ -34,7 +35,7 @@ export async function sendCommandAndParseResponse(
     const currentData = [Buffer.alloc(0)];
 
     const writer = port.writable.getWriter();
-    const message = Buffer.from(JSON.stringify(command));
+    const message = Buffer.from(stringify(command));
     await writer.write(message);
     writer.releaseLock();
 
@@ -68,7 +69,7 @@ export async function sendCommandAndParseResponse(
         if (portMode === 'command') {
           const maybeCommand = accumulatedData.shift()!;
           try {
-            currentCommand = JSON.parse(maybeCommand.toString('utf-8').trim());
+            currentCommand = parse(maybeCommand.toString('utf-8').trim());
             if (!currentCommand!.type) {
               throw new Error('Invalid command');
             }
@@ -107,7 +108,7 @@ export async function sendCommandAndParseResponse(
             const jsonEnd = uncompressed.lastIndexOf('}');
             currentCommand!.data = {
               ...currentCommand!.data,
-              data: JSON.parse(uncompressed.slice(jsonStart, jsonEnd + 1)),
+              data: parse(uncompressed.slice(jsonStart, jsonEnd + 1)),
             };
             logger.verbose('Data transfer complete, enriching response');
             response = currentCommand;
