@@ -128,11 +128,11 @@ public:
   virtual ~CaptivePortalHandler() {}
 
   bool canHandle(AsyncWebServerRequest *request){
-    return request->url() == "/" && request->method() == HTTP_GET;
+    return true;
   }
 
   void handleRequest(AsyncWebServerRequest *request) {
-    request->send(SPIFFS, "/index.html", String(), false);
+      request->send(SPIFFS, "/index.html", String(), false);
   }
 };
 
@@ -167,6 +167,9 @@ void setupServer(){
   server.addHandler(accountsHandler);
   server.addHandler(signatureHandler);
   server.addHandler(settingsHandler);
+  server.on("/EcdsaRAccount.json.gz", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/EcdsaRAccount.json.gz", "application/gzip", false);
+  });
   server.onNotFound([&](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/index.html", String(), false);
   });

@@ -21,6 +21,7 @@
     "@noble/curves": "^1.9.0",
     "@zkpassport/poseidon2": "^0.6.1",
     "detect-node": "^2.1.0",
+    "hash.js": "^1.1.7",
     "pako": "^2.1.0",
     "react": "^18.3.1",
     "react-ascii-text": "^0.0.4",
