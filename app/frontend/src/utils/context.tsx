@@ -12,6 +12,7 @@ export const DataContext = createContext<{
   SSID: string;
   password: string;
   initialized: boolean;
+  loading: boolean;
   storeSettings: (SSID: string, password: string) => Promise<void>;
   generateAccount: (index: number) => Promise<void>;
   selectAccount: (index: number) => Promise<void>;
@@ -23,6 +24,7 @@ export const DataContext = createContext<{
   SSID: "",
   password: "",
   initialized: false,
+  loading: true,
   storeSettings: (_SSID: string, _password: string) => Promise.resolve(),
   generateAccount: (_index: number) => Promise.resolve(),
   selectAccount: (_index: number) => Promise.resolve(),

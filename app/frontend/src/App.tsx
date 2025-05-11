@@ -14,6 +14,7 @@ import { RegenerateDialog } from "./components/RegenerateDialog";
 import { Settings } from "./components/Settings";
 import { AccountBox } from "./components/AccountBox";
 import { SelectAccountDialog } from "./components/SelectAccountDialog";
+import { CircularProgress } from "@mui/material";
 
 const statusContainer = css({
   display: "flex",
@@ -78,20 +79,16 @@ function App() {
     accounts,
     currentSignatureRequest,
     initialized,
+    loading,
   } = useContext(DataContext);
-  const initializedRef = useRef(initialized);
 
   useEffect(() => {
-    initializedRef.current = initialized;
-  }, [initialized]);
-
-  useEffect(() => {
-    setTimeout(() => {
-      if (!initializedRef.current) {
-        setTab("1");
-      }
-    }, 1000);
-  }, []);
+    console.log(`Loading: ${loading}`);
+    console.log(`Initialized: ${initialized}`);
+    if (!loading && !initialized) {
+      setTab("1");
+    }
+  }, [initialized, loading]);
 
   return (
     <>
@@ -157,7 +154,7 @@ function App() {
                     setRegenerateDialogOpen(true);
                   }
                 }}
-                disabled={keyChainStatus !== "IDLE" || !initialized}
+                disabled={loading || keyChainStatus !== "IDLE" || !initialized}
                 buttonText={!account.initialized ? "Initialize" : "Regenerate"}
               />
             ))}

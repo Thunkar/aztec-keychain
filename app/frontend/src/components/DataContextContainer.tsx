@@ -68,6 +68,8 @@ export const DataContextContainer = function ({
   const [SSID, setSSID] = useState("");
   const [password, setPassword] = useState("");
 
+  const [loading, setLoading] = useState(true);
+
   const { lastMessage, readyState } = useWebSocket(
     import.meta.env.VITE_WS_URL ?? `ws://${window.location.hostname}`,
     {
@@ -158,17 +160,21 @@ export const DataContextContainer = function ({
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
       await loadAccounts();
       await reloadSettings();
+      setLoading(false);
     };
     load();
   }, []);
 
   const generateAccount = async (index: number) => {
+    setLoading(true);
     await requestNewAccount(index);
     const account = await loadAccount(index);
     accounts.splice(index, 1, account);
     setAccounts(accounts);
+    setLoading(false);
   };
 
   const selectAccount = async (index: number) => {
@@ -183,6 +189,7 @@ export const DataContextContainer = function ({
     SSID,
     password,
     initialized,
+    loading,
     storeSettings,
     generateAccount,
     selectAccount,
