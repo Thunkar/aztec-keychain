@@ -5,7 +5,7 @@ import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import Tab from "@mui/material/Tab";
 import { smallSlant, useAsciiText } from "react-ascii-text";
-import { ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { ReactNode, useContext, useEffect, useState } from "react";
 import { DataContext } from "./utils/context";
 import { css } from "@emotion/react";
 import { colors } from "./styles";
@@ -14,7 +14,6 @@ import { RegenerateDialog } from "./components/RegenerateDialog";
 import { Settings } from "./components/Settings";
 import { AccountBox } from "./components/AccountBox";
 import { SelectAccountDialog } from "./components/SelectAccountDialog";
-import { CircularProgress } from "@mui/material";
 
 const statusContainer = css({
   display: "flex",

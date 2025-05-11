@@ -97,42 +97,6 @@ export class PublicKeys {
   }
 
   /**
-   * Creates an PublicKeys instance from a given buffer or BufferReader.
-   * If the input is a Buffer, it wraps it in a BufferReader before processing.
-   * Throws an error if the input length is not equal to the expected size.
-   *
-   * @param buffer - The input buffer or BufferReader containing the address data.
-   * @returns - A new PublicKeys instance with the extracted address data.
-   */
-  static fromBuffer(buffer: Buffer | BufferReader): PublicKeys {
-    const reader = BufferReader.asReader(buffer);
-    const masterNullifierPublicKey = reader.readObject(Point);
-    const masterIncomingViewingPublicKey = reader.readObject(Point);
-    const masterOutgoingViewingPublicKey = reader.readObject(Point);
-    const masterTaggingPublicKey = reader.readObject(Point);
-    return new PublicKeys(
-      masterNullifierPublicKey,
-      masterIncomingViewingPublicKey,
-      masterOutgoingViewingPublicKey,
-      masterTaggingPublicKey
-    );
-  }
-
-  toNoirStruct() {
-    // We need to use lowercase identifiers as those are what the noir interface expects
-    // eslint-disable-next-line camelcase
-    return {
-      // TODO(#6337): Directly dump account.publicKeys here
-      /* eslint-disable camelcase */
-      npk_m: this.masterNullifierPublicKey.toWrappedNoirStruct(),
-      ivpk_m: this.masterIncomingViewingPublicKey.toWrappedNoirStruct(),
-      ovpk_m: this.masterOutgoingViewingPublicKey.toWrappedNoirStruct(),
-      tpk_m: this.masterTaggingPublicKey.toWrappedNoirStruct(),
-      /* eslint-enable camelcase */
-    };
-  }
-
-  /**
    * Serializes the payload to an array of fields
    * @returns The fields of the payload
    */
@@ -147,9 +111,5 @@ export class PublicKeys {
 
   toString() {
     return bufferToHex(this.toBuffer());
-  }
-
-  static fromString(keys: string) {
-    return PublicKeys.fromBuffer(Buffer.from(withoutHexPrefix(keys), "hex"));
   }
 }

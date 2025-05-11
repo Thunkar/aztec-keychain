@@ -153,19 +153,6 @@ export class Point {
     return `${str.slice(0, 10)}...${str.slice(-4)}`;
   }
 
-  toNoirStruct() {
-    /* eslint-disable camelcase */
-    return { x: this.x, y: this.y, is_infinite: this.isInfinite };
-    /* eslint-enable camelcase */
-  }
-
-  // Used for IvpkM, OvpkM, NpkM and TpkM. TODO(#8124): Consider removing this method.
-  toWrappedNoirStruct() {
-    /* eslint-disable camelcase */
-    return { inner: this.toNoirStruct() };
-    /* eslint-enable camelcase */
-  }
-
   /**
    * Check if two Point instances are equal by comparing their buffer values.
    * Returns true if the buffer values are the same, and false otherwise.

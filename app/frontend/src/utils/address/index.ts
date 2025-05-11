@@ -73,6 +73,7 @@ export async function computeAddressForAccount(
   );
   const x = pk.slice(0, 32);
   const y = pk.slice(32, 64);
+
   const initializationHash = await computeInitializationHash(initFn, [x, y]);
   const saltedInitializationHash = await computeSaltedInitializationHash(
     initializationHash,
