@@ -68,11 +68,11 @@ export async function computeAddressForAccount(
   pk: number[],
   initFn: FunctionAbi | undefined
 ) {
-  const { publicKeys } = await deriveKeys(new Fr(Buffer.from(msk)));
+  const { publicKeys } = await deriveKeys(
+    Fr.fromBufferReduce(Buffer.from(msk))
+  );
   const x = pk.slice(0, 32);
   const y = pk.slice(32, 64);
-  console.log(x);
-  console.log(y);
   const initializationHash = await computeInitializationHash(initFn, [x, y]);
   const saltedInitializationHash = await computeSaltedInitializationHash(
     initializationHash,
