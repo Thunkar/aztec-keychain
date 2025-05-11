@@ -14,8 +14,8 @@ import type { PublicKey } from "./public_key.js";
 import { Fr } from "../crypto/fields.js";
 import { poseidon2HashWithSeparator } from "../crypto/poseidon2.js";
 import { Point } from "../crypto/point.js";
-import { bufferToHex, withoutHexPrefix } from "@aztec/foundation/string";
-import { BufferReader, serializeToBuffer } from "../serialization.js";
+import { bufferToHex } from "@aztec/foundation/string";
+import { serializeToBuffer } from "../serialization.js";
 
 export class PublicKeys {
   public constructor(
