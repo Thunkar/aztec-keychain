@@ -14,7 +14,7 @@ import {
 const MAX_ACCOUNTS = 5;
 
 export type Account = {
-  address: string;
+  address?: string;
   salt: number[];
   msk: number[];
   pk: number[];

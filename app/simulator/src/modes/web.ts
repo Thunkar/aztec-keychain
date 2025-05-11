@@ -43,7 +43,7 @@ export async function initServer(logger: Logger) {
       const { index } = req.body;
       state.status = 1;
       const sk = secp256r1.utils.randomPrivateKey();
-      const pk = secp256r1.getPublicKey(sk);
+      const pk = secp256r1.getPublicKey(sk, false);
       state.accounts[index] = {
         msk: Array.from(randomBytes(MSK_LENGTH)),
         salt: Array.from(randomBytes(SALT_LENGTH)),

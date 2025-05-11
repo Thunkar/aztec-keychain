@@ -6,3 +6,7 @@ export function keyToShortStr(key: number[]): string {
   const hex = keyToHex(key);
   return `0x${hex.slice(2, 6).toUpperCase()}...${hex.slice(-4).toUpperCase()}`;
 }
+
+export function addressToShortStr(address: string): string {
+  return `0x${address.slice(2, 6).toUpperCase()}...${address.slice(-4).toUpperCase()}`;
+}

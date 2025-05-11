@@ -37,7 +37,7 @@ export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract
         type: CommandType.GET_ARTIFACT_REQUEST,
         data: {},
       });
-      EcdsaRSerialAccountContract._artifact = loadContractArtifact(data);
+      EcdsaRSerialAccountContract._artifact = data as ContractArtifact;
     }
     return EcdsaRSerialAccountContract._artifact;
   }

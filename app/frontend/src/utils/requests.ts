@@ -1,9 +1,11 @@
+import { inflate } from "pako";
 import {
   CurrentSignatureRequest,
   Account,
   Settings,
 } from "../components/DataContextContainer";
 import { computeAddressForAccount } from "./address";
+import { FunctionAbi } from "./address/abi/types";
 
 function buildUrl(path: string): URL {
   return new URL(
@@ -20,15 +22,23 @@ export async function loadAccount(index: number): Promise<Account> {
   const response = await fetch(url);
   const body = await response.json();
   body.initialized = !body.pk.every((byte: number) => byte === 255);
-  const initFnRes = await fetch(import.meta.env.VITE_INIT_FN_URL);
-  const initFn = await initFnRes.json();
-  body.address = await computeAddressForAccount(
-    body.contractClassId,
-    body.salt,
-    body.msk,
-    body.pk,
-    initFn
-  );
+  if (body.initialized) {
+    const accountContractRes = await fetch(import.meta.env.VITE_INIT_FN_URL);
+    const accountContractCompressed = await accountContractRes.arrayBuffer();
+    const accountContract = JSON.parse(
+      await inflate(accountContractCompressed, { to: "string" })
+    );
+    const initFn = accountContract.functions
+      .concat(accountContract.nonDispatchPublicFunctions || [])
+      .find((fn: FunctionAbi) => fn.name === "constructor");
+    body.address = await computeAddressForAccount(
+      body.contractClassId,
+      body.salt,
+      body.msk,
+      body.pk,
+      initFn
+    );
+  }
   return body;
 }
 

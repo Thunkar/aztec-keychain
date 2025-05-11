@@ -6,7 +6,7 @@ import AccordionDetails from "@mui/material/AccordionDetails";
 import AccordionSummary from "@mui/material/AccordionSummary";
 import ArrowDropDown from "@mui/icons-material/ArrowDropDown";
 
-import { keyToShortStr } from "../utils/format";
+import { addressToShortStr, keyToShortStr } from "../utils/format";
 
 interface AccountBoxProps {
   account: Account;
@@ -39,7 +39,9 @@ export function AccountBox({
             marginLeft: "0.5rem",
           }}
         >
-          {keyToShortStr(account.pk)}
+          {account.address
+            ? addressToShortStr(account.address)
+            : "Uninitialized"}
         </Typography>
         <div css={{ flexGrow: 1 }}></div>
         <Button
@@ -56,6 +58,9 @@ export function AccountBox({
         </Button>
       </AccordionSummary>
       <AccordionDetails>
+        <Typography variant="subtitle2">
+          Public key: {keyToShortStr(account.pk)}
+        </Typography>
         <Typography variant="subtitle2">
           Salt: {keyToShortStr(account.salt)}
         </Typography>

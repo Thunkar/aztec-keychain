@@ -37,6 +37,7 @@ yarn generate
 
 PATH=$PATH:$HOME/.platformio/penv/bin
 cd ../firmware
+rm -rf data
 mkdir -p data
 cp ../app/frontend/dist/index.html ./data/index.html
 cp ../contracts/artifacts/* ./data/

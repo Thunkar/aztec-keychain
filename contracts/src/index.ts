@@ -3,6 +3,7 @@ import { writeFile, mkdir, readFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import {
+  getAllFunctionAbis,
   getContractClassFromArtifact,
   loadContractArtifact,
 } from "@aztec/aztec.js";
@@ -37,11 +38,10 @@ async function main() {
   ];
 
   for (const contract of contracts) {
-    const compressed = await gzip(JSON.stringify(contract.json));
+    const artifact = loadContractArtifact(contract.json);
+    const compressed = await gzip(JSON.stringify(artifact));
     await writeFile(join(outputFolder, `${contract.name}.json.gz`), compressed);
-    const contractClassId = (
-      await getContractClassFromArtifact(loadContractArtifact(contract.json))
-    ).id;
+    const contractClassId = (await getContractClassFromArtifact(artifact)).id;
     await writeFile(
       join(outputFolder, `${contract.name}.classId`),
       contractClassId.toBuffer()
