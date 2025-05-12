@@ -1,13 +1,8 @@
-import { inflate } from "pako";
 import {
   CurrentSignatureRequest,
   Account,
   Settings,
 } from "../components/DataContextContainer";
-import { computeAddressForAccount } from "./address";
-import { FunctionAbi } from "./address/abi/types";
-import { parse } from "buffer-json";
-import { sha1 } from "hash.js";
 
 function buildUrl(path: string): URL {
   return new URL(
