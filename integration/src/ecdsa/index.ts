@@ -12,8 +12,15 @@ import { AztecAddress } from '@aztec/aztec.js/addresses';
 import type { PXE } from '@aztec/aztec.js/interfaces';
 
 import { CommandType, sendCommandAndParseResponse } from '../utils/web_serial.js';
-import { EcdsaRSerialBaseAccountContract } from './account_contract.js';
 import { createLogger, type Logger } from '@aztec/aztec.js/log';
+import type { AuthWitnessProvider } from '@aztec/aztec.js/account';
+import { EcdsaSignature, sha256 } from '@aztec/foundation/crypto';
+
+import type { CompleteAddress } from '@aztec/aztec.js/addresses';
+import { DefaultAccountContract } from '@aztec/accounts/defaults';
+import { AuthWitness } from '@aztec/stdlib/auth-witness';
+
+const secp256r1N = 115792089210356248762697446949407573529996955224135760342422259061068512044369n;
 
 /**
  * Account contract that authenticates transactions using ECDSA signatures
@@ -23,11 +30,14 @@ import { createLogger, type Logger } from '@aztec/aztec.js/log';
  * that will be used to sign authwitnesses.
  * Lazily loads the contract artifact through the serial port
  */
-export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract {
+export class EcdsaRSerialAccountContract extends DefaultAccountContract {
   private static _artifact: ContractArtifact | undefined;
 
-  constructor(signingPublicKey: Buffer, logger: Logger = createLogger('aztec-keychain')) {
-    super(signingPublicKey, logger);
+  constructor(
+    private signingPublicKey: Buffer,
+    private logger: Logger,
+  ) {
+    super();
   }
 
   override async getContractArtifact(): Promise<ContractArtifact> {
@@ -44,6 +54,63 @@ export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract
       EcdsaRSerialAccountContract._artifact = loadContractArtifact(data);
     }
     return EcdsaRSerialAccountContract._artifact;
+  }
+
+  override getDeploymentFunctionAndArgs() {
+    return Promise.resolve({
+      constructorName: 'constructor',
+      constructorArgs: [this.signingPublicKey.subarray(0, 32), this.signingPublicKey.subarray(32, 64)],
+    });
+  }
+
+  override getAuthWitnessProvider(_address: CompleteAddress): AuthWitnessProvider {
+    return new SerialEcdsaRAuthWitnessProvider(this.signingPublicKey, this.logger);
+  }
+}
+
+/** Creates auth witnesses using ECDSA signatures. */
+class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
+  constructor(
+    private signingPublicKey: Buffer,
+    private logger: Logger,
+  ) {}
+
+  #parseECDSASignature(data: number[]) {
+    // Extract ECDSA signature components
+    const r = Buffer.from(data.slice(0, 32));
+    let s = Buffer.from(data.slice(32, 64));
+
+    const maybeHighS = BigInt(`0x${s.toString('hex')}`);
+
+    // ECDSA signatures must have a low S value so they can be used as a nullifier. BB forces a value of 27 for v, so
+    // only one PublicKey can verify the signature (and not its negated counterpart) https://ethereum.stackexchange.com/a/55728
+    if (maybeHighS > secp256r1N / 2n + 1n) {
+      s = Buffer.from((secp256r1N - maybeHighS).toString(16), 'hex');
+    }
+
+    return new EcdsaSignature(r, s, Buffer.from([0]));
+  }
+
+  async createAuthWit(messageHash: Fr): Promise<AuthWitness> {
+    const signRequest = {
+      type: CommandType.SIGNATURE_REQUEST,
+      data: {
+        index: 0,
+        pk: Array.from(this.signingPublicKey),
+        msg: Array.from(sha256(messageHash.toBuffer())),
+      },
+    };
+
+    const response = await sendCommandAndParseResponse(signRequest, this.logger);
+
+    if (response.type !== CommandType.SIGNATURE_ACCEPTED_RESPONSE) {
+      throw new Error(
+        `Unexpected response type from HW wallet: ${response.type}. Expected ${CommandType.SIGNATURE_ACCEPTED_RESPONSE}`,
+      );
+    }
+
+    const signature = this.#parseECDSASignature(response.data.signature);
+    return new AuthWitness(messageHash, [...signature.r, ...signature.s]);
   }
 }
 
