@@ -82,8 +82,6 @@ function App() {
   } = useContext(DataContext);
 
   useEffect(() => {
-    console.log(`Loading: ${loading}`);
-    console.log(`Initialized: ${initialized}`);
     if (!loading && !initialized) {
       setTab("1");
     }
