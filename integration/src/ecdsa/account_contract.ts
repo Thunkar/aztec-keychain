@@ -6,6 +6,7 @@ import { CommandType, sendCommandAndParseResponse } from '../utils/web_serial.js
 import type { CompleteAddress } from '@aztec/aztec.js/addresses';
 import { DefaultAccountContract } from '@aztec/accounts/defaults';
 import { AuthWitness } from '@aztec/stdlib/auth-witness';
+import { createLogger, type Logger } from '@aztec/aztec.js/log';
 
 const secp256r1N = 115792089210356248762697446949407573529996955224135760342422259061068512044369n;
 /**
@@ -18,7 +19,10 @@ const secp256r1N = 1157920892103562487626974469494075735299969552241357603424222
  * can be implemented with or without lazy loading.
  */
 export abstract class EcdsaRSerialBaseAccountContract extends DefaultAccountContract {
-  constructor(private signingPublicKey: Buffer) {
+  constructor(
+    private signingPublicKey: Buffer,
+    protected logger: Logger = createLogger('aztec-keychain'),
+  ) {
     super();
   }
 
@@ -30,13 +34,16 @@ export abstract class EcdsaRSerialBaseAccountContract extends DefaultAccountCont
   }
 
   override getAuthWitnessProvider(_address: CompleteAddress): AuthWitnessProvider {
-    return new SerialEcdsaRAuthWitnessProvider(this.signingPublicKey);
+    return new SerialEcdsaRAuthWitnessProvider(this.signingPublicKey, this.logger);
   }
 }
 
 /** Creates auth witnesses using ECDSA signatures. */
 class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
-  constructor(private signingPublicKey: Buffer) {}
+  constructor(
+    private signingPublicKey: Buffer,
+    private logger: Logger,
+  ) {}
 
   #parseECDSASignature(data: number[]) {
     // Extract ECDSA signature components
@@ -64,7 +71,7 @@ class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
       },
     };
 
-    const response = await sendCommandAndParseResponse(signRequest);
+    const response = await sendCommandAndParseResponse(signRequest, this.logger);
 
     if (response.type !== CommandType.SIGNATURE_ACCEPTED_RESPONSE) {
       throw new Error(

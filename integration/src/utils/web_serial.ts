@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from '@aztec/aztec.js';
+import type { Logger } from '@aztec/aztec.js/log';
 import { inflate } from 'pako';
 import { parse, stringify } from 'buffer-json';
 
@@ -19,10 +19,7 @@ type Command = {
   data: any;
 };
 
-export async function sendCommandAndParseResponse(
-  command: Command,
-  logger: Logger = createLogger('aztec-keychain'),
-): Promise<Command> {
+export async function sendCommandAndParseResponse(command: Command, logger: Logger): Promise<Command> {
   if ('serial' in navigator) {
     let port;
     const existingPorts = await (navigator.serial as any).getPorts();

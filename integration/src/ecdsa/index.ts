@@ -13,6 +13,7 @@ import type { PXE } from '@aztec/aztec.js/interfaces';
 
 import { CommandType, sendCommandAndParseResponse } from '../utils/web_serial.js';
 import { EcdsaRSerialBaseAccountContract } from './account_contract.js';
+import { createLogger, type Logger } from '@aztec/aztec.js/log';
 
 /**
  * Account contract that authenticates transactions using ECDSA signatures
@@ -25,18 +26,21 @@ import { EcdsaRSerialBaseAccountContract } from './account_contract.js';
 export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract {
   private static _artifact: ContractArtifact | undefined;
 
-  constructor(signingPublicKey: Buffer) {
-    super(signingPublicKey);
+  constructor(signingPublicKey: Buffer, logger: Logger = createLogger('aztec-keychain')) {
+    super(signingPublicKey, logger);
   }
 
   override async getContractArtifact(): Promise<ContractArtifact> {
     if (!EcdsaRSerialAccountContract._artifact) {
       const {
         data: { data },
-      } = await sendCommandAndParseResponse({
-        type: CommandType.GET_ARTIFACT_REQUEST,
-        data: {},
-      });
+      } = await sendCommandAndParseResponse(
+        {
+          type: CommandType.GET_ARTIFACT_REQUEST,
+          data: {},
+        },
+        this.logger,
+      );
       EcdsaRSerialAccountContract._artifact = loadContractArtifact(data);
     }
     return EcdsaRSerialAccountContract._artifact;
@@ -50,10 +54,15 @@ export class EcdsaRSerialAccountContract extends EcdsaRSerialBaseAccountContract
  * @returns An account manager initialized with the account contract and its deployment params
  */
 export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<AccountManager> {
-  const accountResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_ACCOUNT_REQUEST,
-    data: { index },
-  });
+  const logger = createLogger('aztec-keychain');
+
+  const accountResponse = await sendCommandAndParseResponse(
+    {
+      type: CommandType.GET_ACCOUNT_REQUEST,
+      data: { index },
+    },
+    logger,
+  );
   if (accountResponse.type !== CommandType.GET_ACCOUNT_RESPONSE) {
     throw new Error(
       `Unexpected response type from HW wallet: ${accountResponse.type}. Expected ${CommandType.GET_ACCOUNT_RESPONSE}`,
@@ -62,7 +71,7 @@ export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<A
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
   const secretKey = Fr.fromBufferReduce(Buffer.from(accountResponse.data.msk));
   const salt = Fr.fromBufferReduce(Buffer.from(accountResponse.data.salt));
-  return AccountManager.create(pxe, secretKey, new EcdsaRSerialAccountContract(signingPublicKey), salt);
+  return AccountManager.create(pxe, secretKey, new EcdsaRSerialAccountContract(signingPublicKey, logger), salt);
 }
 
 /**
@@ -72,15 +81,20 @@ export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<A
  * @returns A wallet for this account that can be used to interact with a contract instance.
  */
 export async function getEcdsaRSerialWallet(pxe: PXE, address: AztecAddress, index: number): Promise<AccountWallet> {
-  const accountResponse = await sendCommandAndParseResponse({
-    type: CommandType.GET_ACCOUNT_REQUEST,
-    data: { index },
-  });
+  const logger = createLogger('aztec-keychain');
+
+  const accountResponse = await sendCommandAndParseResponse(
+    {
+      type: CommandType.GET_ACCOUNT_REQUEST,
+      data: { index },
+    },
+    logger,
+  );
   if (accountResponse.type !== CommandType.GET_ACCOUNT_RESPONSE) {
     throw new Error(
       `Unexpected response type from HW wallet: ${accountResponse.type}. Expected ${CommandType.GET_ACCOUNT_RESPONSE}`,
     );
   }
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
-  return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey));
+  return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey, logger));
 }
