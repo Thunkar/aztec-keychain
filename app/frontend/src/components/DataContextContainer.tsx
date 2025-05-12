@@ -3,13 +3,18 @@ import { useEffect, useState, type ReactNode } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import {
   loadCurrentSignatureRequest,
-  loadAccount,
+  loadAccountData,
   requestNewAccount,
   loadSettings,
   writeSettings,
   finishSignatureRequest,
   confirmAccountSelection,
 } from "../utils/requests";
+import { sha1 } from "hash.js";
+import { parse } from "buffer-json";
+import { inflate } from "pako";
+import { FunctionAbi } from "../utils/address/abi/types";
+import { computeAddressForAccount } from "../utils/address";
 
 const MAX_ACCOUNTS = 5;
 
@@ -134,6 +139,48 @@ export const DataContextContainer = function ({
       refreshCurrentSignatureRequest();
     }
   }, [keyChainStatus]);
+
+  const loadAccount = async (index: number) => {
+    const account = await loadAccountData(index);
+    account.initialized = !account.pk.every((byte: number) => byte === 255);
+    if (account.initialized) {
+      const accountIdentifier = sha1()
+        .update(
+          new Uint8Array(
+            [account.index]
+              .concat(account.pk)
+              .concat(account.salt)
+              .concat(account.msk)
+              .concat(account.contractClassId)
+          )
+        )
+        .digest("hex");
+      let address = localStorage.getItem(accountIdentifier);
+      if (!address) {
+        const accountContractRes = await fetch(
+          import.meta.env.VITE_INIT_FN_URL
+        );
+        const accountContractCompressed =
+          await accountContractRes.arrayBuffer();
+        const accountContract = parse(
+          await inflate(accountContractCompressed, { to: "string" })
+        );
+        const initFn = accountContract.functions
+          .concat(accountContract.nonDispatchPublicFunctions || [])
+          .find((fn: FunctionAbi) => fn.name === "constructor");
+        address = await computeAddressForAccount(
+          account.contractClassId,
+          account.salt,
+          account.msk,
+          account.pk,
+          initFn
+        );
+        localStorage.setItem(accountIdentifier, address);
+      }
+      account.address = address;
+    }
+    return account;
+  };
 
   const loadAccounts = async () => {
     const accounts = [];

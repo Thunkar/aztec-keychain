@@ -7,6 +7,7 @@ import {
 import { computeAddressForAccount } from "./address";
 import { FunctionAbi } from "./address/abi/types";
 import { parse } from "buffer-json";
+import { sha1 } from "hash.js";
 
 function buildUrl(path: string): URL {
   return new URL(
@@ -16,30 +17,12 @@ function buildUrl(path: string): URL {
   );
 }
 
-export async function loadAccount(index: number): Promise<Account> {
+export async function loadAccountData(index: number): Promise<Account> {
   const url = buildUrl("accounts");
   url.searchParams.append("index", index.toString());
 
   const response = await fetch(url);
   const body = await response.json();
-  body.initialized = !body.pk.every((byte: number) => byte === 255);
-  if (body.initialized) {
-    const accountContractRes = await fetch(import.meta.env.VITE_INIT_FN_URL);
-    const accountContractCompressed = await accountContractRes.arrayBuffer();
-    const accountContract = parse(
-      await inflate(accountContractCompressed, { to: "string" })
-    );
-    const initFn = accountContract.functions
-      .concat(accountContract.nonDispatchPublicFunctions || [])
-      .find((fn: FunctionAbi) => fn.name === "constructor");
-    body.address = await computeAddressForAccount(
-      body.contractClassId,
-      body.salt,
-      body.msk,
-      body.pk,
-      initFn
-    );
-  }
   return body;
 }
 

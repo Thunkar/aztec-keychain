@@ -67,7 +67,7 @@ export async function computeAddressForAccount(
   msk: number[],
   pk: number[],
   initFn: FunctionAbi | undefined
-) {
+): Promise<string> {
   const { publicKeys } = await deriveKeys(
     Fr.fromBufferReduce(Buffer.from(msk))
   );
@@ -75,35 +75,23 @@ export async function computeAddressForAccount(
   const y = pk.slice(32, 64);
 
   const initializationHash = await computeInitializationHash(initFn, [x, y]);
-  console.log(`initializationHash ${initializationHash.toString()}`);
-
   const saltFr = Fr.fromBufferReduce(Buffer.from(salt));
-  console.log(`salt ${saltFr.toString()}`);
 
   const saltedInitializationHash = await computeSaltedInitializationHash(
     initializationHash,
     saltFr,
     Fr.ZERO
   );
-  console.log(
-    `saltedInitializationHash ${saltedInitializationHash.toString()}`
-  );
 
   const originalContractClassIdFr = new Fr(
     Buffer.from(originalContractClassId)
   );
-  console.log(`originalContractClassId ${originalContractClassIdFr}`);
 
   const partialAddress = await computePartialAddress(
     originalContractClassIdFr,
     saltedInitializationHash
   );
 
-  console.log(`partialAddress`, partialAddress.toString());
-
   const result = await computeAddress(publicKeys, partialAddress);
-
-  console.log(`address ${result.toString()}`);
-
   return result.toString();
 }
