@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "lint": "eslint .",
-    "generate": "node --experimental-transform-types src/index.ts"
+    "generate": "rm -rf ./artifacts && node --experimental-transform-types src/index.ts"
   },
   "author": "",
   "license": "ISC",

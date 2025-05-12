@@ -3,20 +3,25 @@ import { useEffect, useState, type ReactNode } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import {
   loadCurrentSignatureRequest,
-  loadAccount,
+  loadAccountData,
   requestNewAccount,
   loadSettings,
   writeSettings,
   finishSignatureRequest,
   confirmAccountSelection,
 } from "../utils/requests";
+import { sha1 } from "hash.js";
+import { parse } from "buffer-json";
+import { inflate } from "pako";
+import { FunctionAbi } from "../utils/address/abi/types";
+import { computeAddressForAccount } from "../utils/address";
 
 const MAX_ACCOUNTS = 5;
 
 export type Account = {
+  address?: string;
   salt: number[];
   msk: number[];
-  sk: number[];
   pk: number[];
   contractClassId: number[];
   index: number;
@@ -67,6 +72,8 @@ export const DataContextContainer = function ({
 
   const [SSID, setSSID] = useState("");
   const [password, setPassword] = useState("");
+
+  const [loading, setLoading] = useState(true);
 
   const { lastMessage, readyState } = useWebSocket(
     import.meta.env.VITE_WS_URL ?? `ws://${window.location.hostname}`,
@@ -133,6 +140,48 @@ export const DataContextContainer = function ({
     }
   }, [keyChainStatus]);
 
+  const loadAccount = async (index: number) => {
+    const account = await loadAccountData(index);
+    account.initialized = !account.pk.every((byte: number) => byte === 255);
+    if (account.initialized) {
+      const accountIdentifier = sha1()
+        .update(
+          new Uint8Array(
+            [account.index]
+              .concat(account.pk)
+              .concat(account.salt)
+              .concat(account.msk)
+              .concat(account.contractClassId)
+          )
+        )
+        .digest("hex");
+      let address = localStorage.getItem(accountIdentifier);
+      if (!address) {
+        const accountContractRes = await fetch(
+          import.meta.env.VITE_INIT_FN_URL
+        );
+        const accountContractCompressed =
+          await accountContractRes.arrayBuffer();
+        const accountContract = parse(
+          await inflate(accountContractCompressed, { to: "string" })
+        );
+        const initFn = accountContract.functions
+          .concat(accountContract.nonDispatchPublicFunctions || [])
+          .find((fn: FunctionAbi) => fn.name === "constructor");
+        address = await computeAddressForAccount(
+          account.contractClassId,
+          account.salt,
+          account.msk,
+          account.pk,
+          initFn
+        );
+        localStorage.setItem(accountIdentifier, address);
+      }
+      account.address = address;
+    }
+    return account;
+  };
+
   const loadAccounts = async () => {
     const accounts = [];
     for (let i = 0; i < MAX_ACCOUNTS; i++) {
@@ -158,17 +207,21 @@ export const DataContextContainer = function ({
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
       await loadAccounts();
       await reloadSettings();
+      setLoading(false);
     };
     load();
   }, []);
 
   const generateAccount = async (index: number) => {
+    setLoading(true);
     await requestNewAccount(index);
     const account = await loadAccount(index);
     accounts.splice(index, 1, account);
     setAccounts(accounts);
+    setLoading(false);
   };
 
   const selectAccount = async (index: number) => {
@@ -183,6 +236,7 @@ export const DataContextContainer = function ({
     SSID,
     password,
     initialized,
+    loading,
     storeSettings,
     generateAccount,
     selectAccount,

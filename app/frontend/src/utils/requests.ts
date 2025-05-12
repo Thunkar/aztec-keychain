@@ -12,13 +12,12 @@ function buildUrl(path: string): URL {
   );
 }
 
-export async function loadAccount(index: number): Promise<Account> {
+export async function loadAccountData(index: number): Promise<Account> {
   const url = buildUrl("accounts");
   url.searchParams.append("index", index.toString());
 
   const response = await fetch(url);
   const body = await response.json();
-  body.initialized = !body.pk.every((byte: number) => byte === 255);
   return body;
 }
 

@@ -5,7 +5,7 @@ import TabList from "@mui/lab/TabList";
 import TabPanel from "@mui/lab/TabPanel";
 import Tab from "@mui/material/Tab";
 import { smallSlant, useAsciiText } from "react-ascii-text";
-import { ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { ReactNode, useContext, useEffect, useState } from "react";
 import { DataContext } from "./utils/context";
 import { css } from "@emotion/react";
 import { colors } from "./styles";
@@ -78,20 +78,14 @@ function App() {
     accounts,
     currentSignatureRequest,
     initialized,
+    loading,
   } = useContext(DataContext);
-  const initializedRef = useRef(initialized);
 
   useEffect(() => {
-    initializedRef.current = initialized;
-  }, [initialized]);
-
-  useEffect(() => {
-    setTimeout(() => {
-      if (!initializedRef.current) {
-        setTab("1");
-      }
-    }, 1000);
-  }, []);
+    if (!loading && !initialized) {
+      setTab("1");
+    }
+  }, [initialized, loading]);
 
   return (
     <>
@@ -157,7 +151,7 @@ function App() {
                     setRegenerateDialogOpen(true);
                   }
                 }}
-                disabled={keyChainStatus !== "IDLE" || !initialized}
+                disabled={loading || keyChainStatus !== "IDLE" || !initialized}
                 buttonText={!account.initialized ? "Initialize" : "Regenerate"}
               />
             ))}
