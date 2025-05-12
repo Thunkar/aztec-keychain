@@ -31,17 +31,18 @@ const secp256r1N = 1157920892103562487626974469494075735299969552241357603424222
  * Lazily loads the contract artifact through the serial port
  */
 export class EcdsaRSerialAccountContract extends DefaultAccountContract {
-  private static _artifact: ContractArtifact | undefined;
+  private artifact: ContractArtifact | undefined;
 
   constructor(
     private signingPublicKey: Buffer,
+    private index: number,
     private logger: Logger,
   ) {
     super();
   }
 
   override async getContractArtifact(): Promise<ContractArtifact> {
-    if (!EcdsaRSerialAccountContract._artifact) {
+    if (!this.artifact) {
       const {
         data: { data },
       } = await sendCommandAndParseResponse(
@@ -51,9 +52,9 @@ export class EcdsaRSerialAccountContract extends DefaultAccountContract {
         },
         this.logger,
       );
-      EcdsaRSerialAccountContract._artifact = loadContractArtifact(data);
+      this.artifact = loadContractArtifact(data);
     }
-    return EcdsaRSerialAccountContract._artifact;
+    return this.artifact;
   }
 
   override getDeploymentFunctionAndArgs() {
@@ -64,7 +65,7 @@ export class EcdsaRSerialAccountContract extends DefaultAccountContract {
   }
 
   override getAuthWitnessProvider(_address: CompleteAddress): AuthWitnessProvider {
-    return new SerialEcdsaRAuthWitnessProvider(this.signingPublicKey, this.logger);
+    return new SerialEcdsaRAuthWitnessProvider(this.signingPublicKey, this.index, this.logger);
   }
 }
 
@@ -72,6 +73,7 @@ export class EcdsaRSerialAccountContract extends DefaultAccountContract {
 class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
   constructor(
     private signingPublicKey: Buffer,
+    private index: number,
     private logger: Logger,
   ) {}
 
@@ -95,7 +97,7 @@ class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
     const signRequest = {
       type: CommandType.SIGNATURE_REQUEST,
       data: {
-        index: 0,
+        index: this.index,
         pk: Array.from(this.signingPublicKey),
         msg: Array.from(sha256(messageHash.toBuffer())),
       },
@@ -146,7 +148,7 @@ export async function getEcdsaRSerialAccount(
     manager: await AccountManager.create(
       pxe,
       secretKey,
-      new EcdsaRSerialAccountContract(signingPublicKey, logger),
+      new EcdsaRSerialAccountContract(signingPublicKey, accountResponse.data.index, logger),
       salt,
     ),
   };
@@ -174,5 +176,5 @@ export async function getEcdsaRSerialWallet(pxe: PXE, address: AztecAddress, ind
     );
   }
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
-  return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey, logger));
+  return getWallet(pxe, address, new EcdsaRSerialAccountContract(signingPublicKey, accountResponse.data.index, logger));
 }
