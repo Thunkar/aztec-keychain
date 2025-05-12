@@ -120,13 +120,13 @@ class SerialEcdsaRAuthWitnessProvider implements AuthWitnessProvider {
  * @param index - Index of the account stored in the webserial device.
  * @returns An account manager initialized with the account contract and its deployment params
  */
-export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<AccountManager> {
+export async function getEcdsaRSerialAccount(pxe: PXE): Promise<{ index: number; manager: AccountManager }> {
   const logger = createLogger('aztec-keychain');
 
   const accountResponse = await sendCommandAndParseResponse(
     {
       type: CommandType.GET_ACCOUNT_REQUEST,
-      data: { index },
+      data: { index: -1 },
     },
     logger,
   );
@@ -138,7 +138,15 @@ export async function getEcdsaRSerialAccount(pxe: PXE, index: number): Promise<A
   const signingPublicKey = Buffer.from(accountResponse.data.pk);
   const secretKey = Fr.fromBufferReduce(Buffer.from(accountResponse.data.msk));
   const salt = Fr.fromBufferReduce(Buffer.from(accountResponse.data.salt));
-  return AccountManager.create(pxe, secretKey, new EcdsaRSerialAccountContract(signingPublicKey, logger), salt);
+  return {
+    index: accountResponse.data.index,
+    manager: await AccountManager.create(
+      pxe,
+      secretKey,
+      new EcdsaRSerialAccountContract(signingPublicKey, logger),
+      salt,
+    ),
+  };
 }
 
 /**
