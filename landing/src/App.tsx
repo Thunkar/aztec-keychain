@@ -128,7 +128,7 @@ function App() {
             }}
           >
             <Typography variant="subtitle1" color="warning">
-              Unfortunately this browser cannot be used as it doesn't support
+              Unfortunately this browser is incompatible as it doesn't support
               the WebSerial API. Please use a desktop Chromium derivative
               (Chrome, Edge, Brave, Opera...)
             </Typography>
