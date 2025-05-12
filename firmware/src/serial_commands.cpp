@@ -92,6 +92,7 @@ void sendAccount(int index) {
     JsonDocument response;
     if(index != -1) {
       response[F("type")] = GET_ACCOUNT_RESPONSE;
+      response[F("data")][F("index")] = index;
       JsonArray pk_array = response[F("data")][F("pk")].to<JsonArray>();
       JsonArray msk_array = response[F("data")][F("msk")].to<JsonArray>();
       JsonArray salt_array = response[F("data")][F("salt")].to<JsonArray>();
