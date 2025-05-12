@@ -12,13 +12,13 @@ bootloader_offset = "0x0000"
 bootloader_bin = "${BUILD_DIR}/bootloader.bin"
 partitions_offset = "0x8000"
 partitions_bin = "${BUILD_DIR}/partitions.bin"
-boot_app0_offset = "0xe000"
+boot_app0_offset = "0x9000"
 boot_app0_bin = "${PACKAGES_DIR}/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
 firmware_offset = "0x10000"
 firmware_bin = "${BUILD_DIR}/${PROGNAME}.bin"
 merged_bin = os.environ.get("MERGED_BIN_PATH", "${BUILD_DIR}/${PROGNAME}-merged.bin")
 spiffs_bin = "${BUILD_DIR}/spiffs.bin"
-spiffs_offset = "0x210000"
+spiffs_offset = "0x20b000"
 
 def merge_bin_action(source, target, env):
     flash_images = [
