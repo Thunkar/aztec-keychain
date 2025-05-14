@@ -7,6 +7,7 @@ enum KeyChainStatus {
     IDLE,
     GENERATING_ACCOUNT,
     SELECTING_ACCOUNT,
+    WAITING_FOR_SENDER_REQUEST,
     SIGNING
 };
 
@@ -28,6 +29,8 @@ struct State {
     bool activeTasks[N_TASKS];
     // Current signature request
     CurrentSignatureRequest currentSignatureRequest;
+    // Current sender
+    char currentSender[34];
 };
 
 extern State state;

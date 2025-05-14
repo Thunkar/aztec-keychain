@@ -62,22 +62,42 @@ TaskResult readCommands(unsigned long now) {
         break;
       }
       case GET_ARTIFACT_REQUEST: {
-          char output[1024];
-          File artifact = SPIFFS.open("/EcdsaRAccount.json.gz", "r");
-          JsonDocument responseStart;
-          responseStart[F("type")] = GET_ARTIFACT_RESPONSE_START;
-          responseStart[F("data")][F("size")] = artifact.size();
-          serializeJson(responseStart, output);
-          Serial.println(output);
-          ReadBufferingStream bufferedFile{artifact, 64};  
-          while(bufferedFile.available()) {
-            size_t bytesRead = bufferedFile.readBytes(output, sizeof(output));
-            Serial.write(output, bytesRead);
-          }
-          artifact.close();
-          Serial.println("");
-          break;
+        char output[1024];
+        File artifact = SPIFFS.open("/EcdsaRAccount.json.gz", "r");
+        JsonDocument responseStart;
+        responseStart[F("type")] = GET_ARTIFACT_RESPONSE_START;
+        responseStart[F("data")][F("size")] = artifact.size();
+        serializeJson(responseStart, output);
+        Serial.println(output);
+        ReadBufferingStream bufferedFile{artifact, 64};  
+        while(bufferedFile.available()) {
+          size_t bytesRead = bufferedFile.readBytes(output, sizeof(output));
+          Serial.write(output, bytesRead);
+        }
+        artifact.close();
+        Serial.println("");
+        break;
       }
+      case GET_SENDER_REQUEST: {
+        JsonDocument response;
+        char output[1024];
+        if(state.status != WAITING_FOR_SENDER_REQUEST) {
+          setError(INVALID_SENDER_REQUEST);
+          response[F("type")] = ERROR;
+          response[F("data")][F("error")] = "Unexpected sender request";
+          serializeJson(response, output);
+          Serial.println(output);
+          return { false, 0 };
+        }
+        JsonArray sender_array = doc[F("data")][F("sender")].to<JsonArray>();
+        for (int i = 0; i < 34; i++) {
+          sender_array[i] = state.currentSender[i];
+        }
+        response[F("type")] = GET_SENDER_RESPONSE;
+        serializeJson(response, output);
+        Serial.println(output);
+        break;
+      } 
       default:
         // Unknown command
         setError(UNKNOWN);

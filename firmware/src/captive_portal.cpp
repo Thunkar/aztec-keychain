@@ -4,6 +4,19 @@ DNSServer dnsServer;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/");
 
+static AsyncCallbackJsonWebHandler *senderHandler = new AsyncCallbackJsonWebHandler("/sender");
+void configureSettingsHandler() {
+  senderHandler->setMethod(HTTP_GET);
+  senderHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
+    char sender[34];
+    request->getParam("account")->value().toCharArray(sender, 34);
+    state.status = WAITING_FOR_SENDER_REQUEST;
+    for(int i = 0; i < 34; i++) {
+      state.currentSender[i] = sender[i];
+    }
+  });
+}
+
 static AsyncCallbackJsonWebHandler *settingsHandler = new AsyncCallbackJsonWebHandler("/settings");
 void configureSettingsHandler() {
   settingsHandler->setMethod(HTTP_POST | HTTP_GET);

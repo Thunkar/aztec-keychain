@@ -10,7 +10,8 @@ enum ErrorCode {
     UNKNOWN,
     JSON_PARSE,
     INVALID_PK,
-    FAILED_VERIFICATION
+    FAILED_VERIFICATION,
+    INVALID_SENDER_REQUEST
 };
 
 struct Stats {
