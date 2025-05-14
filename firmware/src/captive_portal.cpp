@@ -5,15 +5,16 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/");
 
 static AsyncCallbackJsonWebHandler *senderHandler = new AsyncCallbackJsonWebHandler("/sender");
-void configureSettingsHandler() {
+void configureSenderHandler() {
   senderHandler->setMethod(HTTP_GET);
   senderHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
-    char sender[34];
-    request->getParam("account")->value().toCharArray(sender, 34);
+    char sender[66];
+    request->getParam("address")->value().toCharArray(sender, 66);
     state.status = WAITING_FOR_SENDER_REQUEST;
-    for(int i = 0; i < 34; i++) {
+    for(int i = 0; i < 66; i++) {
       state.currentSender[i] = sender[i];
     }
+    request->redirect("/");
   });
 }
 
@@ -173,6 +174,7 @@ void setupServer(){
   configureaccountsHandler();
   configureSignatureHandler();
   configureSettingsHandler();
+  configureSenderHandler();
 
   ws.onEvent(onEvent);
   server.addHandler(&ws);
@@ -180,6 +182,7 @@ void setupServer(){
   server.addHandler(accountsHandler);
   server.addHandler(signatureHandler);
   server.addHandler(settingsHandler);
+  server.addHandler(senderHandler);
   server.on("/EcdsaRAccount.json.gz", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/EcdsaRAccount.json.gz", "application/gzip", false);
   });

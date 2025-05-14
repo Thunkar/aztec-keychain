@@ -16,7 +16,7 @@ interface AccountBoxProps {
   account: Account;
   disabled: boolean;
   buttonText: string;
-  QRButton: boolean;
+  QRButton?: boolean;
   onClick: (index: number) => void;
 }
 
@@ -24,7 +24,7 @@ export function AccountBox({
   account,
   onClick,
   buttonText,
-  QRButton,
+  QRButton = false,
   disabled,
 }: AccountBoxProps) {
   const [openQR, setOpenQR] = useState(false);
@@ -52,7 +52,7 @@ export function AccountBox({
             ? addressToShortStr(account.address)
             : "Uninitialized"}
         </Typography>
-        {account.address && (
+        {QRButton && account.address && (
           <IconButton onClick={() => setOpenQR(true)}>
             <QrCode />
           </IconButton>

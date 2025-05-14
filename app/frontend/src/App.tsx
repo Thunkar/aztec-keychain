@@ -142,6 +142,7 @@ function App() {
             {accounts.map((account) => (
               <AccountBox
                 key={account.index}
+                QRButton
                 account={account}
                 onClick={(index) => {
                   setAccountIndexToRegenerate(index);
