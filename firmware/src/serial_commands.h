@@ -18,10 +18,13 @@ enum Command {
     GET_ACCOUNT_REJECTED,
     GET_ARTIFACT_REQUEST,
     GET_ARTIFACT_RESPONSE_START,
+    GET_SENDER_REQUEST,
+    GET_SENDER_RESPONSE,
     ERROR,
 };
 
 void sendAccount(int index);
+void sendSender(char *sender);
 void sendSignatureResponse(bool approve);
 
 TaskResult readCommands(unsigned long now);

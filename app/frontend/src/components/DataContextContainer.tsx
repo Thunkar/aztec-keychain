@@ -32,12 +32,14 @@ export type KeyChainStatusType =
   | "IDLE"
   | "GENERATING_KEY"
   | "SIGNING"
-  | "SELECTING_ACCOUNT";
+  | "SELECTING_ACCOUNT"
+  | "WAITING_FOR_SENDER_REQUEST";
 export const KeyChainStatus: KeyChainStatusType[] = [
   "IDLE",
   "GENERATING_KEY",
   "SIGNING",
   "SELECTING_ACCOUNT",
+  "WAITING_FOR_SENDER_REQUEST",
 ] as const;
 
 export type CurrentSignatureRequest = {
@@ -124,6 +126,10 @@ export const DataContextContainer = function ({
           } else {
             finishSignatureRequest(false);
           }
+          break;
+        }
+        case 4: {
+          setKeyChainStatus("WAITING_FOR_SENDER_REQUEST");
           break;
         }
       }

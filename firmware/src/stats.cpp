@@ -58,6 +58,8 @@ char* getReason(ErrorCode code) {
       return "Invalid public key";
     case FAILED_VERIFICATION:
       return "Failed verification";
+    case INVALID_SENDER_REQUEST:
+      return "Invalid sender request";
     default:
       return "Unknown error";
   }
