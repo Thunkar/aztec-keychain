@@ -8,10 +8,10 @@ static AsyncCallbackJsonWebHandler *senderHandler = new AsyncCallbackJsonWebHand
 void configureSenderHandler() {
   senderHandler->setMethod(HTTP_GET);
   senderHandler->onRequest([](AsyncWebServerRequest *request, JsonVariant &json) {
-    char sender[66];
-    request->getParam("address")->value().toCharArray(sender, 66);
+    char sender[67];
+    request->getParam("address")->value().toCharArray(sender, 67);
     state.status = WAITING_FOR_SENDER_REQUEST;
-    for(int i = 0; i < 66; i++) {
+    for(int i = 0; i < 67; i++) {
       state.currentSender[i] = sender[i];
     }
     request->redirect("/");

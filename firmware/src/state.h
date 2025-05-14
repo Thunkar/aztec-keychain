@@ -30,7 +30,7 @@ struct State {
     // Current signature request
     CurrentSignatureRequest currentSignatureRequest;
     // Current sender
-    char currentSender[66];
+    char currentSender[67];
 };
 
 extern State state;

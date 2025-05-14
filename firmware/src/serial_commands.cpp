@@ -89,13 +89,11 @@ TaskResult readCommands(unsigned long now) {
           Serial.println(output);
           return { false, 0 };
         }
-        JsonArray sender_array = doc[F("data")][F("sender")];
-        for (int i = 0; i < 66; i++) {
-          sender_array[i] = (unsigned char)state.currentSender[i];
-        }
+        response[F("data")][F("sender")] = String(state.currentSender);
         response[F("type")] = GET_SENDER_RESPONSE;
         serializeJson(response, output);
         Serial.println(output);
+        state.status = IDLE;
         break;
       } 
       default:

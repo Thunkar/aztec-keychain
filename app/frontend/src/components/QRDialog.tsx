@@ -14,7 +14,7 @@ interface QRDialogProps {
 export function QRDialog({ address, open, onClose }: QRDialogProps) {
   return (
     <Dialog open={open}>
-      <DialogTitle>Confirm settings</DialogTitle>
+      <DialogTitle>Add as sender</DialogTitle>
       <DialogContent>
         <div
           style={{
