@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-AZTEC_VERSION=${AZTEC_VERSION:-"0.85.0-alpha-testnet.5"}
+AZTEC_VERSION=${AZTEC_VERSION:-"0.86.0-nightly.20250515"}
 
 # Root 
 yarn install
