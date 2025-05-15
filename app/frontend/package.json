@@ -10,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aztec/constants": "0.85.0-alpha-testnet.5",
-    "@aztec/foundation": "0.85.0-alpha-testnet.5",
+    "@aztec/constants": "0.86.0-nightly.20250515",
+    "@aztec/foundation": "0.86.0-nightly.20250515",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fontsource/roboto": "^5.1.1",

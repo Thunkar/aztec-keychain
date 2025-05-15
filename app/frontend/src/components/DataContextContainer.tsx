@@ -158,6 +158,12 @@ export const DataContextContainer = function ({
               .concat(account.salt)
               .concat(account.msk)
               .concat(account.contractClassId)
+              .concat(
+                import.meta.env.VITE_ACCOUNT_VERSION.split().map(
+                  (_c: string, i: number) =>
+                    import.meta.env.VITE_ACCOUNT_VERSION.charCodeAt(i)
+                )
+              )
           )
         )
         .digest("hex");

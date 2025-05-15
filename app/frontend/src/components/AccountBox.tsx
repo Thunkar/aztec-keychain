@@ -81,6 +81,9 @@ export function AccountBox({
         <Typography variant="subtitle2">
           Contract class id: {keyToShortStr(account.contractClassId)}
         </Typography>
+        <Typography variant="subtitle2">
+          Version: {import.meta.env.VITE_ACCOUNT_VERSION}
+        </Typography>
       </AccordionDetails>
       {openQR && account.address && (
         <QRDialog
