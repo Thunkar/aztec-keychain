@@ -4,11 +4,11 @@ import "./index.css";
 import {
   createTheme,
   CssBaseline,
-  ThemeOptions,
+  type ThemeOptions,
   ThemeProvider,
 } from "@mui/material";
 import { colors } from "./styles.js";
-import { App } from "./components/App";
+import { App } from "./components/app/App.js";
 
 const themeOptions: ThemeOptions = {
   palette: {

@@ -8,6 +8,7 @@ import {
 import { TestWallet } from "@aztec/test-wallet";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
+import type { MessagePortMain } from "electron";
 
 async function main() {
   console.log("Starting wallet utility process...");
@@ -34,10 +35,16 @@ async function main() {
   const wallet = new TestWallet(pxe);
   const schema = generateWalletSchema(wallet);
 
-  process.parentPort.on("message", async (event) => {
-    console.log("Received message:", event.data);
+  const handleExternalEvent = (port: MessagePortMain) => async (event: any) => {
+    const { origin, content } = event.data;
+    if (origin !== "websocket") {
+      return;
+    }
+    await handleEvent(port)(content);
+  };
 
-    const { type, messageId, args } = JSON.parse(event.data);
+  const handleEvent = (port: MessagePortMain) => async (content: any) => {
+    const { type, messageId, args } = JSON.parse(content);
 
     console.log("Parsed message:", { type, messageId, args });
 
@@ -50,7 +57,26 @@ async function main() {
       schema[type].parameters()
     );
     const result = await (wallet as unknown as Wallet)[type](...sanitizedArgs);
-    process.parentPort.postMessage(jsonStringify({ messageId, result }));
+    port.postMessage({
+      origin: "wallet",
+      content: jsonStringify({ messageId, result }),
+    });
+  };
+
+  process.parentPort.once("message", (message: any) => {
+    if (message.data.type === "ports" && message.ports?.length) {
+      const [externalPort, internalPort] = message.ports;
+      externalPort.on("message", async (event) => {
+        console.log("Received external message:", event.data);
+        handleExternalEvent(externalPort)(event);
+      });
+      internalPort.on("message", async (event) => {
+        console.log("Received internal message:", event.data);
+        handleEvent(internalPort)(event.data);
+      });
+      externalPort.start();
+      internalPort.start();
+    }
   });
 }
 

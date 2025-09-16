@@ -19,5 +19,5 @@
     "allowArbitraryExtensions": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "wallet-api.d.ts"]
 }

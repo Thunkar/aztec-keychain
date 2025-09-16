@@ -1,7 +1,8 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, MessageChannelMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
-import { utilityProcess } from "electron/main";
+import { ipcMain, utilityProcess } from "electron/main";
+import { WalletProxy } from "./wallet-proxy";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -31,27 +32,32 @@ const createWindow = () => {
   mainWindow.webContents.openDevTools();
 };
 
+const inFlightRequests = new Map<number, (value: unknown) => void>();
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
   createWindow();
+  const { port1: externalPort1, port2: externalPort2 } =
+    new MessageChannelMain();
+  const { port1: internalPort1, port2: internalPort2 } =
+    new MessageChannelMain();
+
   const wsServer = utilityProcess.fork(path.join(__dirname, "ws-server.js"));
   const wallet = utilityProcess.fork(path.join(__dirname, "wallet.js"));
 
-  wallet.on("exit", (code: number) => {
-    console.error(`Wallet process exited with code ${code}`);
-  });
+  wsServer.postMessage({ type: "ports" }, [externalPort1]);
+  wallet.postMessage({ type: "ports" }, [externalPort2, internalPort1]);
 
-  wallet.on("message", (message: any) => {
-    console.log("Message from wallet:", message);
-    wsServer.postMessage(message);
-  });
-
-  wsServer.on("message", (message: any) => {
-    console.log("Message from ws-server:", message);
-    wallet.postMessage(message);
-  });
+  const walletProxy = WalletProxy.create(internalPort2);
+  for (const method of walletProxy.methods()) {
+    ipcMain.handle(method, async (_event, args) => {
+      const result = await walletProxy[method](...(args ?? []));
+      console.log(`finally ${result}`);
+      return result;
+    });
+  }
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

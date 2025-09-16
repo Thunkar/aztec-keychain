@@ -6,16 +6,16 @@ export default defineContentScript({
       if (event.source !== window || event.data.result || event.data.error) {
         return;
       }
-      const { data } = event;
-      browser.runtime.sendMessage({ origin: "content", data });
+      const { data: content } = event;
+      browser.runtime.sendMessage({ origin: "injected", content });
     });
     browser.runtime.onMessage.addListener((event: any) => {
       console.log("content received message", event);
-      const { data, origin } = event;
+      const { content, origin } = event;
       if (origin !== "background") {
         return;
       }
-      window.postMessage(data);
+      window.postMessage(content);
     });
   },
 });

@@ -2,9 +2,9 @@ export default defineBackground(() => {
   let webSocket: WebSocket | null = null;
 
   browser.runtime.onMessage.addListener((event: any) => {
-    const { data, origin } = event;
-    if (webSocket && origin === "content") {
-      webSocket.send(data);
+    const { content, origin } = event;
+    if (webSocket && origin === "injected") {
+      webSocket.send(content);
     }
   });
 
@@ -29,7 +29,7 @@ export default defineBackground(() => {
         }
         browser.tabs.sendMessage(tab.id, {
           origin: "background",
-          data: JSON.parse(event.data),
+          content: JSON.parse(event.data),
         });
       };
 

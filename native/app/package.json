@@ -50,6 +50,7 @@
   "dependencies": {
     "@aztec/accounts": "link:../../../aztec-packages/yarn-project/accounts",
     "@aztec/bb.js": "link:../../../aztec-packages/barretenberg/ts",
+    "@aztec/entrypoints": "link:../../../aztec-packages/yarn-project/entrypoints",
     "@aztec/aztec.js": "link:../../../aztec-packages/yarn-project/aztec.js",
     "@aztec/kv-store": "link:../../../aztec-packages/yarn-project/kv-store",
     "@aztec/pxe": "link:../../../aztec-packages/yarn-project/pxe",
