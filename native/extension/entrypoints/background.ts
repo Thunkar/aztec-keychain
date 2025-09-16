@@ -1,9 +1,10 @@
 export default defineBackground(() => {
   let webSocket: WebSocket | null = null;
 
-  browser.runtime.onMessage.addListener((message: any) => {
-    if (webSocket) {
-      webSocket.send(message);
+  browser.runtime.onMessage.addListener((event: any) => {
+    const { data, origin } = event;
+    if (webSocket && origin === "content") {
+      webSocket.send(data);
     }
   });
 
@@ -16,8 +17,20 @@ export default defineBackground(() => {
         resolve(true);
       };
 
-      webSocket.onmessage = (event) => {
-        browser.runtime.sendMessage(event);
+      webSocket.onmessage = async (event) => {
+        console.log("websocket message", event);
+        const [tab] = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        if (!tab?.id) {
+          console.error("No active tab found");
+          return;
+        }
+        browser.tabs.sendMessage(tab.id, {
+          origin: "background",
+          data: JSON.parse(event.data),
+        });
       };
 
       webSocket.onclose = (event) => {

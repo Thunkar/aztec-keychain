@@ -34,10 +34,24 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on("ready", () => {
+app.on("ready", async () => {
   createWindow();
-  utilityProcess.fork(path.join(__dirname, "ws-server.js"));
-  utilityProcess.fork(path.join(__dirname, "wallet.js"));
+  const wsServer = utilityProcess.fork(path.join(__dirname, "ws-server.js"));
+  const wallet = utilityProcess.fork(path.join(__dirname, "wallet.js"));
+
+  wallet.on("exit", (code: number) => {
+    console.error(`Wallet process exited with code ${code}`);
+  });
+
+  wallet.on("message", (message: any) => {
+    console.log("Message from wallet:", message);
+    wsServer.postMessage(message);
+  });
+
+  wsServer.on("message", (message: any) => {
+    console.log("Message from ws-server:", message);
+    wallet.postMessage(message);
+  });
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

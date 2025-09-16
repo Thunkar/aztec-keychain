@@ -12,10 +12,18 @@ async function main() {
   const wss = new WebSocketServer({ server });
 
   wss.on("connection", (ws) => {
-    ws.on("error", console.error);
+    process.parentPort.on("message", (message: any) => {
+      console.log("Sending message to ws client:", message.data);
+      ws.send(message.data);
+    });
+
+    ws.on("error", (err) => {
+      console.error("WebSocket error:", err);
+      ws.close();
+    });
 
     ws.on("message", (data) => {
-      console.log(data.toString("utf-8"));
+      process.parentPort.postMessage(data.toString("utf-8"));
     });
   });
 

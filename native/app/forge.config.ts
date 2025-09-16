@@ -38,6 +38,10 @@ const config: ForgeConfig = {
           entry: "src/ws-server.ts",
           config: "vite.preload.config.ts",
         },
+        {
+          entry: "src/wallet.ts",
+          config: "vite.preload.config.ts",
+        },
       ],
       renderer: [
         {
