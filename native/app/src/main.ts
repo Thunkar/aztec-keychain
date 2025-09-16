@@ -37,6 +37,7 @@ const createWindow = () => {
 app.on("ready", () => {
   createWindow();
   utilityProcess.fork(path.join(__dirname, "ws-server.js"));
+  utilityProcess.fork(path.join(__dirname, "wallet.js"));
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

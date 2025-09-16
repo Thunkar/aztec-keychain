@@ -14,8 +14,8 @@ async function main() {
   wss.on("connection", (ws) => {
     ws.on("error", console.error);
 
-    ws.on("message", function message(data) {
-      console.info("received: %s", data);
+    ws.on("message", (data) => {
+      console.log(data.toString("utf-8"));
     });
   });
 

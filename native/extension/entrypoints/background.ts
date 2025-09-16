@@ -3,7 +3,7 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener((message: any) => {
     if (webSocket) {
-      webSocket.send(message.data);
+      webSocket.send(message);
     }
   });
 
@@ -17,8 +17,7 @@ export default defineBackground(() => {
       };
 
       webSocket.onmessage = (event) => {
-        console.log(`websocket received message: ${event.data}`);
-        browser.runtime.sendMessage({ type: "ws-message", data: event.data });
+        browser.runtime.sendMessage(event);
       };
 
       webSocket.onclose = (event) => {
