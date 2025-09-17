@@ -1,16 +1,49 @@
 import { getPXEServiceConfig } from "@aztec/pxe/config";
-import { createPXEService } from "@aztec/pxe/server";
+import { createPXEService, PXE_DATA_SCHEMA_VERSION } from "@aztec/pxe/server";
 import {
   createAztecNodeClient,
   generateWalletSchema,
   type Wallet,
+  type Logger,
+  createLogger,
 } from "@aztec/aztec.js";
-import { TestWallet } from "@aztec/test-wallet";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
+import { NativeWallet } from "./wallet-utils/native-wallet.ts";
+import { NativeWalletInterfaceSchema } from "./wallet-utils/wallet-proxy.ts";
+import { createStore } from "@aztec/kv-store/lmdb-v2";
 
-async function main() {
+const logLevel = [
+  "silent",
+  "fatal",
+  "error",
+  "warn",
+  "info",
+  "verbose",
+  "debug",
+  "trace",
+] as const;
+type LogLevel = (typeof logLevel)[number];
+
+function createProxyLogger(prefix: string, logPort: MessagePortMain): Logger {
+  return new Proxy(createLogger(prefix), {
+    get: (target, prop) => {
+      if (logLevel.includes(prop as (typeof logLevel)[number])) {
+        return function (this: Logger, ...data: Parameters<Logger[LogLevel]>) {
+          const loggingFn = prop as LogLevel;
+          const args = [loggingFn, prefix, ...data];
+          logPort.postMessage({ type: "log", args });
+          target[loggingFn].call(this, ...[data[0], data[1]]);
+        };
+      } else {
+        return target[prop];
+      }
+    },
+  });
+}
+
+async function init(logPort: MessagePortMain) {
   console.log("Starting wallet utility process...");
   const nodeURL = "http://localhost:8080";
   const aztecNode = await createAztecNodeClient(nodeURL);
@@ -29,24 +62,35 @@ async function main() {
     l1Contracts,
   };
 
-  const pxe = await createPXEService(aztecNode, configWithContracts);
+  const storeLogger = createProxyLogger("pxe:data:lmdb-v2", logPort);
+
+  const pxe = await createPXEService(aztecNode, configWithContracts, {
+    loggers: {
+      pxe: createProxyLogger("pxe:service", logPort),
+      prover: createProxyLogger("bb:native", logPort),
+    },
+    store: await createStore(
+      "pxe_data",
+      PXE_DATA_SCHEMA_VERSION,
+      configWithContracts,
+      createProxyLogger("pxe:data:lmdb", logPort)
+    ),
+  });
   console.log("PXE Service started with config:", configWithContracts);
 
-  const wallet = new TestWallet(pxe);
-  const schema = generateWalletSchema(wallet);
+  return new NativeWallet(pxe);
+}
 
-  const handleExternalEvent = (port: MessagePortMain) => async (event: any) => {
+const handleExternalEvent = (port: MessagePortMain, wallet: Wallet) => {
+  const schema = generateWalletSchema(wallet);
+  return async (event: any) => {
     const { origin, content } = event.data;
     if (origin !== "websocket") {
       return;
     }
-    await handleEvent(port)(content);
-  };
-
-  const handleEvent = (port: MessagePortMain) => async (content: any) => {
     const { type, messageId, args } = JSON.parse(content);
 
-    console.log("Parsed message:", { type, messageId, args });
+    console.log("Parsed external message:", { type, messageId, args });
 
     if (!schemaHasMethod(schema, type)) {
       throw new Error(`Unknown method: ${type}`);
@@ -62,20 +106,47 @@ async function main() {
       content: jsonStringify({ messageId, result }),
     });
   };
+};
 
-  process.parentPort.once("message", (message: any) => {
+const handleInternalEvent =
+  (port: MessagePortMain, wallet: NativeWallet) => async (content: any) => {
+    const { type, messageId, args } = JSON.parse(content);
+
+    console.log("Parsed internal message:", { type, messageId, args });
+
+    if (!schemaHasMethod(NativeWalletInterfaceSchema, type)) {
+      throw new Error(`Unknown method: ${type}`);
+    }
+
+    const sanitizedArgs = await parseWithOptionals(
+      args,
+      NativeWalletInterfaceSchema[type].parameters()
+    );
+    const result = await (wallet as unknown as NativeWallet)[type](
+      ...sanitizedArgs
+    );
+    port.postMessage({
+      origin: "wallet",
+      content: jsonStringify({ messageId, result }),
+    });
+  };
+
+async function main() {
+  process.parentPort.once("message", async (message: any) => {
     if (message.data.type === "ports" && message.ports?.length) {
-      const [externalPort, internalPort] = message.ports;
+      const [externalPort, internalPort, logPort] = message.ports;
+      const wallet = await init(logPort);
       externalPort.on("message", async (event) => {
         console.log("Received external message:", event.data);
-        handleExternalEvent(externalPort)(event);
+        handleExternalEvent(externalPort, wallet)(event);
       });
       internalPort.on("message", async (event) => {
         console.log("Received internal message:", event.data);
-        handleEvent(internalPort)(event.data);
+        handleInternalEvent(internalPort, wallet)(event.data);
       });
       externalPort.start();
       internalPort.start();
+      logPort.start();
     }
   });
 }

@@ -1,7 +1,6 @@
-import type { Wallet } from "@aztec/aztec.js";
-
+import type { NativeWallet } from "./src/wallet-utils/wallet-proxy.ts";
 declare global {
   interface Window {
-    walletAPI: Wallet;
+    walletAPI: NativeWallet;
   }
 }

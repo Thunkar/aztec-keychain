@@ -2,7 +2,8 @@ import { app, BrowserWindow, MessageChannelMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
-import { WalletProxy } from "./wallet-proxy";
+import { WalletProxy } from "./wallet-utils/wallet-proxy";
+import { inspect } from "node:util";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -32,8 +33,6 @@ const createWindow = () => {
   mainWindow.webContents.openDevTools();
 };
 
-const inFlightRequests = new Map<number, (value: unknown) => void>();
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -43,19 +42,43 @@ app.on("ready", async () => {
     new MessageChannelMain();
   const { port1: internalPort1, port2: internalPort2 } =
     new MessageChannelMain();
+  const { port1: walletLogPort1, port2: walletLogPort2 } =
+    new MessageChannelMain();
 
   const wsServer = utilityProcess.fork(path.join(__dirname, "ws-server.js"));
   const wallet = utilityProcess.fork(path.join(__dirname, "wallet.js"));
 
   wsServer.postMessage({ type: "ports" }, [externalPort1]);
-  wallet.postMessage({ type: "ports" }, [externalPort2, internalPort1]);
+  wallet.postMessage({ type: "ports" }, [
+    externalPort2,
+    internalPort1,
+    walletLogPort1,
+  ]);
+
+  wallet.on("exit", () => {
+    console.error("sadge");
+  });
+
+  walletLogPort2.start();
+  walletLogPort2.on("message", (event) => {
+    const {
+      data: { args },
+    } = event;
+    const dataObject = args.pop();
+    console.log(`${args.join(" ")} ${inspect(dataObject)}`);
+  });
 
   const walletProxy = WalletProxy.create(internalPort2);
-  for (const method of walletProxy.methods()) {
+  const internalMethods = [
+    "getAccounts",
+    "getSenders",
+    "registerSender",
+    "getTxReceipt",
+    "createAccount",
+  ];
+  for (const method of internalMethods) {
     ipcMain.handle(method, async (_event, args) => {
-      const result = await walletProxy[method](...(args ?? []));
-      console.log(`finally ${result}`);
-      return result;
+      return walletProxy[method](...(args ?? []));
     });
   }
 });

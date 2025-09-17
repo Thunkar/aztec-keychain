@@ -8,7 +8,7 @@ import {
   ThemeProvider,
 } from "@mui/material";
 import { colors } from "./styles.js";
-import { App } from "./components/app/App.js";
+import { App } from "./app/App.js";
 
 const themeOptions: ThemeOptions = {
   palette: {

@@ -1,4 +1,4 @@
-import { generateWalletSchema } from "@aztec/aztec.js";
+import { TxHash, TxReceipt } from "@aztec/aztec.js";
 import type { Wallet } from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,
@@ -7,10 +7,41 @@ import {
 import { schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron/main";
+import { z } from "zod";
+import { schemas, type ApiSchemaFor, optional } from "@aztec/stdlib/schemas";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
 };
+
+type NativeWalletInterface = Pick<
+  Wallet,
+  "getTxReceipt" | "getAccounts" | "getSenders" | "registerSender"
+> & {
+  createAccount(): Promise<TxHash>;
+};
+
+export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
+  {
+    getTxReceipt: z.function().args(TxHash.schema).returns(TxReceipt.schema),
+    createAccount: z.function().args().returns(TxHash.schema),
+    registerSender: z
+      .function()
+      .args(schemas.AztecAddress, optional(z.string()))
+      .returns(schemas.AztecAddress),
+    getSenders: z
+      .function()
+      .args()
+      .returns(
+        z.array(z.object({ alias: z.string(), item: schemas.AztecAddress }))
+      ),
+    getAccounts: z
+      .function()
+      .args()
+      .returns(
+        z.array(z.object({ alias: z.string(), item: schemas.AztecAddress }))
+      ),
+  };
 
 export class WalletProxy {
   private inFlight = new Map<string, PromiseWithResolvers<any>>();
@@ -39,32 +70,31 @@ export class WalletProxy {
     });
     port.start();
     return new Proxy(wallet, {
-      get: (target, prop, receiver) => {
-        const schema = generateWalletSchema(receiver);
-        if (schemaHasMethod(schema, prop.toString())) {
+      get: (target, prop) => {
+        if (schemaHasMethod(NativeWalletInterfaceSchema, prop.toString())) {
           return async (...args: any[]) => {
             const result = await target.postMessage({
-              type: prop.toString() as keyof FunctionsOf<Wallet>,
+              type: prop.toString() as keyof FunctionsOf<NativeWallet>,
               args,
             });
-            return schema[prop.toString() as keyof typeof schema]
+            return NativeWalletInterfaceSchema[
+              prop.toString() as keyof NativeWalletInterface
+            ]
               .returnType()
               .parseAsync(result);
           };
-        } else if (prop.toString() === "methods") {
-          return () => Object.keys(schema);
         } else {
           return target[prop];
         }
       },
-    }) as unknown as Wallet & { methods(): string[] };
+    }) as unknown as NativeWallet;
   }
 
   private async postMessage({
     type,
     args,
   }: {
-    type: keyof FunctionsOf<Wallet>;
+    type: keyof FunctionsOf<NativeWalletInterface>;
     args: any[];
   }) {
     const messageId = globalThis.crypto.randomUUID();

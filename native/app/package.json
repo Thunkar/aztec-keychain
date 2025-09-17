@@ -5,7 +5,7 @@
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
-    "start": "BB_WASM_PATH='/home/thunkar/Repos/aztec-packages/barretenberg/ts/dest/node-cjs/barretenberg_wasm/barretenberg-threads.wasm.gz' JEST_WORKER_ID=1 LOG_LEVEL=debug BB_BINARY_PATH=~/repos/aztec-packages/barretenberg/cpp/build/bin/bb BB_WORKING_DIRECTORY=/tmp/bb electron-forge start",
+    "start": "BB_WASM_PATH='/home/thunkar/Repos/aztec-packages/barretenberg/ts/dest/node/barretenberg_wasm/barretenberg-threads.wasm.gz' JEST_WORKER_ID=1 LOG_LEVEL=debug BB_BINARY_PATH=~/Repos/aztec-packages/barretenberg/cpp/build/bin/bb BB_WORKING_DIRECTORY=/tmp/bb electron-forge start",
     "postbuild": "node scripts/copyNative.js",
     "package": "electron-forge package",
     "make": "electron-forge make",
@@ -41,6 +41,7 @@
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
+    "glob": "^11.0.2",
     "prettier": "^3.6.2",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.32.0",
@@ -49,12 +50,13 @@
   },
   "dependencies": {
     "@aztec/accounts": "link:../../../aztec-packages/yarn-project/accounts",
-    "@aztec/bb.js": "link:../../../aztec-packages/barretenberg/ts",
-    "@aztec/entrypoints": "link:../../../aztec-packages/yarn-project/entrypoints",
     "@aztec/aztec.js": "link:../../../aztec-packages/yarn-project/aztec.js",
+    "@aztec/bb.js": "link:../../../aztec-packages/barretenberg/ts",
+    "@aztec/constants": "link:../../../aztec-packages/yarn-project/constants",
+    "@aztec/entrypoints": "link:../../../aztec-packages/yarn-project/entrypoints",
     "@aztec/kv-store": "link:../../../aztec-packages/yarn-project/kv-store",
+    "@aztec/noir-contracts.js": "link:../../../aztec-packages/yarn-project/noir-contracts.js",
     "@aztec/pxe": "link:../../../aztec-packages/yarn-project/pxe",
-    "@aztec/test-wallet": "link:../../../aztec-packages/yarn-project/test-wallet",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@fontsource/roboto": "^5.1.1",
@@ -63,14 +65,17 @@
     "@mui/material": "^6.4.4",
     "bufferutil": "^4.0.9",
     "cors": "^2.8.5",
+    "electron-log": "^5.4.3",
     "electron-squirrel-startup": "^1.0.1",
     "express": "^5.1.0",
     "pino": "^9.5.0",
     "react": "^18.3.1",
     "react-ascii-text": "^0.0.4",
     "react-dom": "^18.3.1",
+    "react-qr-code": "^2.0.18",
     "utf-8-validate": "^6.0.5",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^3.23.8"
   },
   "resolutions": {
     "@aztec/accounts": "link:../../../aztec-packages/yarn-project/accounts",
@@ -93,10 +98,10 @@
     "@aztec/noir-contracts.js": "link:../../../aztec-packages/yarn-project/noir-contracts.js",
     "@aztec/l1-artifacts": "link:../../../aztec-packages/yarn-project/l1-artifacts",
     "@aztec/constants": "link:../../../aztec-packages/yarn-project/constants",
-    "@aztec/noir-acvm_js": "link:../noir/packages/acvm_js",
-    "@aztec/noir-types": "link:../noir/packages/types",
-    "@aztec/noir-noirc_abi": "link:../noir/packages/noirc_abi",
-    "@aztec/noir-noir_codegen": "link:../noir/packages/noir-noir_codegen",
+    "@aztec/noir-acvm_js": "link:../../../aztec-packages/noir/packages/acvm_js",
+    "@aztec/noir-types": "link:../../../aztec-packages/noir/packages/types",
+    "@aztec/noir-noirc_abi": "link:../../../aztec-packages/noir/packages/noirc_abi",
+    "@aztec/noir-noir_codegen": "link:../../../aztec-packages/noir/packages/noir_codegen",
     "@aztec/noir-protocol-circuits-types": "link:../../../aztec-packages/yarn-project/noir-protocol-circuits-types",
     "@aztec/world-state": "link:../../../aztec-packages/yarn-project/world-state",
     "@aztec/telemetry-client": "link:../../../aztec-packages/yarn-project/telemetry-client",
@@ -113,5 +118,6 @@
     "@aztec/test-wallet": "link:../../../aztec-packages/yarn-project/test-wallet",
     "@aztec/slasher": "link:../../../aztec-packages/yarn-project/slasher",
     "@aztec/node-keystore": "link:../../../aztec-packages/yarn-project/node-keystore"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
