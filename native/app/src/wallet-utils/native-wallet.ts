@@ -6,6 +6,7 @@ import {
   type SimulateMethodOptions,
   getContractInstanceFromInstantiationParams,
   TxHash,
+  type ProfileMethodOptions,
 } from "@aztec/aztec.js";
 import { DefaultMultiCallEntrypoint } from "@aztec/entrypoints/multicall";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
@@ -15,7 +16,11 @@ import {
   StubAccountContractArtifact,
   createStubAccount,
 } from "@aztec/accounts/stub";
-import type { TxSimulationResult } from "@aztec/stdlib/tx";
+import type {
+  TxProfileResult,
+  TxProvingResult,
+  TxSimulationResult,
+} from "@aztec/stdlib/tx";
 import { EcdsaRAccountContract } from "@aztec/accounts/ecdsa";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { prepareForFeePayment } from "./sponsoredFPC";
@@ -123,6 +128,11 @@ export class NativeWallet extends BaseWallet {
     executionPayload: ExecutionPayload,
     opts: SimulateMethodOptions
   ): Promise<TxSimulationResult> {
+    if (!opts.fee) {
+      opts.fee = {
+        paymentMethod: await prepareForFeePayment(this),
+      };
+    }
     const executionOptions = { txNonce: Fr.random(), cancellable: false };
     const {
       account: fromAccount,
@@ -149,6 +159,42 @@ export class NativeWallet extends BaseWallet {
       true,
       true,
       { contracts: contractOverrides }
+    );
+  }
+
+  override async proveTx(
+    exec: ExecutionPayload,
+    opts: SimulateMethodOptions
+  ): Promise<TxProvingResult> {
+    opts.fee = {
+      paymentMethod: await prepareForFeePayment(this),
+    };
+
+    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+      exec,
+      opts.from,
+      opts.fee
+    );
+    return this.pxe.proveTx(txRequest);
+  }
+
+  override async profileTx(
+    exec: ExecutionPayload,
+    opts: ProfileMethodOptions
+  ): Promise<TxProfileResult> {
+    opts.fee = {
+      paymentMethod: await prepareForFeePayment(this),
+    };
+
+    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+      exec,
+      opts.from,
+      opts.fee
+    );
+    return this.pxe.profileTx(
+      txRequest,
+      opts.profileMode,
+      opts.skipProofGeneration ?? true
     );
   }
 }

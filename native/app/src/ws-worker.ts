@@ -16,7 +16,6 @@ async function main() {
   let externalPort: MessagePortMain;
 
   const handleWalletEvent = (event: any) => {
-    console.log("Sending message to ws clients:", event.data);
     const { origin, content } = event.data;
     if (origin !== "wallet") {
       return;
@@ -34,12 +33,10 @@ async function main() {
 
   wss.on("connection", (ws) => {
     ws.on("error", (err) => {
-      console.error("WebSocket error:", err);
       ws.close();
     });
 
     ws.on("message", (data) => {
-      console.log("Received message from ws client:", data.toString("utf-8"));
       externalPort.postMessage({
         origin: "websocket",
         content: data.toString("utf-8"),
@@ -48,7 +45,6 @@ async function main() {
   });
 
   await server.listen(8765);
-  console.info("WebSocket server started on ws://localhost:8765");
 }
 
 main();

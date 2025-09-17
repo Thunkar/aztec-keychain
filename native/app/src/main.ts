@@ -45,8 +45,8 @@ app.on("ready", async () => {
   const { port1: walletLogPort1, port2: walletLogPort2 } =
     new MessageChannelMain();
 
-  const wsServer = utilityProcess.fork(path.join(__dirname, "ws-server.js"));
-  const wallet = utilityProcess.fork(path.join(__dirname, "wallet.js"));
+  const wsServer = utilityProcess.fork(path.join(__dirname, "ws-worker.js"));
+  const wallet = utilityProcess.fork(path.join(__dirname, "wallet-worker.js"));
 
   wsServer.postMessage({ type: "ports" }, [externalPort1]);
   wallet.postMessage({ type: "ports" }, [
@@ -55,17 +55,25 @@ app.on("ready", async () => {
     walletLogPort1,
   ]);
 
+  wsServer.on("exit", () => {
+    console.error("ws server process died");
+    process.exit(1);
+  });
+
   wallet.on("exit", () => {
-    console.error("sadge");
+    console.error("wallet process died");
+    process.exit(1);
   });
 
   walletLogPort2.start();
   walletLogPort2.on("message", (event) => {
-    const {
-      data: { args },
-    } = event;
-    const dataObject = args.pop();
-    console.log(`${args.join(" ")} ${inspect(dataObject)}`);
+    const { type, args } = event.data;
+    if (type !== "log") {
+      return;
+    }
+    const sanitizedArgs = JSON.parse(args);
+    const dataObject = sanitizedArgs.pop();
+    console.log(`${sanitizedArgs.join(" ")} ${inspect(dataObject)}`);
   });
 
   const walletProxy = WalletProxy.create(internalPort2);

@@ -35,11 +35,11 @@ const config: ForgeConfig = {
           target: "preload",
         },
         {
-          entry: "src/ws-server.ts",
+          entry: "src/ws-worker.ts",
           config: "vite.preload.config.ts",
         },
         {
-          entry: "src/wallet.ts",
+          entry: "src/wallet-worker.ts",
           config: "vite.preload.config.ts",
         },
       ],

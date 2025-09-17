@@ -18,7 +18,6 @@ interface AccountBoxProps {
 
 export function AccountBox({
   account,
-  buttonText,
   QRButton = false,
   disabled,
 }: AccountBoxProps) {
