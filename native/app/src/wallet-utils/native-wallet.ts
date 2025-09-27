@@ -3,40 +3,64 @@ import {
   AccountManager,
   BaseWallet,
   SignerlessAccount,
-  type SimulateMethodOptions,
+  type SimulateOptions,
   getContractInstanceFromInstantiationParams,
   TxHash,
-  type ProfileMethodOptions,
+  type DeployAccountOptions,
+  type FeeOptions,
+  type WalletFeeOptions,
+  type AztecNode,
 } from "@aztec/aztec.js";
 import { DefaultMultiCallEntrypoint } from "@aztec/entrypoints/multicall";
-import type { ExecutionPayload } from "@aztec/entrypoints/payload";
+import {
+  ExecutionPayload,
+  mergeExecutionPayloads,
+} from "@aztec/entrypoints/payload";
 import { Fr } from "@aztec/foundation/fields";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
   StubAccountContractArtifact,
   createStubAccount,
 } from "@aztec/accounts/stub";
-import type {
-  TxProfileResult,
-  TxProvingResult,
-  TxSimulationResult,
-} from "@aztec/stdlib/tx";
+import type { TxSimulationResult } from "@aztec/stdlib/tx";
+import { GasSettings } from "@aztec/stdlib/gas";
 import { EcdsaRAccountContract } from "@aztec/accounts/ecdsa";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { prepareForFeePayment } from "./sponsoredFPC";
+import {
+  type PXEConfig,
+  type PXECreationOptions,
+  createPXE,
+  getPXEConfig,
+} from "@aztec/pxe/server";
 
 export class NativeWallet extends BaseWallet {
   protected accounts: Map<string, Account> = new Map();
+
+  static async create(
+    node: AztecNode,
+    overridePXEConfig?: Partial<PXEConfig>,
+    options: PXECreationOptions = { loggers: {} }
+  ): Promise<NativeWallet> {
+    const pxeConfig = Object.assign(getPXEConfig(), {
+      proverEnabled: overridePXEConfig?.proverEnabled ?? false,
+      ...overridePXEConfig,
+    });
+    const pxe = await createPXE(node, pxeConfig, options);
+    return new NativeWallet(pxe, node);
+  }
 
   protected async getAccountFromAddress(
     address: AztecAddress
   ): Promise<Account> {
     let account: Account | undefined;
     if (address.equals(AztecAddress.ZERO)) {
-      const { l1ChainId: chainId, rollupVersion } =
-        await this.pxe.getNodeInfo();
+      const chainInfo = await this.getChainInfo();
       account = new SignerlessAccount(
-        new DefaultMultiCallEntrypoint(chainId, rollupVersion)
+        new DefaultMultiCallEntrypoint(
+          chainInfo.chainId.toNumber(),
+          chainInfo.version.toNumber()
+        )
       );
     } else {
       account = this.accounts.get(address?.toString() ?? "");
@@ -68,10 +92,18 @@ export class NativeWallet extends BaseWallet {
     const contract = new EcdsaRAccountContract(signingKey);
     const accountManager = await AccountManager.create(
       this,
-      this.pxe,
       secret,
       contract,
       salt
+    );
+
+    const instance = await accountManager.getInstance();
+    const artifact = await contract.getContractArtifact();
+
+    await this.pxe.registerContract({ artifact, instance });
+    await this.pxe.registerAccount(
+      secret,
+      (await accountManager.getCompleteAddress()).partialAddress
     );
 
     this.accounts.set(
@@ -80,15 +112,12 @@ export class NativeWallet extends BaseWallet {
     );
 
     const deployMethod = await accountManager.getDeployMethod();
-    const feePaymentMethod = await prepareForFeePayment(this);
-    const opts = {
+    const paymentMethod = await prepareForFeePayment(this);
+    const opts: DeployAccountOptions = {
       from: AztecAddress.ZERO,
-      contractAddressSalt: salt,
       fee: {
-        paymentMethod:
-          await accountManager.getSelfPaymentMethod(feePaymentMethod),
+        paymentMethod,
       },
-      universalDeploy: true,
       skipClassPublication: true,
       skipInstancePublication: true,
     };
@@ -124,77 +153,98 @@ export class NativeWallet extends BaseWallet {
     };
   }
 
+  protected async getDefaultFeeOptions(
+    address: AztecAddress,
+    walletFeeOptions?: WalletFeeOptions
+  ): Promise<FeeOptions> {
+    const maxFeesPerGas =
+      walletFeeOptions?.gasSettings?.maxFeesPerGas ??
+      (await this.aztecNode.getCurrentBaseFees()).mul(1 + this.baseFeePadding);
+    const paymentMethod = !walletFeeOptions?.embeddedPaymentMethodFeePayer
+      ? await prepareForFeePayment(this)
+      : undefined;
+    const gasSettings: GasSettings = GasSettings.default({
+      ...walletFeeOptions?.gasSettings,
+      maxFeesPerGas,
+    });
+    this.log.debug(`Using L2 gas settings`, gasSettings);
+    return {
+      gasSettings,
+      paymentMethod,
+      embeddedPaymentMethodFeePayer:
+        walletFeeOptions?.embeddedPaymentMethodFeePayer,
+    };
+  }
+
   override async simulateTx(
     executionPayload: ExecutionPayload,
-    opts: SimulateMethodOptions
+    opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    if (!opts.fee) {
-      opts.fee = {
-        paymentMethod: await prepareForFeePayment(this),
+    let simulationResults;
+    const feeOptions = opts.fee?.estimateGas
+      ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
+      : await this.getDefaultFeeOptions(opts.from, opts.fee);
+    const feeExecutionPayload =
+      await feeOptions.paymentMethod?.getExecutionPayload();
+    const maybeFeePayer =
+      (await feeOptions.paymentMethod?.getFeePayer()) ??
+      opts.fee?.embeddedPaymentMethodFeePayer;
+    const isFeePayer = !!maybeFeePayer && maybeFeePayer.equals(opts.from);
+    // Either there is no fee execution payload and we're the fee payer (embedded fee juice payment in the interaction)
+    // Or the fee payment method has no calls and we're the fee payer (wallet injected fee juice payment)
+    const endSetup =
+      (!feeExecutionPayload || feeExecutionPayload.calls.length === 0) &&
+      isFeePayer;
+    const executionOptions = {
+      txNonce: Fr.random(),
+      cancellable: true,
+      isFeePayer,
+      endSetup,
+    };
+    const combinedExecutionPayload = mergeExecutionPayloads([
+      feeExecutionPayload ?? ExecutionPayload.empty(),
+      executionPayload,
+    ]);
+    // Kernelless simulations using the multicall entrypoints are not currently supported,
+    // since we only override proper account contracts.
+    // TODO: allow disabling kernels even when no overrides are necessary
+    if (opts.from.equals(AztecAddress.ZERO)) {
+      const fromAccount = await this.getAccountFromAddress(opts.from);
+      const txRequest = await fromAccount.createTxExecutionRequest(
+        combinedExecutionPayload,
+        feeOptions.gasSettings,
+        executionOptions
+      );
+      simulationResults = await this.pxe.simulateTx(
+        txRequest,
+        true /* simulatePublic */,
+        opts?.skipTxValidation,
+        opts?.skipFeeEnforcement ?? true
+      );
+    } else {
+      const {
+        account: fromAccount,
+        instance,
+        artifact,
+      } = await this.getFakeAccountDataFor(opts.from);
+      const txRequest = await fromAccount.createTxExecutionRequest(
+        combinedExecutionPayload,
+        feeOptions.gasSettings,
+        executionOptions
+      );
+      const contractOverrides = {
+        [opts.from.toString()]: { instance, artifact },
       };
+      simulationResults = await this.pxe.simulateTx(
+        txRequest,
+        true /* simulatePublic */,
+        true,
+        true,
+        {
+          contracts: contractOverrides,
+        }
+      );
     }
-    const executionOptions = { txNonce: Fr.random(), cancellable: false };
-    const {
-      account: fromAccount,
-      instance,
-      artifact,
-    } = await this.getFakeAccountDataFor(opts.from);
-    const fee = await this.getFeeOptions(
-      fromAccount,
-      executionPayload,
-      opts.fee,
-      executionOptions
-    );
-    const txRequest = await fromAccount.createTxExecutionRequest(
-      executionPayload,
-      fee,
-      executionOptions
-    );
-    const contractOverrides = {
-      [opts.from.toString()]: { instance, artifact },
-    };
-    return this.pxe.simulateTx(
-      txRequest,
-      true /* simulatePublic */,
-      true,
-      true,
-      { contracts: contractOverrides }
-    );
-  }
-
-  override async proveTx(
-    exec: ExecutionPayload,
-    opts: SimulateMethodOptions
-  ): Promise<TxProvingResult> {
-    opts.fee = {
-      paymentMethod: await prepareForFeePayment(this),
-    };
-
-    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-      exec,
-      opts.from,
-      opts.fee
-    );
-    return this.pxe.proveTx(txRequest);
-  }
-
-  override async profileTx(
-    exec: ExecutionPayload,
-    opts: ProfileMethodOptions
-  ): Promise<TxProfileResult> {
-    opts.fee = {
-      paymentMethod: await prepareForFeePayment(this),
-    };
-
-    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-      exec,
-      opts.from,
-      opts.fee
-    );
-    return this.pxe.profileTx(
-      txRequest,
-      opts.profileMode,
-      opts.skipProofGeneration ?? true
-    );
+    return simulationResults;
   }
 }

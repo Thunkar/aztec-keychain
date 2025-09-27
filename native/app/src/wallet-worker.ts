@@ -1,11 +1,9 @@
-import { getPXEServiceConfig } from "@aztec/pxe/config";
-import { createPXEService } from "@aztec/pxe/server";
 import {
   createAztecNodeClient,
-  generateWalletSchema,
   type Wallet,
   type Logger,
   createLogger,
+  WalletSchema,
 } from "@aztec/aztec.js";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
@@ -55,15 +53,12 @@ async function init(logPort: MessagePortMain) {
 
   const rollupAddress = l1Contracts.rollupAddress;
 
-  const config = getPXEServiceConfig();
-  config.dataDirectory = resolve(__dirname, `./pxe-${rollupAddress}`);
-  config.proverEnabled = true;
-  const configWithContracts = {
-    ...config,
+  const configOverrides = {
+    dataDirectory: resolve(__dirname, `./pxe-${rollupAddress}`),
+    proverEnabled: true,
     l1Contracts,
   };
-
-  const pxe = await createPXEService(aztecNode, configWithContracts, {
+  const options = {
     loggers: {
       store: createProxyLogger("pxe:data:lmdb", logPort),
       pxe: createProxyLogger("pxe:service", logPort),
@@ -72,16 +67,15 @@ async function init(logPort: MessagePortMain) {
     store: await createStore(
       "pxe_data",
       2,
-      configWithContracts,
+      configOverrides,
       createProxyLogger("pxe:data:lmdb", logPort)
     ),
-  });
+  };
 
-  return new NativeWallet(pxe);
+  return NativeWallet.create(aztecNode, configOverrides, options);
 }
 
 const handleExternalEvent = (port: MessagePortMain, wallet: Wallet) => {
-  const schema = generateWalletSchema(wallet);
   return async (event: any) => {
     const { origin, content } = event.data;
     if (origin !== "websocket") {
@@ -89,13 +83,13 @@ const handleExternalEvent = (port: MessagePortMain, wallet: Wallet) => {
     }
     const { type, messageId, args } = JSON.parse(content);
 
-    if (!schemaHasMethod(schema, type)) {
+    if (!schemaHasMethod(WalletSchema, type)) {
       throw new Error(`Unknown method: ${type}`);
     }
 
     const sanitizedArgs = await parseWithOptionals(
       args,
-      schema[type].parameters()
+      WalletSchema[type].parameters()
     );
     const result = await (wallet as unknown as Wallet)[type](...sanitizedArgs);
     port.postMessage({
@@ -127,10 +121,16 @@ const handleInternalEvent =
   };
 
 async function main() {
+  let userLog;
+  process.on("unhandledRejection", (error) => {
+    if (userLog) {
+      userLog.error("Unhandled rejection", jsonStringify(error));
+    }
+  });
   process.parentPort.once("message", async (message: any) => {
     if (message.data.type === "ports" && message.ports?.length) {
       const [externalPort, internalPort, logPort] = message.ports;
-      const userLog = createProxyLogger("wallet:worker", logPort);
+      userLog = createProxyLogger("wallet:worker", logPort);
       const wallet = await init(logPort);
       externalPort.on("message", async (event) => {
         userLog.debug("Received external message:", event.data);

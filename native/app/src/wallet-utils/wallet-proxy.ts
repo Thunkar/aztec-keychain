@@ -1,5 +1,5 @@
 import { TxHash, TxReceipt } from "@aztec/aztec.js";
-import type { Wallet } from "@aztec/aztec.js/wallet";
+import { type Wallet, WalletSchema } from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,
   type PromiseWithResolvers,
@@ -21,27 +21,10 @@ type NativeWalletInterface = Pick<
   createAccount(): Promise<TxHash>;
 };
 
-export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
-  {
-    getTxReceipt: z.function().args(TxHash.schema).returns(TxReceipt.schema),
-    createAccount: z.function().args().returns(TxHash.schema),
-    registerSender: z
-      .function()
-      .args(schemas.AztecAddress, optional(z.string()))
-      .returns(schemas.AztecAddress),
-    getSenders: z
-      .function()
-      .args()
-      .returns(
-        z.array(z.object({ alias: z.string(), item: schemas.AztecAddress }))
-      ),
-    getAccounts: z
-      .function()
-      .args()
-      .returns(
-        z.array(z.object({ alias: z.string(), item: schemas.AztecAddress }))
-      ),
-  };
+export const NativeWalletInterfaceSchema = {
+  ...WalletSchema,
+  createAccount: z.function().args().returns(TxHash.schema),
+};
 
 export class WalletProxy {
   private inFlight = new Map<string, PromiseWithResolvers<any>>();
