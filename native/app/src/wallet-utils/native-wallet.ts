@@ -7,38 +7,48 @@ import {
   getContractInstanceFromInstantiationParams,
   TxHash,
   type DeployAccountOptions,
-  type FeeOptions,
-  type WalletFeeOptions,
   type AztecNode,
+  type Aliased,
 } from "@aztec/aztec.js";
 import { DefaultMultiCallEntrypoint } from "@aztec/entrypoints/multicall";
 import {
   ExecutionPayload,
   mergeExecutionPayloads,
 } from "@aztec/entrypoints/payload";
-import { Fr } from "@aztec/foundation/fields";
+import { Fq, Fr } from "@aztec/foundation/fields";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
   StubAccountContractArtifact,
   createStubAccount,
 } from "@aztec/accounts/stub";
 import type { TxSimulationResult } from "@aztec/stdlib/tx";
-import { GasSettings } from "@aztec/stdlib/gas";
-import { EcdsaRAccountContract } from "@aztec/accounts/ecdsa";
-import { randomBytes } from "@aztec/foundation/crypto";
+import {
+  EcdsaKAccountContract,
+  EcdsaRAccountContract,
+} from "@aztec/accounts/ecdsa";
+import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { prepareForFeePayment } from "./sponsoredFPC";
 import {
   type PXEConfig,
   type PXECreationOptions,
   createPXE,
   getPXEConfig,
+  type PXE,
 } from "@aztec/pxe/server";
+import type { AccountType, WalletDB } from "./wallet_db";
 
 export class NativeWallet extends BaseWallet {
-  protected accounts: Map<string, Account> = new Map();
+  private constructor(
+    pxe: PXE,
+    node: AztecNode,
+    private db: WalletDB
+  ) {
+    super(pxe, node);
+  }
 
   static async create(
     node: AztecNode,
+    db: WalletDB,
     overridePXEConfig?: Partial<PXEConfig>,
     options: PXECreationOptions = { loggers: {} }
   ): Promise<NativeWallet> {
@@ -47,7 +57,8 @@ export class NativeWallet extends BaseWallet {
       ...overridePXEConfig,
     });
     const pxe = await createPXE(node, pxeConfig, options);
-    return new NativeWallet(pxe, node);
+
+    return new NativeWallet(pxe, node, db);
   }
 
   protected async getAccountFromAddress(
@@ -55,15 +66,21 @@ export class NativeWallet extends BaseWallet {
   ): Promise<Account> {
     let account: Account | undefined;
     if (address.equals(AztecAddress.ZERO)) {
-      const chainInfo = await this.getChainInfo();
+      const { l1ChainId: chainId, rollupVersion } =
+        await this.aztecNode.getNodeInfo();
       account = new SignerlessAccount(
-        new DefaultMultiCallEntrypoint(
-          chainInfo.chainId.toNumber(),
-          chainInfo.version.toNumber()
-        )
+        new DefaultMultiCallEntrypoint(chainId, rollupVersion)
       );
     } else {
-      account = this.accounts.get(address?.toString() ?? "");
+      const { secretKey, salt, signingKey, type } =
+        await this.db.retrieveAccount(address);
+      const accountManager = await this.createAccountInternal(
+        type,
+        secretKey,
+        salt,
+        signingKey
+      );
+      account = await accountManager.getAccount();
     }
 
     if (!account) {
@@ -73,23 +90,31 @@ export class NativeWallet extends BaseWallet {
     return account;
   }
 
-  getAccounts() {
-    return Promise.resolve(
-      Array.from(this.accounts.values()).map((acc) => ({
-        alias: "",
-        item: acc.getAddress(),
-      }))
-    );
-  }
+  private async createAccountInternal(
+    type: AccountType,
+    secret: Fr,
+    salt: Fr,
+    signingKey: Buffer
+  ): Promise<AccountManager> {
+    let contract;
+    switch (type) {
+      case "schnorr": {
+        contract = new SchnorrAccountContract(Fq.fromBuffer(signingKey));
+        break;
+      }
+      case "ecdsasecp256k1": {
+        contract = new EcdsaKAccountContract(signingKey);
+        break;
+      }
+      case "ecdsasecp256r1": {
+        contract = new EcdsaRAccountContract(signingKey);
+        break;
+      }
+      default: {
+        throw new Error(`Unknown account type ${type}`);
+      }
+    }
 
-  async createAccount(): Promise<TxHash> {
-    // Generate a random salt, secret key, and signing key
-    const salt = Fr.random();
-    const secret = Fr.random();
-    const signingKey = randomBytes(32);
-
-    // Create an ECDSA account
-    const contract = new EcdsaRAccountContract(signingKey);
     const accountManager = await AccountManager.create(
       this,
       secret,
@@ -98,19 +123,39 @@ export class NativeWallet extends BaseWallet {
     );
 
     const instance = await accountManager.getInstance();
-    const artifact = await contract.getContractArtifact();
+    const artifact = await accountManager
+      .getAccountContract()
+      .getContractArtifact();
 
-    await this.pxe.registerContract({ artifact, instance });
-    await this.pxe.registerAccount(
+    await this.registerContract(
+      instance,
+      artifact,
+      accountManager.getSecretKey()
+    );
+
+    return accountManager;
+  }
+
+  async createAndStoreAccount(
+    alias: string,
+    type: AccountType,
+    secret: Fr,
+    salt: Fr,
+    signingKey: Buffer
+  ): Promise<TxHash> {
+    const accountManager = await this.createAccountInternal(
+      type,
       secret,
-      (await accountManager.getCompleteAddress()).partialAddress
+      salt,
+      signingKey
     );
-
-    this.accounts.set(
-      accountManager.getAddress().toString(),
-      await accountManager.getAccount()
-    );
-
+    await this.db.storeAccount(accountManager.address, {
+      type,
+      secretKey: secret,
+      salt,
+      alias,
+      signingKey,
+    });
     const deployMethod = await accountManager.getDeployMethod();
     const paymentMethod = await prepareForFeePayment(this);
     const opts: DeployAccountOptions = {
@@ -125,6 +170,28 @@ export class NativeWallet extends BaseWallet {
     const tx = deployMethod.send(opts);
     await tx.wait();
     return tx.getTxHash();
+  }
+
+  getAccounts() {
+    return this.db.listAccounts();
+  }
+
+  override async registerSender(address: AztecAddress, alias: string) {
+    await this.db.storeSender(address, alias);
+    return this.pxe.registerSender(address);
+  }
+
+  override async getSenders(): Promise<Aliased<AztecAddress>[]> {
+    const senders = await this.pxe.getSenders();
+    const storedSenders = await this.db.listSenders();
+    for (const storedSender of storedSenders) {
+      if (
+        senders.findIndex((sender) => sender.equals(storedSender.item)) === -1
+      ) {
+        await this.pxe.registerSender(storedSender.item);
+      }
+    }
+    return storedSenders;
   }
 
   async getFakeAccountDataFor(address: AztecAddress) {
@@ -153,29 +220,6 @@ export class NativeWallet extends BaseWallet {
     };
   }
 
-  protected async getDefaultFeeOptions(
-    address: AztecAddress,
-    walletFeeOptions?: WalletFeeOptions
-  ): Promise<FeeOptions> {
-    const maxFeesPerGas =
-      walletFeeOptions?.gasSettings?.maxFeesPerGas ??
-      (await this.aztecNode.getCurrentBaseFees()).mul(1 + this.baseFeePadding);
-    const paymentMethod = !walletFeeOptions?.embeddedPaymentMethodFeePayer
-      ? await prepareForFeePayment(this)
-      : undefined;
-    const gasSettings: GasSettings = GasSettings.default({
-      ...walletFeeOptions?.gasSettings,
-      maxFeesPerGas,
-    });
-    this.log.debug(`Using L2 gas settings`, gasSettings);
-    return {
-      gasSettings,
-      paymentMethod,
-      embeddedPaymentMethodFeePayer:
-        walletFeeOptions?.embeddedPaymentMethodFeePayer,
-    };
-  }
-
   override async simulateTx(
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
@@ -186,32 +230,22 @@ export class NativeWallet extends BaseWallet {
       : await this.getDefaultFeeOptions(opts.from, opts.fee);
     const feeExecutionPayload =
       await feeOptions.paymentMethod?.getExecutionPayload();
-    const maybeFeePayer =
-      (await feeOptions.paymentMethod?.getFeePayer()) ??
-      opts.fee?.embeddedPaymentMethodFeePayer;
-    const isFeePayer = !!maybeFeePayer && maybeFeePayer.equals(opts.from);
-    // Either there is no fee execution payload and we're the fee payer (embedded fee juice payment in the interaction)
-    // Or the fee payment method has no calls and we're the fee payer (wallet injected fee juice payment)
-    const endSetup =
-      (!feeExecutionPayload || feeExecutionPayload.calls.length === 0) &&
-      isFeePayer;
     const executionOptions = {
       txNonce: Fr.random(),
-      cancellable: true,
-      isFeePayer,
-      endSetup,
+      cancellable: this.cancellableTransactions,
+      isFeePayer: feeOptions.isFeePayer,
+      endSetup: feeOptions.endSetup,
     };
-    const combinedExecutionPayload = mergeExecutionPayloads([
-      feeExecutionPayload ?? ExecutionPayload.empty(),
-      executionPayload,
-    ]);
+    const finalExecutionPayload = feeExecutionPayload
+      ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
+      : executionPayload;
     // Kernelless simulations using the multicall entrypoints are not currently supported,
     // since we only override proper account contracts.
     // TODO: allow disabling kernels even when no overrides are necessary
     if (opts.from.equals(AztecAddress.ZERO)) {
       const fromAccount = await this.getAccountFromAddress(opts.from);
       const txRequest = await fromAccount.createTxExecutionRequest(
-        combinedExecutionPayload,
+        finalExecutionPayload,
         feeOptions.gasSettings,
         executionOptions
       );
@@ -228,7 +262,7 @@ export class NativeWallet extends BaseWallet {
         artifact,
       } = await this.getFakeAccountDataFor(opts.from);
       const txRequest = await fromAccount.createTxExecutionRequest(
-        combinedExecutionPayload,
+        finalExecutionPayload,
         feeOptions.gasSettings,
         executionOptions
       );

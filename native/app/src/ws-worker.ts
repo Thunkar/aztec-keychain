@@ -37,6 +37,9 @@ async function main() {
     });
 
     ws.on("message", (data) => {
+      if (data.toString() === "keepalive") {
+        return;
+      }
       externalPort.postMessage({
         origin: "websocket",
         content: data.toString("utf-8"),

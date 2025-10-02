@@ -7,21 +7,16 @@ function App() {
   );
 
   browser.runtime.onMessage.addListener((message) => {
-    setLongLivedMessageList(
-      longLivedMessageList.concat([JSON.stringify(message)])
-    );
+    const newList = [JSON.stringify(message), ...longLivedMessageList];
+    if (newList.length > 10) {
+      newList.splice(0, newList.length - 10);
+    }
+    setLongLivedMessageList(newList);
   });
 
   return (
     <>
       <h1>Keychain</h1>
-      <button
-        onClick={async () => {
-          browser.runtime.sendMessage({ type: "wohoo" });
-        }}
-      >
-        Say hello
-      </button>
       {longLivedMessageList.map((message, index) => (
         <p key={index}>{message}</p>
       ))}

@@ -1,4 +1,4 @@
-import { TxHash, TxReceipt } from "@aztec/aztec.js";
+import { TxHash } from "@aztec/aztec.js";
 import { type Wallet, WalletSchema } from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,
@@ -8,7 +8,7 @@ import { schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron/main";
 import { z } from "zod";
-import { schemas, type ApiSchemaFor, optional } from "@aztec/stdlib/schemas";
+import { type ApiSchemaFor } from "@aztec/stdlib/schemas";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
@@ -21,10 +21,11 @@ type NativeWalletInterface = Pick<
   createAccount(): Promise<TxHash>;
 };
 
-export const NativeWalletInterfaceSchema = {
-  ...WalletSchema,
-  createAccount: z.function().args().returns(TxHash.schema),
-};
+export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
+  {
+    ...WalletSchema,
+    createAccount: z.function().args().returns(TxHash.schema),
+  };
 
 export class WalletProxy {
   private inFlight = new Map<string, PromiseWithResolvers<any>>();
@@ -57,7 +58,7 @@ export class WalletProxy {
         if (schemaHasMethod(NativeWalletInterfaceSchema, prop.toString())) {
           return async (...args: any[]) => {
             const result = await target.postMessage({
-              type: prop.toString() as keyof FunctionsOf<NativeWallet>,
+              type: prop.toString() as keyof FunctionsOf<NativeWalletInterface>,
               args,
             });
             return NativeWalletInterfaceSchema[
@@ -70,7 +71,7 @@ export class WalletProxy {
           return target[prop];
         }
       },
-    }) as unknown as NativeWallet;
+    }) as unknown as NativeWalletInterface;
   }
 
   private async postMessage({
