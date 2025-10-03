@@ -3,25 +3,21 @@ import {
   type AztecNode,
   type ChainInfo,
   type Wallet,
-  Fr,
 } from "@aztec/aztec.js";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
 import { NativeWallet } from "./wallet-utils/native-wallet.ts";
-import { NativeWalletInterfaceSchema } from "./wallet-utils/wallet-proxy.ts";
+import { NativeWalletInterfaceSchema } from "./wallet-utils/wallet-internal-proxy.ts";
 import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
 import { schemas } from "@aztec/stdlib/schemas";
 
 import { createStore } from "@aztec/kv-store/lmdb-v2";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { createProxyLogger } from "./wallet-utils/logger";
 import { WalletDB } from "./wallet-utils/wallet_db.ts";
 import { z } from "zod";
 import { homedir } from "node:os";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,

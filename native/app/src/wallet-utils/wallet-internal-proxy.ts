@@ -46,13 +46,13 @@ export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
       .returns(TxHash.schema),
   };
 
-export class WalletProxy {
+export class WalletInternalProxy {
   private inFlight = new Map<string, PromiseWithResolvers<any>>();
 
   private constructor(private port: MessagePortMain) {}
 
   static create(port: MessagePortMain) {
-    const wallet = new WalletProxy(port);
+    const wallet = new WalletInternalProxy(port);
     port.on("message", async (event) => {
       const { messageId, result, error } = JSON.parse(event.data.content);
       if (!messageId) {

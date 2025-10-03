@@ -2,7 +2,7 @@ import { app, BrowserWindow, MessageChannelMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
-import { WalletProxy } from "./wallet-utils/wallet-proxy";
+import { WalletInternalProxy } from "./wallet-utils/wallet-internal-proxy";
 import { inspect } from "node:util";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -77,7 +77,7 @@ app.on("ready", async () => {
     console.log(`${sanitizedArgs.join(" ")} ${inspect(dataObject)}`);
   });
 
-  const walletProxy = WalletProxy.create(internalPort2);
+  const walletProxy = WalletInternalProxy.create(internalPort2);
   const internalMethods = [
     "getAccounts",
     "getSenders",
