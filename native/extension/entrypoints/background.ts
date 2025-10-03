@@ -11,7 +11,7 @@ export default defineBackground(() => {
   function connect() {
     return new Promise((resolve, reject) => {
       webSocket = new WebSocket("ws://localhost:8765");
-      webSocket.onopen = (event) => {
+      webSocket.onopen = () => {
         console.log("websocket open");
         keepAlive();
         resolve(true);
@@ -39,13 +39,6 @@ export default defineBackground(() => {
         connect();
       };
     });
-  }
-
-  function disconnect() {
-    if (webSocket == null) {
-      return;
-    }
-    webSocket.close();
   }
 
   function keepAlive() {

@@ -1,30 +1,49 @@
-import { TxHash } from "@aztec/aztec.js";
-import { type Wallet, WalletSchema } from "@aztec/aztec.js/wallet";
+import { TxHash, Fr } from "@aztec/aztec.js";
+import {
+  type ChainInfo,
+  type Wallet,
+  WalletSchema,
+} from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,
   type PromiseWithResolvers,
 } from "@aztec/foundation/promise";
 import { schemaHasMethod } from "@aztec/foundation/schemas";
+import { schemas } from "@aztec/stdlib/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron/main";
 import { z } from "zod";
 import { type ApiSchemaFor } from "@aztec/stdlib/schemas";
+import { AccountTypes, type AccountType } from "./wallet_db";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
 };
 
-type NativeWalletInterface = Pick<
-  Wallet,
-  "getTxReceipt" | "getAccounts" | "getSenders" | "registerSender"
-> & {
-  createAccount(): Promise<TxHash>;
+export type NativeWalletInterface = Wallet & {
+  createAccount(
+    alias: string,
+    type: AccountType,
+    secret: Fr,
+    salt: Fr,
+    signingKey: Buffer
+  ): Promise<TxHash>;
 };
 
 export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
   {
     ...WalletSchema,
-    createAccount: z.function().args().returns(TxHash.schema),
+    // @ts-ignore Annoying zod error
+    createAccount: z
+      .function()
+      .args(
+        z.string(),
+        z.enum(AccountTypes),
+        schemas.Fr,
+        schemas.Fr,
+        schemas.Buffer
+      )
+      .returns(TxHash.schema),
   };
 
 export class WalletProxy {
@@ -57,15 +76,10 @@ export class WalletProxy {
       get: (target, prop) => {
         if (schemaHasMethod(NativeWalletInterfaceSchema, prop.toString())) {
           return async (...args: any[]) => {
-            const result = await target.postMessage({
+            return target.postMessage({
               type: prop.toString() as keyof FunctionsOf<NativeWalletInterface>,
               args,
             });
-            return NativeWalletInterfaceSchema[
-              prop.toString() as keyof NativeWalletInterface
-            ]
-              .returnType()
-              .parseAsync(result);
           };
         } else {
           return target[prop];
@@ -82,7 +96,16 @@ export class WalletProxy {
     args: any[];
   }) {
     const messageId = globalThis.crypto.randomUUID();
-    this.port.postMessage(jsonStringify({ type, args, messageId }));
+    const chainInfo: ChainInfo = { chainId: new Fr(31337), version: new Fr(1) };
+    const appId = "this";
+    const message = {
+      type,
+      args,
+      messageId,
+      appId,
+      chainInfo: jsonStringify(chainInfo),
+    };
+    this.port.postMessage(message);
     const { promise, resolve, reject } = promiseWithResolvers<any>();
     this.inFlight.set(messageId, { promise, resolve, reject });
     return promise;

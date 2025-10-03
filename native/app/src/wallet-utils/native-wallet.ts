@@ -28,37 +28,17 @@ import {
 } from "@aztec/accounts/ecdsa";
 import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { prepareForFeePayment } from "./sponsoredFPC";
-import {
-  type PXEConfig,
-  type PXECreationOptions,
-  createPXE,
-  getPXEConfig,
-  type PXE,
-} from "@aztec/pxe/server";
-import type { AccountType, WalletDB } from "./wallet_db";
+import { type PXE } from "@aztec/pxe/server";
+import { WalletDB, type AccountType } from "./wallet_db";
 
 export class NativeWallet extends BaseWallet {
-  private constructor(
+  constructor(
     pxe: PXE,
     node: AztecNode,
-    private db: WalletDB
+    private db: WalletDB,
+    private appId: string
   ) {
     super(pxe, node);
-  }
-
-  static async create(
-    node: AztecNode,
-    db: WalletDB,
-    overridePXEConfig?: Partial<PXEConfig>,
-    options: PXECreationOptions = { loggers: {} }
-  ): Promise<NativeWallet> {
-    const pxeConfig = Object.assign(getPXEConfig(), {
-      proverEnabled: overridePXEConfig?.proverEnabled ?? false,
-      ...overridePXEConfig,
-    });
-    const pxe = await createPXE(node, pxeConfig, options);
-
-    return new NativeWallet(pxe, node, db);
   }
 
   protected async getAccountFromAddress(
@@ -136,7 +116,7 @@ export class NativeWallet extends BaseWallet {
     return accountManager;
   }
 
-  async createAndStoreAccount(
+  async createAccount(
     alias: string,
     type: AccountType,
     secret: Fr,

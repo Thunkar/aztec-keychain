@@ -12,25 +12,18 @@ import type { Aliased, AztecAddress } from "@aztec/aztec.js";
 
 interface AccountBoxProps {
   account: Aliased<AztecAddress>;
-  disabled: boolean;
   QRButton?: boolean;
 }
 
-export function AccountBox({
-  account,
-  QRButton = false,
-  disabled,
-}: AccountBoxProps) {
+export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
   const [openQR, setOpenQR] = useState(false);
   return (
-    <Box sx={{ margin: 0 }}>
+    <Box sx={{ width: "100%", margin: 0 }}>
       <Box
         sx={{
           display: "flex",
-          flexDirection: "row-reverse",
           padding: "0.1rem 0.5rem",
         }}
-        expandIcon={<ArrowDropDown />}
       >
         <Typography
           variant="overline"

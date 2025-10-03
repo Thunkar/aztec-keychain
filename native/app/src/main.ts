@@ -17,6 +17,7 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
+      sandbox: false,
     },
   });
 
@@ -86,7 +87,7 @@ app.on("ready", async () => {
   ];
   for (const method of internalMethods) {
     ipcMain.handle(method, async (_event, args) => {
-      return walletProxy[method](...(args ?? []));
+      return walletProxy[method](...(args ? JSON.parse(args) : []));
     });
   }
 });
