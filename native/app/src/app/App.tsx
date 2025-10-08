@@ -8,7 +8,7 @@ import { randomBytes } from "@aztec/foundation/crypto";
 import { WalletApi } from "./utils/wallet-api.ts";
 
 export function App() {
-  const [accounts, setAccounts] = useState<Aliased<AztecAddress>>([]);
+  const [accounts, setAccounts] = useState<Aliased<AztecAddress>[]>([]);
   const [loading, setLoading] = useState(false);
 
   const loadAccounts = async () => {
@@ -23,12 +23,7 @@ export function App() {
       <h1>Aztec keychain</h1>
       <Box css={{ display: "flex", width: "100%", flexDirection: "column" }}>
         {accounts.map((account, index) => (
-          <AccountBox
-            key={index}
-            QRButton
-            account={account}
-            disabled={loading}
-          />
+          <AccountBox key={index} QRButton account={account} />
         ))}
       </Box>
       <Fab

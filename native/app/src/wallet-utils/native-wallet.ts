@@ -10,7 +10,6 @@ import {
   type AztecNode,
   type Aliased,
 } from "@aztec/aztec.js";
-import { DefaultMultiCallEntrypoint } from "@aztec/entrypoints/multicall";
 import {
   ExecutionPayload,
   mergeExecutionPayloads,
@@ -30,8 +29,19 @@ import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { prepareForFeePayment } from "./sponsoredFPC";
 import { type PXE } from "@aztec/pxe/server";
 import { WalletDB, type AccountType } from "./wallet_db";
+import type { DefaultAccountEntrypointOptions } from "@aztec/entrypoints/account";
+import { jsonStringify } from "@aztec/foundation/json-rpc";
+import { WalletInteraction } from "./wallet-interaction";
 
-export class NativeWallet extends BaseWallet {
+export class WalletInteractionEvent extends CustomEvent<string> {
+  constructor(content: WalletInteraction<any>) {
+    super("interaction", { detail: jsonStringify(content) });
+  }
+}
+
+export class NativeWallet extends BaseWallet implements EventTarget {
+  private eventEmitter = new EventTarget();
+
   constructor(
     pxe: PXE,
     node: AztecNode,
@@ -41,16 +51,33 @@ export class NativeWallet extends BaseWallet {
     super(pxe, node);
   }
 
+  dispatchEvent(event: Event): boolean {
+    return this.eventEmitter.dispatchEvent(event);
+  }
+
+  addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions
+  ): void {
+    return this.eventEmitter.addEventListener(type, callback, options);
+  }
+
+  removeEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions
+  ): void {
+    return this.eventEmitter.removeEventListener(type, callback, options);
+  }
+
   protected async getAccountFromAddress(
     address: AztecAddress
   ): Promise<Account> {
     let account: Account | undefined;
     if (address.equals(AztecAddress.ZERO)) {
-      const { l1ChainId: chainId, rollupVersion } =
-        await this.aztecNode.getNodeInfo();
-      account = new SignerlessAccount(
-        new DefaultMultiCallEntrypoint(chainId, rollupVersion)
-      );
+      const chainInfo = await this.getChainInfo();
+      account = new SignerlessAccount(chainInfo);
     } else {
       const { secretKey, salt, signingKey, type } =
         await this.db.retrieveAccount(address);
@@ -136,6 +163,18 @@ export class NativeWallet extends BaseWallet {
       alias,
       signingKey,
     });
+    this.dispatchEvent(
+      new WalletInteractionEvent(
+        new WalletInteraction(
+          accountManager.address.toString(),
+          "createAccount",
+          "CREATED",
+          false,
+          "Creating account",
+          ""
+        )
+      )
+    );
     const deployMethod = await accountManager.getDeployMethod();
     const paymentMethod = await prepareForFeePayment(this);
     const opts: DeployAccountOptions = {
@@ -147,8 +186,20 @@ export class NativeWallet extends BaseWallet {
       skipInstancePublication: true,
     };
 
-    const tx = deployMethod.send(opts);
-    await tx.wait();
+    const provenTx = await deployMethod.prove(opts);
+    this.dispatchEvent(
+      new WalletInteractionEvent(
+        new WalletInteraction(
+          provenTx.txHash.toString(),
+          "proveTx",
+          "PROVEN",
+          false,
+          "Creating account",
+          ""
+        )
+      )
+    );
+    const tx = provenTx.send();
     return tx.getTxHash();
   }
 
@@ -204,61 +255,45 @@ export class NativeWallet extends BaseWallet {
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    let simulationResults;
     const feeOptions = opts.fee?.estimateGas
       ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
       : await this.getDefaultFeeOptions(opts.from, opts.fee);
     const feeExecutionPayload =
-      await feeOptions.paymentMethod?.getExecutionPayload();
-    const executionOptions = {
+      await feeOptions.walletFeePaymentMethod?.getExecutionPayload();
+    const executionOptions: DefaultAccountEntrypointOptions = {
       txNonce: Fr.random(),
       cancellable: this.cancellableTransactions,
-      isFeePayer: feeOptions.isFeePayer,
-      endSetup: feeOptions.endSetup,
+      feePaymentMethodOptions: feeOptions.accountFeePaymentMethodOptions,
     };
     const finalExecutionPayload = feeExecutionPayload
       ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
       : executionPayload;
-    // Kernelless simulations using the multicall entrypoints are not currently supported,
-    // since we only override proper account contracts.
-    // TODO: allow disabling kernels even when no overrides are necessary
-    if (opts.from.equals(AztecAddress.ZERO)) {
-      const fromAccount = await this.getAccountFromAddress(opts.from);
-      const txRequest = await fromAccount.createTxExecutionRequest(
-        finalExecutionPayload,
-        feeOptions.gasSettings,
-        executionOptions
-      );
-      simulationResults = await this.pxe.simulateTx(
-        txRequest,
-        true /* simulatePublic */,
-        opts?.skipTxValidation,
-        opts?.skipFeeEnforcement ?? true
-      );
-    } else {
-      const {
-        account: fromAccount,
-        instance,
-        artifact,
-      } = await this.getFakeAccountDataFor(opts.from);
-      const txRequest = await fromAccount.createTxExecutionRequest(
-        finalExecutionPayload,
-        feeOptions.gasSettings,
-        executionOptions
-      );
-      const contractOverrides = {
-        [opts.from.toString()]: { instance, artifact },
-      };
-      simulationResults = await this.pxe.simulateTx(
-        txRequest,
-        true /* simulatePublic */,
-        true,
-        true,
-        {
-          contracts: contractOverrides,
-        }
-      );
-    }
-    return simulationResults;
+
+    const {
+      account: fromAccount,
+      instance,
+      artifact,
+    } = await this.getFakeAccountDataFor(opts.from);
+    const txRequest = await fromAccount.createTxExecutionRequest(
+      finalExecutionPayload,
+      feeOptions.gasSettings,
+      executionOptions
+    );
+    const contractOverrides = {
+      [opts.from.toString()]: { instance, artifact },
+    };
+    return this.pxe.simulateTx(
+      txRequest,
+      true /* simulatePublic */,
+      true,
+      true,
+      {
+        contracts: contractOverrides,
+      }
+    );
+  }
+
+  getInteractions() {
+    return this.db.listInteractions();
   }
 }

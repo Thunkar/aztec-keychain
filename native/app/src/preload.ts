@@ -1,7 +1,6 @@
 import type { Aliased, AztecAddress, Fr } from "@aztec/aztec.js";
 import { contextBridge, ipcRenderer } from "electron";
 import type { TxHash, TxReceipt } from "@aztec/stdlib/tx";
-import type { AccountType } from "./wallet-utils/wallet_db";
 
 contextBridge.exposeInMainWorld("walletAPI", {
   getTxReceipt(stringifiedArgs: string): Promise<TxReceipt> {

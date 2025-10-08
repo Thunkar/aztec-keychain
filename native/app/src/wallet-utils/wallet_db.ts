@@ -1,6 +1,10 @@
 import { AztecAddress, Fr, Fq, type Aliased } from "@aztec/aztec.js";
 import { type LogFn } from "@aztec/foundation/log";
 import { type AztecAsyncMap, type AztecAsyncKVStore } from "@aztec/kv-store";
+import {
+  WalletInteraction,
+  type WalletInteractionType,
+} from "./wallet-interaction";
 
 export const AccountTypes = [
   "schnorr",
@@ -14,6 +18,7 @@ export class WalletDB {
     private accounts: AztecAsyncMap<string, Buffer>,
     private aliases: AztecAsyncMap<string, Buffer>,
     private bridgedFeeJuice: AztecAsyncMap<string, Buffer>,
+    private interactions: AztecAsyncMap<string, Buffer>,
     private userLog: LogFn
   ) {}
 
@@ -21,7 +26,14 @@ export class WalletDB {
     const accounts = store.openMap<string, Buffer>("accounts");
     const aliases = store.openMap<string, Buffer>("aliases");
     const bridgedFeeJuice = store.openMap<string, Buffer>("bridgedFeeJuice");
-    return new WalletDB(accounts, aliases, bridgedFeeJuice, userLog);
+    const interactions = store.openMap<string, Buffer>("interactions");
+    return new WalletDB(
+      accounts,
+      aliases,
+      bridgedFeeJuice,
+      interactions,
+      userLog
+    );
   }
 
   async pushBridgedFeeJuice(
@@ -205,5 +217,33 @@ export class WalletDB {
     const accounts = await this.listAccounts();
     const account = accounts.find((account) => address.equals(account.item));
     await this.aliases.delete(account?.alias);
+  }
+
+  async storeInteraction<T extends WalletInteractionType>(
+    interaction: WalletInteraction<T>
+  ) {
+    await this.interactions.set(interaction.id, interaction.toBuffer());
+  }
+
+  async updateInteraction(
+    id: string,
+    { status, complete }: { status: string; complete: boolean }
+  ) {
+    const maybeInteractionBufer = await this.interactions.getAsync(id);
+    if (!maybeInteractionBufer) {
+      throw new Error(`No interaction for id ${id}`);
+    }
+    const interaction = WalletInteraction.fromBuffer(maybeInteractionBufer);
+    interaction.status = status;
+    interaction.complete = complete;
+    await this.storeInteraction(interaction);
+  }
+
+  async listInteractions() {
+    const result = [];
+    for await (const [_, item] of this.aliases.entriesAsync()) {
+      result.push(WalletInteraction.fromBuffer(item));
+    }
+    return result;
   }
 }

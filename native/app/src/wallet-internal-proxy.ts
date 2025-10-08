@@ -1,9 +1,5 @@
-import { TxHash, Fr } from "@aztec/aztec.js";
-import {
-  type ChainInfo,
-  type Wallet,
-  WalletSchema,
-} from "@aztec/aztec.js/wallet";
+import { TxHash, Fr, type ChainInfo } from "@aztec/aztec.js";
+import { type Wallet, WalletSchema } from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,
   type PromiseWithResolvers,
@@ -14,7 +10,8 @@ import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron/main";
 import { z } from "zod";
 import { type ApiSchemaFor } from "@aztec/stdlib/schemas";
-import { AccountTypes, type AccountType } from "./wallet_db";
+import { AccountTypes, type AccountType } from "./wallet-utils/wallet_db";
+import type { WalletInteraction } from "./wallet-utils/wallet-interaction";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
@@ -28,7 +25,8 @@ export type NativeWalletInterface = Wallet & {
     salt: Fr,
     signingKey: Buffer
   ): Promise<TxHash>;
-};
+  getInteractions(): Promise<WalletInteraction<any>[]>;
+} & EventTarget;
 
 export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
   {
