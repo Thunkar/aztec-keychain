@@ -23,6 +23,14 @@ export class WalletApi {
                 .returnType()
                 .parseAsync(result);
             };
+          } else if (prop.toString() === "onWalletUpdate") {
+            return (callback) => {
+              const safeCallback = (stringifiedEvent) => {
+                const event = JSON.parse(stringifiedEvent.content);
+                callback(event);
+              };
+              return window.walletAPI.onWalletUpdate(safeCallback);
+            };
           } else {
             throw new Error("Invalid method");
           }

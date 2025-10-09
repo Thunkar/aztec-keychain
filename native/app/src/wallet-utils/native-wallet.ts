@@ -33,9 +33,9 @@ import type { DefaultAccountEntrypointOptions } from "@aztec/entrypoints/account
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import { WalletInteraction } from "./wallet-interaction";
 
-export class WalletInteractionEvent extends CustomEvent<string> {
+export class WalletUpdateEvent extends CustomEvent<string> {
   constructor(content: WalletInteraction<any>) {
-    super("interaction", { detail: jsonStringify(content) });
+    super("wallet-update", { detail: jsonStringify(content) });
   }
 }
 
@@ -164,7 +164,7 @@ export class NativeWallet extends BaseWallet implements EventTarget {
       signingKey,
     });
     this.dispatchEvent(
-      new WalletInteractionEvent(
+      new WalletUpdateEvent(
         new WalletInteraction(
           accountManager.address.toString(),
           "createAccount",
@@ -188,7 +188,7 @@ export class NativeWallet extends BaseWallet implements EventTarget {
 
     const provenTx = await deployMethod.prove(opts);
     this.dispatchEvent(
-      new WalletInteractionEvent(
+      new WalletUpdateEvent(
         new WalletInteraction(
           provenTx.txHash.toString(),
           "proveTx",

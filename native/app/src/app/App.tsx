@@ -6,17 +6,24 @@ import AddIcon from "@mui/icons-material/Add";
 import { AccountBox } from "./components/AccountBox.tsx";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { WalletApi } from "./utils/wallet-api.ts";
+import type { WalletInteraction } from "../wallet-utils/wallet-interaction.ts";
 
 export function App() {
   const [accounts, setAccounts] = useState<Aliased<AztecAddress>[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [events, setEvents] = useState<any[]>([]);
+
   const loadAccounts = async () => {
-    const accounts = await window.walletAPI.getAccounts();
+    const accounts = await WalletApi.getInstance().getAccounts();
     setAccounts(accounts);
   };
   useEffect(() => {
     loadAccounts();
+    WalletApi.getInstance().onWalletUpdate((interaction) => {
+      console.log(interaction);
+      setEvents([...events, interaction]);
+    });
   }, []);
   return (
     <Box css={{ display: "flex", flexDirection: "column" }}>

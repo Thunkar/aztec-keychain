@@ -17,6 +17,8 @@ type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
 };
 
+type OnWalletUpdateListener = (interaction: WalletInteraction<any>) => void;
+
 export type NativeWalletInterface = Wallet & {
   createAccount(
     alias: string,
@@ -26,7 +28,8 @@ export type NativeWalletInterface = Wallet & {
     signingKey: Buffer
   ): Promise<TxHash>;
   getInteractions(): Promise<WalletInteraction<any>[]>;
-} & EventTarget;
+  onWalletUpdate(callback: OnWalletUpdateListener): void;
+};
 
 export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
   {
@@ -46,14 +49,21 @@ export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
 
 export class WalletInternalProxy {
   private inFlight = new Map<string, PromiseWithResolvers<any>>();
+  private internalEventCallback!: OnWalletUpdateListener;
 
   private constructor(private port: MessagePortMain) {}
+
+  public onWalletUpdate(callback: OnWalletUpdateListener) {
+    this.internalEventCallback = callback;
+  }
 
   static create(port: MessagePortMain) {
     const wallet = new WalletInternalProxy(port);
     port.on("message", async (event) => {
       const { messageId, result, error } = JSON.parse(event.data.content);
+      // No messageId means the event was generated from inside the wallet.
       if (!messageId) {
+        wallet.internalEventCallback(event.data);
         return;
       }
       if (!wallet.inFlight.has(messageId)) {

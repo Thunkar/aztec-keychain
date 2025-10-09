@@ -32,13 +32,14 @@ const createWindow = () => {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
+  return mainWindow;
 };
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
-  createWindow();
+  const mainWindow = createWindow();
   const { port1: externalPort1, port2: externalPort2 } =
     new MessageChannelMain();
   const { port1: internalPort1, port2: internalPort2 } =
@@ -77,11 +78,10 @@ app.on("ready", async () => {
     console.log(`${sanitizedArgs.join(" ")} ${inspect(dataObject)}`);
   });
 
-  internalPort2.on("message", (event) => {
-    console.log("Received internal update", event);
-  });
-
   const walletProxy = WalletInternalProxy.create(internalPort2);
+  walletProxy.onWalletUpdate((event) => {
+    mainWindow.webContents.send("wallet-update", event);
+  });
   const internalMethods = [
     "getAccounts",
     "getSenders",

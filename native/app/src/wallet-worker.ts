@@ -58,7 +58,7 @@ async function init(
 
       const configOverrides = {
         dataDirectory: resolve(keychainHomeDir, `./pxe-${rollupAddress}`),
-        proverEnabled: true,
+        proverEnabled: false,
       };
       const options = {
         loggers: {
@@ -94,7 +94,7 @@ async function init(
         options
       );
       const wallet = new NativeWallet(pxe, node, db, appId);
-      wallet.addEventListener("interaction", (event: CustomEvent) => {
+      wallet.addEventListener("wallet-update", (event: CustomEvent) => {
         internalPort.postMessage({ origin: "wallet", content: event.detail });
       });
       return wallet;

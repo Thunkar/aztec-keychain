@@ -18,4 +18,9 @@ contextBridge.exposeInMainWorld("walletAPI", {
   createAccount(stringifiedArgs: string): Promise<TxHash> {
     return ipcRenderer.invoke("createAccount", stringifiedArgs);
   },
+  onWalletUpdate(callback) {
+    return ipcRenderer.on("wallet-update", (_event, stringifiedEvent) =>
+      callback(stringifiedEvent)
+    );
+  },
 });
