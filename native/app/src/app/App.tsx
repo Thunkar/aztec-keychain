@@ -1,5 +1,5 @@
 import { AztecAddress, Fr, type Aliased } from "@aztec/aztec.js";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Fab from "@mui/material/Fab";
 import AddIcon from "@mui/icons-material/Add";
@@ -7,6 +7,7 @@ import { AccountBox } from "./components/AccountBox.tsx";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { WalletApi } from "./utils/wallet-api.ts";
 import type { WalletInteraction } from "../wallet-utils/wallet-interaction.ts";
+import { WalletContext } from "../renderer.tsx";
 
 export function App() {
   const [accounts, setAccounts] = useState<Aliased<AztecAddress>[]>([]);
@@ -14,13 +15,15 @@ export function App() {
 
   const [events, setEvents] = useState<any[]>([]);
 
+  const { walletAPI } = useContext(WalletContext);
+
   const loadAccounts = async () => {
-    const accounts = await WalletApi.getInstance().getAccounts();
+    const accounts = await walletAPI.getAccounts();
     setAccounts(accounts);
   };
   useEffect(() => {
     loadAccounts();
-    WalletApi.getInstance().onWalletUpdate((interaction) => {
+    walletAPI.onWalletUpdate((interaction) => {
       console.log(interaction);
       setEvents([...events, interaction]);
     });
@@ -41,7 +44,7 @@ export function App() {
           right: "1rem",
         }}
         onClick={async () => {
-          await WalletApi.getInstance().createAccount(
+          await walletAPI.createAccount(
             `ECDSAR1 ${accounts.length}`,
             "ecdsasecp256r1",
             Fr.random(),

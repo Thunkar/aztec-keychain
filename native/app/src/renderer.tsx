@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, createContext } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import {
@@ -9,6 +9,8 @@ import {
 } from "@mui/material";
 import { colors } from "./styles.js";
 import { App } from "./app/App.js";
+import { WalletApi } from "./app/utils/wallet-api.js";
+import type { NativeWalletInterface } from "./wallet-internal-proxy.js";
 
 const themeOptions: ThemeOptions = {
   palette: {
@@ -30,11 +32,25 @@ const themeOptions: ThemeOptions = {
 
 const theme = createTheme(themeOptions);
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
-  </StrictMode>
-);
+export const WalletContext = createContext<{
+  walletAPI: NativeWalletInterface;
+}>({ walletAPI: null });
+
+function Root() {
+  const walletAPI = WalletApi.getInstance();
+  const initialContext = {
+    walletAPI,
+  };
+  return (
+    <StrictMode>
+      <ThemeProvider theme={theme}>
+        <WalletContext.Provider value={initialContext}>
+          <CssBaseline />
+          <App />
+        </WalletContext.Provider>
+      </ThemeProvider>
+    </StrictMode>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<Root />);
