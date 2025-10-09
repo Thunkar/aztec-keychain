@@ -58,7 +58,7 @@ async function init(
 
       const configOverrides = {
         dataDirectory: resolve(keychainHomeDir, `./pxe-${rollupAddress}`),
-        proverEnabled: false,
+        proverEnabled: true,
       };
       const options = {
         loggers: {
