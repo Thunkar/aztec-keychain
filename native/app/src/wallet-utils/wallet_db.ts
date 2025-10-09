@@ -225,23 +225,26 @@ export class WalletDB {
     await this.interactions.set(interaction.id, interaction.toBuffer());
   }
 
-  async updateInteraction(
-    id: string,
-    { status, complete }: { status: string; complete: boolean }
+  async createOrUpdateInteraction(
+    interaction: WalletInteraction<WalletInteractionType>
   ) {
-    const maybeInteractionBufer = await this.interactions.getAsync(id);
-    if (!maybeInteractionBufer) {
-      throw new Error(`No interaction for id ${id}`);
+    const { id, status, complete } = interaction;
+    const maybeInteractionBuffer = await this.interactions.getAsync(id);
+    if (!maybeInteractionBuffer) {
+      await this.storeInteraction(interaction);
+    } else {
+      const storedInteraction = WalletInteraction.fromBuffer(
+        maybeInteractionBuffer
+      );
+      storedInteraction.status = status;
+      storedInteraction.complete = complete;
+      await this.storeInteraction(storedInteraction);
     }
-    const interaction = WalletInteraction.fromBuffer(maybeInteractionBufer);
-    interaction.status = status;
-    interaction.complete = complete;
-    await this.storeInteraction(interaction);
   }
 
   async listInteractions() {
     const result = [];
-    for await (const [_, item] of this.aliases.entriesAsync()) {
+    for await (const [_, item] of this.interactions.entriesAsync()) {
       result.push(WalletInteraction.fromBuffer(item));
     }
     return result;

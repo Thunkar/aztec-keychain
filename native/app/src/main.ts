@@ -88,6 +88,7 @@ app.on("ready", async () => {
     "registerSender",
     "getTxReceipt",
     "createAccount",
+    "getInteractions",
   ];
   for (const method of internalMethods) {
     ipcMain.handle(method, async (_event, args) => {

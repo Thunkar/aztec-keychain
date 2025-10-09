@@ -11,7 +11,11 @@ import type { MessagePortMain } from "electron/main";
 import { z } from "zod";
 import { type ApiSchemaFor } from "@aztec/stdlib/schemas";
 import { AccountTypes, type AccountType } from "./wallet-utils/wallet_db";
-import type { WalletInteraction } from "./wallet-utils/wallet-interaction";
+import type {
+  WalletInteraction,
+  WalletInteractionType,
+} from "./wallet-utils/wallet-interaction";
+import { WalletInteractionSchema } from "./wallet-utils/wallet-interaction";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
@@ -26,8 +30,8 @@ export type NativeWalletInterface = Wallet & {
     secret: Fr,
     salt: Fr,
     signingKey: Buffer
-  ): Promise<TxHash>;
-  getInteractions(): Promise<WalletInteraction<any>[]>;
+  ): Promise<void>;
+  getInteractions(): Promise<WalletInteraction<WalletInteractionType>[]>;
   onWalletUpdate(callback: OnWalletUpdateListener): void;
 };
 
@@ -43,8 +47,11 @@ export const NativeWalletInterfaceSchema: ApiSchemaFor<NativeWalletInterface> =
         schemas.Fr,
         schemas.Fr,
         schemas.Buffer
-      )
-      .returns(TxHash.schema),
+      ),
+    getInteractions: z
+      .function()
+      .args()
+      .returns(z.array(WalletInteractionSchema)),
   };
 
 export class WalletInternalProxy {

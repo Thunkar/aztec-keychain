@@ -1,4 +1,9 @@
+import type { FieldsOf } from "@aztec/aztec.js";
+import { optional } from "@aztec/foundation/schemas";
 import { serializeToBuffer, BufferReader } from "@aztec/foundation/serialize";
+import { z } from "zod";
+
+type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
 
 export type WalletInteractionType =
   | "registerContract"
@@ -8,22 +13,73 @@ export type WalletInteractionType =
   | "sendTx"
   | "profileTx";
 
+export const WalletInteractionSchema = z
+  .object({
+    id: z.string(),
+    type: z.enum([
+      "registerContract",
+      "createAccount",
+      "simulateTx",
+      "proveTx",
+      "sendTx",
+      "profileTx",
+    ]),
+    status: z.string(),
+    complete: z.boolean(),
+    title: optional(z.string()),
+    description: optional(z.string()),
+  })
+  .transform((data: any) => WalletInteraction.from(data));
+
 export class WalletInteraction<T extends WalletInteractionType> {
-  constructor(
-    public id: string,
+  private constructor(
+    public id: string = crypto.randomUUID(),
     public type: T,
     public status: string,
     public complete: boolean,
-    public title: string,
-    public description: string
+    public title?: string,
+    public description?: string
   ) {}
+
+  update({
+    status,
+    complete,
+    title,
+    description,
+  }: Partial<
+    Omit<FieldsOf<WalletInteraction<WalletInteractionType>>, "id" | "type">
+  >) {
+    this.status = status ?? this.status;
+    this.complete = complete ?? this.complete;
+    this.title = title ?? this.title;
+    this.description = description ?? this.description;
+    return this;
+  }
+
+  static from({
+    id,
+    type,
+    status,
+    complete,
+    title,
+    description,
+  }: Optional<FieldsOf<WalletInteraction<WalletInteractionType>>, "id">) {
+    return new WalletInteraction(
+      id,
+      type,
+      status,
+      complete,
+      title,
+      description
+    );
+  }
 
   toBuffer() {
     return serializeToBuffer(
-      this.id,
       this.type,
       this.status,
       this.complete,
+      this.id,
       this.title,
       this.description
     );

@@ -31,7 +31,10 @@ import { type PXE } from "@aztec/pxe/server";
 import { WalletDB, type AccountType } from "./wallet_db";
 import type { DefaultAccountEntrypointOptions } from "@aztec/entrypoints/account";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
-import { WalletInteraction } from "./wallet-interaction";
+import {
+  WalletInteraction,
+  type WalletInteractionType,
+} from "./wallet-interaction";
 
 export class WalletUpdateEvent extends CustomEvent<string> {
   constructor(content: WalletInteraction<any>) {
@@ -69,6 +72,14 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     options?: boolean | EventListenerOptions
   ): void {
     return this.eventEmitter.removeEventListener(type, callback, options);
+  }
+
+  async storeAndEmitInteraction(
+    interaction: WalletInteraction<WalletInteractionType>
+  ) {
+    await this.db.createOrUpdateInteraction(interaction);
+    this.dispatchEvent(new WalletUpdateEvent(interaction));
+    return interaction;
   }
 
   protected async getAccountFromAddress(
@@ -149,7 +160,7 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     secret: Fr,
     salt: Fr,
     signingKey: Buffer
-  ): Promise<TxHash> {
+  ): Promise<void> {
     const accountManager = await this.createAccountInternal(
       type,
       secret,
@@ -163,18 +174,14 @@ export class NativeWallet extends BaseWallet implements EventTarget {
       alias,
       signingKey,
     });
-    this.dispatchEvent(
-      new WalletUpdateEvent(
-        new WalletInteraction(
-          accountManager.address.toString(),
-          "createAccount",
-          "CREATED",
-          false,
-          "Creating account",
-          ""
-        )
-      )
-    );
+    const interaction = WalletInteraction.from({
+      type: "createAccount",
+      status: "PROVING",
+      complete: false,
+      title: `Registering and creating account ${accountManager.address}`,
+    });
+    await this.storeAndEmitInteraction(interaction);
+
     const deployMethod = await accountManager.getDeployMethod();
     const paymentMethod = await prepareForFeePayment(this);
     const opts: DeployAccountOptions = {
@@ -187,20 +194,13 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     };
 
     const provenTx = await deployMethod.prove(opts);
-    this.dispatchEvent(
-      new WalletUpdateEvent(
-        new WalletInteraction(
-          provenTx.txHash.toString(),
-          "proveTx",
-          "PROVEN",
-          false,
-          "Creating account",
-          ""
-        )
-      )
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "PROVEN" })
     );
-    const tx = provenTx.send();
-    return tx.getTxHash();
+    await provenTx.send().wait();
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "DEPLOYED", complete: true })
+    );
   }
 
   getAccounts() {
@@ -255,6 +255,7 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
+    this.storeAndEmitInteraction(new WalletInteraction());
     const feeOptions = opts.fee?.estimateGas
       ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
       : await this.getDefaultFeeOptions(opts.from, opts.fee);
