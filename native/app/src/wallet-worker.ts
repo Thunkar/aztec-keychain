@@ -1,14 +1,16 @@
 import {
   createAztecNodeClient,
-  type AztecNode,
+  WalletSchema,
   type ChainInfo,
-  type Wallet,
 } from "@aztec/aztec.js";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
-import { NativeWallet } from "./wallet-utils/native-wallet.ts";
-import { NativeWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
+import {
+  ExternalWallet,
+  InternalWallet,
+} from "./wallet-utils/native-wallet.ts";
+import { InternalWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
 import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
 import { schemas } from "@aztec/stdlib/schemas";
 
@@ -32,7 +34,10 @@ const chainInfoToNodeURL = {
   },
 };
 
-const RUNNING_SESSIONS = new Map<string, Map<string, NativeWallet>>();
+const RUNNING_SESSIONS = new Map<
+  string,
+  Map<string, { external: ExternalWallet; internal: InternalWallet }>
+>();
 
 async function init(
   chainInfo: ChainInfo,
@@ -94,32 +99,55 @@ async function init(
         { ...getPXEConfig(), ...configOverrides },
         options
       );
-      const wallet = new NativeWallet(pxe, node, db, appId);
-      wallet.addEventListener("wallet-update", (event: CustomEvent) => {
-        internalPort.postMessage({ origin: "wallet", content: event.detail });
-      });
-      return wallet;
+
+      // Create both wallet instances sharing the same db and pxe
+      const externalWallet = new ExternalWallet(pxe, node, db, appId);
+      const internalWallet = new InternalWallet(pxe, node, db, appId);
+
+      // Wire up events from both wallets to internal port
+      const setupWalletEvents = (wallet: ExternalWallet | InternalWallet) => {
+        wallet.addEventListener("wallet-update", (event: CustomEvent) => {
+          internalPort.postMessage({ origin: "wallet", content: event.detail });
+        });
+
+        wallet.addEventListener(
+          "authorization-request",
+          (event: CustomEvent) => {
+            internalPort.postMessage({
+              origin: "wallet",
+              type: "authorization-request",
+              content: event.detail,
+            });
+          }
+        );
+      };
+
+      setupWalletEvents(externalWallet);
+      setupWalletEvents(internalWallet);
+
+      return { external: externalWallet, internal: internalWallet };
     };
     const appMap = RUNNING_SESSIONS.get(appId) ?? new Map();
     RUNNING_SESSIONS.set(appId, appMap);
     appMap.set(sessionId, internalInit());
   }
-  return await RUNNING_SESSIONS.get(appId).get(sessionId);
+  return RUNNING_SESSIONS.get(appId)!.get(sessionId)!;
 }
 
 const handleEvent = async (
   port: MessagePortMain,
-  wallet: Wallet,
+  wallet: ExternalWallet | InternalWallet,
+  schema: typeof WalletSchema | typeof InternalWalletInterfaceSchema,
   type: string,
   messageId: string,
   args: any[]
 ) => {
-  if (!schemaHasMethod(NativeWalletInterfaceSchema, type)) {
+  if (!schemaHasMethod(schema, type)) {
     throw new Error(`Unknown method: ${type}`);
   }
   const sanitizedArgs = await parseWithOptionals(
     args,
-    NativeWalletInterfaceSchema[type].parameters()
+    schema[type].parameters()
   );
   let result;
   let error;
@@ -155,16 +183,42 @@ async function main() {
         const { type, messageId, args, appId, chainInfo } = JSON.parse(content);
         userLog.debug("Received external message:", event.data);
         const parsedChainInfo = ChainInfoSchema.parse(chainInfo);
-        const wallet = await init(
+        const wallets = await init(
           parsedChainInfo as unknown as ChainInfo,
           appId,
           internalPort,
           logPort
         );
-        handleEvent(externalPort, wallet, type, messageId, args);
+        // Use external wallet for external requests
+        handleEvent(
+          externalPort,
+          wallets.external,
+          WalletSchema,
+          type,
+          messageId,
+          args
+        );
       });
       internalPort.on("message", async (event) => {
-        const { type, messageId, args, appId, chainInfo } = event.data;
+        const { type, messageId, args, appId, chainInfo, authResponse } =
+          event.data;
+
+        // Handle authorization responses. This is slightly convoluted, since it's an internal
+        // communication that is resolved by the external wallet (which is the one that emitted
+        // the request in the first place)
+        if (type === "authorization-response" && authResponse) {
+          const parsedChainInfo = ChainInfoSchema.parse(JSON.parse(chainInfo));
+          const wallets = await init(
+            parsedChainInfo as unknown as ChainInfo,
+            appId,
+            internalPort,
+            logPort
+          );
+          // Resolve authorization on external wallet
+          wallets.external.resolveAuthorization(authResponse);
+          return;
+        }
+
         if (!messageId) {
           return;
         }
@@ -177,13 +231,21 @@ async function main() {
           appId,
         });
 
-        const wallet = await init(
+        const wallets = await init(
           parsedChainInfo as unknown as ChainInfo,
           appId,
           internalPort,
           logPort
         );
-        handleEvent(internalPort, wallet, type, messageId, args);
+        // Use internal wallet for internal requests
+        handleEvent(
+          internalPort,
+          wallets.internal,
+          InternalWalletInterfaceSchema,
+          type,
+          messageId,
+          args
+        );
       });
       externalPort.start();
       internalPort.start();

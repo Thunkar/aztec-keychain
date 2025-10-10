@@ -1,4 +1,4 @@
-import { AztecAddress, Fr, type Aliased } from "@aztec/aztec.js";
+import { Fr } from "@aztec/aztec.js";
 import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Fab from "@mui/material/Fab";
@@ -7,12 +7,16 @@ import Typography from "@mui/material/Typography";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { AccountBox } from "./AccountBox.tsx";
 import { WalletContext } from "../../renderer.tsx";
+import type { InternalAccount } from "../../wallet-utils/native-wallet";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 
 export function AccountsManager() {
-  const [accounts, setAccounts] = useState<Aliased<AztecAddress>[]>([]);
-  const [fabPosition, setFabPosition] = useState({ bottom: 16, right: INTERACTIONS_PANEL_WIDTH + 16 });
+  const [accounts, setAccounts] = useState<InternalAccount[]>([]);
+  const [fabPosition, setFabPosition] = useState({
+    bottom: 16,
+    right: INTERACTIONS_PANEL_WIDTH + 16,
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
@@ -68,7 +72,14 @@ export function AccountsManager() {
         <Typography variant="h5" component="h2">
           Accounts
         </Typography>
-        <Box sx={{ display: "flex", width: "100%", flexDirection: "column", gap: 1 }}>
+        <Box
+          sx={{
+            display: "flex",
+            width: "100%",
+            flexDirection: "column",
+            gap: 1,
+          }}
+        >
           {accounts.map((account, index) => (
             <AccountBox key={index} QRButton account={account} />
           ))}

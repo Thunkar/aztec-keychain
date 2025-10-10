@@ -5,8 +5,6 @@ import {
   SignerlessAccount,
   type SimulateOptions,
   getContractInstanceFromInstantiationParams,
-  TxHash,
-  type DeployAccountOptions,
   type AztecNode,
   type Aliased,
 } from "@aztec/aztec.js";
@@ -26,7 +24,6 @@ import {
   EcdsaRAccountContract,
 } from "@aztec/accounts/ecdsa";
 import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
-import { prepareForFeePayment } from "./sponsoredFPC";
 import { type PXE } from "@aztec/pxe/server";
 import { WalletDB, type AccountType } from "./wallet_db";
 import type { DefaultAccountEntrypointOptions } from "@aztec/entrypoints/account";
@@ -35,6 +32,10 @@ import {
   WalletInteraction,
   type WalletInteractionType,
 } from "./wallet-interaction";
+import {
+  promiseWithResolvers,
+  type PromiseWithResolvers,
+} from "@aztec/foundation/promise";
 
 export class WalletUpdateEvent extends CustomEvent<string> {
   constructor(content: WalletInteraction<any>) {
@@ -42,14 +43,37 @@ export class WalletUpdateEvent extends CustomEvent<string> {
   }
 }
 
-export class NativeWallet extends BaseWallet implements EventTarget {
+export type AuthorizationRequest = {
+  id: string;
+  appId: string;
+  method: string;
+  params: any;
+  timestamp: number;
+};
+
+export type AuthorizationResponse = {
+  id: string;
+  approved: boolean;
+};
+
+export class AuthorizationRequestEvent extends CustomEvent<string> {
+  constructor(content: AuthorizationRequest) {
+    super("authorization-request", { detail: jsonStringify(content) });
+  }
+}
+
+export class ExternalWallet extends BaseWallet implements EventTarget {
   private eventEmitter = new EventTarget();
+  protected pendingAuthorizations = new Map<
+    string,
+    PromiseWithResolvers<AuthorizationResponse>
+  >();
 
   constructor(
     pxe: PXE,
     node: AztecNode,
-    private db: WalletDB,
-    private appId: string
+    protected db: WalletDB,
+    protected appId: string
   ) {
     super(pxe, node);
   }
@@ -82,6 +106,43 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     return interaction;
   }
 
+  protected async requestAuthorization(
+    method: string,
+    params: any
+  ): Promise<AuthorizationResponse> {
+    const authRequest: AuthorizationRequest = {
+      id: crypto.randomUUID(),
+      appId: this.appId,
+      method,
+      params,
+      timestamp: Date.now(),
+    };
+
+    const { promise, resolve } = promiseWithResolvers<AuthorizationResponse>();
+    this.pendingAuthorizations.set(authRequest.id, {
+      promise,
+      resolve,
+      reject: () => {},
+    });
+
+    this.dispatchEvent(new AuthorizationRequestEvent(authRequest));
+
+    const response = await promise;
+    if (!response.approved) {
+      throw new Error(`User denied ${method} request`);
+    }
+
+    return response;
+  }
+
+  resolveAuthorization(response: AuthorizationResponse) {
+    const pending = this.pendingAuthorizations.get(response.id);
+    if (pending) {
+      pending.resolve(response);
+      this.pendingAuthorizations.delete(response.id);
+    }
+  }
+
   protected async getAccountFromAddress(
     address: AztecAddress
   ): Promise<Account> {
@@ -108,7 +169,7 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     return account;
   }
 
-  private async createAccountInternal(
+  protected async createAccountInternal(
     type: AccountType,
     secret: Fr,
     salt: Fr,
@@ -154,65 +215,29 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     return accountManager;
   }
 
-  async createAccount(
-    alias: string,
-    type: AccountType,
-    secret: Fr,
-    salt: Fr,
-    signingKey: Buffer
-  ): Promise<void> {
-    const accountManager = await this.createAccountInternal(
-      type,
-      secret,
-      salt,
-      signingKey
-    );
-    await this.db.storeAccount(accountManager.address, {
-      type,
-      secretKey: secret,
-      salt,
-      alias,
-      signingKey,
-    });
-    const interaction = WalletInteraction.from({
-      type: "createAccount",
-      status: "PROVING",
-      complete: false,
-      title: `Registering and creating account ${accountManager.address}`,
-    });
-    await this.storeAndEmitInteraction(interaction);
+  // External API methods - all require authorization
 
-    const deployMethod = await accountManager.getDeployMethod();
-    const paymentMethod = await prepareForFeePayment(this);
-    const opts: DeployAccountOptions = {
-      from: AztecAddress.ZERO,
-      fee: {
-        paymentMethod,
-      },
-      skipClassPublication: true,
-      skipInstancePublication: true,
-    };
-
-    const provenTx = await deployMethod.prove(opts);
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "PROVEN" })
-    );
-    await provenTx.send().wait();
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "DEPLOYED", complete: true })
-    );
-  }
-
-  getAccounts() {
+  override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
+    await this.requestAuthorization("getAccounts", {});
     return this.db.listAccounts();
   }
 
-  override async registerSender(address: AztecAddress, alias: string) {
+  override async registerSender(
+    address: AztecAddress,
+    alias: string
+  ): Promise<AztecAddress> {
+    await this.requestAuthorization("registerSender", {
+      address: address.toString(),
+      alias,
+    });
+
     await this.db.storeSender(address, alias);
     return this.pxe.registerSender(address);
   }
 
   override async getSenders(): Promise<Aliased<AztecAddress>[]> {
+    await this.requestAuthorization("getSenders", {});
+
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
     for (const storedSender of storedSenders) {
@@ -255,6 +280,10 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
+    await this.requestAuthorization("simulateTx", {
+      from: opts.from.toString(),
+    });
+
     const interaction = WalletInteraction.from({
       type: "simulateTx",
       title: "Simulating interaction",
@@ -303,8 +332,124 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     );
     return result;
   }
+}
 
+// Enriched account type for internal use
+export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
+
+/**
+ * InternalWallet extends ExternalWallet but:
+ * 1. Skips all authorization checks (trusted internal GUI)
+ * 2. Returns enriched data (e.g., account types)
+ * 3. Provides additional internal-only methods
+ */
+export class InternalWallet extends ExternalWallet {
+  // Override authorization to always approve instantly
+  protected override async requestAuthorization(
+    _method: string,
+    _params: any
+  ): Promise<AuthorizationResponse> {
+    // Internal requests are always pre-approved
+    return {
+      id: crypto.randomUUID(),
+      approved: true,
+    };
+  }
+
+  // Override getAccounts to return enriched data with account types
+  override async getAccounts(): Promise<InternalAccount[]> {
+    // Skip authorization via override above
+    const accounts = await this.db.listAccounts();
+
+    // Enrich with account type information
+    return Promise.all(
+      accounts.map(async (acc) => ({
+        ...acc,
+        type: (await this.db.retrieveAccount(acc.item)).type,
+      }))
+    );
+  }
+
+  // Internal-only method: Create account
+  async createAccount(
+    alias: string,
+    type: AccountType,
+    secret: Fr,
+    salt: Fr,
+    signingKey: Buffer
+  ): Promise<void> {
+    const accountManager = await this.createAccountInternal(
+      type,
+      secret,
+      salt,
+      signingKey
+    );
+    await this.db.storeAccount(accountManager.address, {
+      type,
+      secretKey: secret,
+      salt,
+      alias,
+      signingKey,
+    });
+    const interaction = WalletInteraction.from({
+      type: "createAccount",
+      status: "PROVING",
+      complete: false,
+      title: `Registering and creating account ${accountManager.address}`,
+    });
+    await this.storeAndEmitInteraction(interaction);
+
+    const deployMethod = await accountManager.getDeployMethod();
+    const { prepareForFeePayment } = await import("./sponsoredFPC");
+    const paymentMethod = await prepareForFeePayment(this);
+    const opts = {
+      from: AztecAddress.ZERO,
+      fee: {
+        paymentMethod,
+      },
+      skipClassPublication: true,
+      skipInstancePublication: true,
+    };
+
+    const provenTx = await deployMethod.prove(opts);
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "PROVEN" })
+    );
+    await provenTx.send().wait();
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "DEPLOYED", complete: true })
+    );
+  }
+
+  // Internal-only method: Get account with full details
+  async getAccountDetails(addressOrAlias: AztecAddress | string) {
+    return this.db.retrieveAccount(addressOrAlias);
+  }
+
+  // Internal-only method: Delete account
+  async deleteAccount(address: AztecAddress) {
+    await this.db.deleteAccount(address);
+  }
+
+  // Internal-only: Get all interactions (unfiltered)
   getInteractions() {
     return this.db.listInteractions();
+  }
+
+  // Internal-only: Direct access to store account metadata
+  async storeAccountMetadata(
+    aliasOrAddress: AztecAddress | string,
+    metadataKey: string,
+    metadata: Buffer
+  ) {
+    return this.db.storeAccountMetadata(aliasOrAddress, metadataKey, metadata);
+  }
+
+  // Internal-only: Retrieve account metadata
+  async retrieveAccountMetadata(
+    aliasOrAddress: AztecAddress | string,
+    metadataKey: string
+  ) {
+    return this.db.retrieveAccountMetadata(aliasOrAddress, metadataKey);
   }
 }

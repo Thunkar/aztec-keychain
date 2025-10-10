@@ -1,7 +1,10 @@
 import type { Aliased, AztecAddress, Fr } from "@aztec/aztec.js";
 import { contextBridge, ipcRenderer } from "electron";
 import type { TxHash, TxReceipt } from "@aztec/stdlib/tx";
-import type { WalletInteraction, WalletInteractionType } from "./wallet-utils/wallet-interaction";
+import type {
+  WalletInteraction,
+  WalletInteractionType,
+} from "./wallet-utils/wallet-interaction";
 
 contextBridge.exposeInMainWorld("walletAPI", {
   getTxReceipt(stringifiedArgs: string): Promise<TxReceipt> {
@@ -24,6 +27,11 @@ contextBridge.exposeInMainWorld("walletAPI", {
   },
   onWalletUpdate(callback) {
     return ipcRenderer.on("wallet-update", (_event, stringifiedEvent) =>
+      callback(stringifiedEvent)
+    );
+  },
+  onAuthorizationRequest(callback) {
+    return ipcRenderer.on("authorization-request", (_event, stringifiedEvent) =>
       callback(stringifiedEvent)
     );
   },

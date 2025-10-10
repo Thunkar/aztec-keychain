@@ -1,7 +1,7 @@
 import { schemaHasMethod } from "@aztec/foundation/schemas";
 import {
-  NativeWalletInterfaceSchema,
-  type NativeWalletInterface,
+  InternalWalletInterfaceSchema,
+  type InternalWalletInterface,
 } from "../../wallet-internal-proxy";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 
@@ -13,36 +13,44 @@ export class WalletApi {
       {},
       {
         get: (_, prop) => {
-          if (schemaHasMethod(NativeWalletInterfaceSchema, prop.toString())) {
+          if (schemaHasMethod(InternalWalletInterfaceSchema, prop.toString())) {
             return async (...args: any[]) => {
               const safeArgs = jsonStringify(args);
               const result = await window.walletAPI[prop](safeArgs);
-              return NativeWalletInterfaceSchema[
-                prop.toString() as keyof NativeWalletInterface
+              return InternalWalletInterfaceSchema[
+                prop.toString() as keyof InternalWalletInterface
               ]
                 .returnType()
                 .parseAsync(result);
             };
           } else if (prop.toString() === "onWalletUpdate") {
-            return (callback) => {
-              const safeCallback = (stringifiedEvent) => {
+            return (callback: any) => {
+              const safeCallback = (stringifiedEvent: any) => {
                 const event = JSON.parse(stringifiedEvent.content);
                 callback(event);
               };
               return window.walletAPI.onWalletUpdate(safeCallback);
+            };
+          } else if (prop.toString() === "onAuthorizationRequest") {
+            return (callback: any) => {
+              const safeCallback = (stringifiedEvent: any) => {
+                const event = JSON.parse(stringifiedEvent.content);
+                callback(event);
+              };
+              return window.walletAPI.onAuthorizationRequest(safeCallback);
             };
           } else {
             throw new Error("Invalid method");
           }
         },
       }
-    ) as unknown as NativeWalletInterface;
+    ) as unknown as InternalWalletInterface;
   }
 
   static getInstance() {
     if (!WalletApi.instance) {
       WalletApi.instance = new WalletApi();
     }
-    return WalletApi.instance as NativeWalletInterface;
+    return WalletApi.instance as InternalWalletInterface;
   }
 }

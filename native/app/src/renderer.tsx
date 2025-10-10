@@ -10,7 +10,7 @@ import {
 import { colors } from "./styles.js";
 import { App } from "./app/App.js";
 import { WalletApi } from "./app/utils/wallet-api.js";
-import type { NativeWalletInterface } from "./wallet-internal-proxy.js";
+import type { InternalWalletInterface } from "./wallet-internal-proxy.js";
 
 const themeOptions: ThemeOptions = {
   palette: {
@@ -33,8 +33,8 @@ const themeOptions: ThemeOptions = {
 const theme = createTheme(themeOptions);
 
 export const WalletContext = createContext<{
-  walletAPI: NativeWalletInterface;
-}>({ walletAPI: null });
+  walletAPI: InternalWalletInterface;
+}>({ walletAPI: null! });
 
 function Root() {
   const walletAPI = WalletApi.getInstance();

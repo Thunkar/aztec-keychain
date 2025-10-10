@@ -1,6 +1,7 @@
 import type { FieldsOf } from "@aztec/aztec.js";
 import { optional } from "@aztec/foundation/schemas";
 import { serializeToBuffer, BufferReader } from "@aztec/foundation/serialize";
+
 import { z } from "zod";
 
 type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;

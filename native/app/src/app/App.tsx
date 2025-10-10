@@ -12,6 +12,11 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Button from "@mui/material/Button";
 import { InteractionsList } from "./components/InteractionsList.tsx";
 import { AccountsManager } from "./components/AccountsManager.tsx";
 
@@ -19,6 +24,7 @@ import { WalletContext } from "../renderer.tsx";
 import type {
   WalletInteraction,
   WalletInteractionType,
+  AuthorizationRequest,
 } from "../wallet-utils/wallet-interaction.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
@@ -33,6 +39,10 @@ export function App() {
   const [events, setEvents] = useState<
     WalletInteraction<WalletInteractionType>[]
   >([]);
+
+  const [pendingAuth, setPendingAuth] = useState<AuthorizationRequest | null>(
+    null
+  );
 
   const { walletAPI } = useContext(WalletContext);
 
@@ -52,6 +62,11 @@ export function App() {
         return Array.from(eventsMap.values());
       });
     });
+
+    // Listen for authorization requests from external dApps
+    walletAPI.onAuthorizationRequest((request: AuthorizationRequest) => {
+      setPendingAuth(request);
+    });
   }, []);
 
   const handleMenuToggle = () => {
@@ -61,6 +76,27 @@ export function App() {
   const handleMenuItemClick = (section: MenuSection) => {
     setCurrentSection(section);
     setMenuOpen(false);
+  };
+
+  const handleAuthApprove = (modifiedParams?: any) => {
+    if (pendingAuth) {
+      walletAPI.resolveAuthorization({
+        id: pendingAuth.id,
+        approved: true,
+        modifiedParams,
+      });
+      setPendingAuth(null);
+    }
+  };
+
+  const handleAuthDeny = () => {
+    if (pendingAuth) {
+      walletAPI.resolveAuthorization({
+        id: pendingAuth.id,
+        approved: false,
+      });
+      setPendingAuth(null);
+    }
   };
 
   const renderContent = () => {
@@ -173,6 +209,47 @@ export function App() {
           <InteractionsList interactions={events} />
         </Box>
       </Box>
+
+      {/* Authorization Dialog */}
+      {pendingAuth && (
+        <Dialog open={true} maxWidth="sm" fullWidth>
+          <DialogTitle>Authorization Request</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              App <strong>{pendingAuth.appId}</strong> requests:
+            </Typography>
+            <Typography variant="h6" gutterBottom>
+              {pendingAuth.method}
+            </Typography>
+            <Box
+              sx={{
+                mt: 2,
+                p: 2,
+                bgcolor: "background.default",
+                borderRadius: 1,
+                maxHeight: 300,
+                overflow: "auto",
+              }}
+            >
+              <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                {JSON.stringify(pendingAuth.params, null, 2)}
+              </pre>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleAuthDeny} color="error">
+              Deny
+            </Button>
+            <Button
+              onClick={() => handleAuthApprove()}
+              color="primary"
+              variant="contained"
+            >
+              Approve
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Box>
   );
 }
