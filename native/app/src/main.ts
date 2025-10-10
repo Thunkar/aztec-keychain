@@ -82,6 +82,9 @@ app.on("ready", async () => {
   walletProxy.onWalletUpdate((event) => {
     mainWindow.webContents.send("wallet-update", event);
   });
+  walletProxy.onAuthorizationRequest((event) => {
+    mainWindow.webContents.send("authorization-request", event);
+  });
   const internalMethods = [
     "getAccounts",
     "getSenders",
@@ -89,6 +92,7 @@ app.on("ready", async () => {
     "getTxReceipt",
     "createAccount",
     "getInteractions",
+    "resolveAuthorization",
   ];
   for (const method of internalMethods) {
     ipcMain.handle(method, async (_event, args) => {

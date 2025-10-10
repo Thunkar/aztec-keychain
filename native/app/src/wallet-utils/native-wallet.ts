@@ -64,15 +64,15 @@ export class AuthorizationRequestEvent extends CustomEvent<string> {
 
 export class ExternalWallet extends BaseWallet implements EventTarget {
   private eventEmitter = new EventTarget();
-  protected pendingAuthorizations = new Map<
-    string,
-    PromiseWithResolvers<AuthorizationResponse>
-  >();
 
   constructor(
     pxe: PXE,
     node: AztecNode,
     protected db: WalletDB,
+    protected pendingAuthorizations: Map<
+      string,
+      PromiseWithResolvers<AuthorizationResponse>
+    >,
     protected appId: string
   ) {
     super(pxe, node);
@@ -118,6 +118,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       timestamp: Date.now(),
     };
 
+    console.log(`created authrequest ${authRequest.id}`);
+
     const { promise, resolve } = promiseWithResolvers<AuthorizationResponse>();
     this.pendingAuthorizations.set(authRequest.id, {
       promise,
@@ -128,6 +130,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     this.dispatchEvent(new AuthorizationRequestEvent(authRequest));
 
     const response = await promise;
+    console.log("wait over");
     if (!response.approved) {
       throw new Error(`User denied ${method} request`);
     }
@@ -136,8 +139,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   }
 
   resolveAuthorization(response: AuthorizationResponse) {
+    console.log(`resolving ${response.id}`);
     const pending = this.pendingAuthorizations.get(response.id);
+    console.log(`pending is ${pending}`);
     if (pending) {
+      console.log(`resolving with response ${response}`);
       pending.resolve(response);
       this.pendingAuthorizations.delete(response.id);
     }

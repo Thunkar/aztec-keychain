@@ -5,6 +5,7 @@ import type {
   WalletInteraction,
   WalletInteractionType,
 } from "./wallet-utils/wallet-interaction";
+import type { AuthorizationResponse } from "./wallet-utils/native-wallet";
 
 contextBridge.exposeInMainWorld("walletAPI", {
   getTxReceipt(stringifiedArgs: string): Promise<TxReceipt> {
@@ -34,5 +35,8 @@ contextBridge.exposeInMainWorld("walletAPI", {
     return ipcRenderer.on("authorization-request", (_event, stringifiedEvent) =>
       callback(stringifiedEvent)
     );
+  },
+  resolveAuthorization(stringifiedArgs: string) {
+    return ipcRenderer.invoke("resolveAuthorization", stringifiedArgs);
   },
 });

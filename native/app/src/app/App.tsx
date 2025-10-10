@@ -5,7 +5,6 @@ import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import MenuIcon from "@mui/icons-material/Menu";
 import Typography from "@mui/material/Typography";
-import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
@@ -29,6 +28,7 @@ import type { AuthorizationRequest } from "../wallet-utils/native-wallet.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const MENU_DRAWER_WIDTH = 240;
+const SIDEBAR_WIDTH = 64;
 
 type MenuSection = "accounts";
 
@@ -64,6 +64,7 @@ export function App() {
 
     // Listen for authorization requests from external dApps
     walletAPI.onAuthorizationRequest((request: AuthorizationRequest) => {
+      console.log(request);
       setPendingAuth(request);
     });
   }, []);
@@ -115,6 +116,103 @@ export function App() {
         width: "100%",
       }}
     >
+      {/* Combined Sidebar - Expands when menu opens */}
+      <Box
+        sx={{
+          width: menuOpen ? SIDEBAR_WIDTH + MENU_DRAWER_WIDTH : SIDEBAR_WIDTH,
+          flexShrink: 0,
+          borderRight: 1,
+          borderColor: "divider",
+          display: "flex",
+          bgcolor: "background.paper",
+          transition: "width 225ms cubic-bezier(0.4, 0, 0.6, 1)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Icon Sidebar - Always visible */}
+        <Box
+          sx={{
+            width: SIDEBAR_WIDTH,
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            borderRight: menuOpen ? 1 : 0,
+            borderColor: "divider",
+          }}
+        >
+          <Box
+            sx={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderBottom: 1,
+              borderColor: "divider",
+            }}
+          >
+            <IconButton
+              color="primary"
+              aria-label="open menu"
+              onClick={handleMenuToggle}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+          <List sx={{ p: 0 }}>
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={currentSection === "accounts"}
+                onClick={() => handleMenuItemClick("accounts")}
+                sx={{
+                  flexDirection: "column",
+                  py: 2,
+                  minHeight: SIDEBAR_WIDTH,
+                }}
+              >
+                <AccountBalanceWalletIcon />
+              </ListItemButton>
+            </ListItem>
+          </List>
+        </Box>
+
+        {/* Expanded Menu Content */}
+        <Box
+          sx={{
+            width: MENU_DRAWER_WIDTH,
+            display: "flex",
+            flexDirection: "column",
+            opacity: menuOpen ? 1 : 0,
+            transition: "opacity 225ms cubic-bezier(0.4, 0, 0.6, 1)",
+          }}
+        >
+          <Box
+            sx={{
+              height: 64,
+              display: "flex",
+              alignItems: "center",
+              px: 2,
+              borderBottom: 1,
+              borderColor: "divider",
+            }}
+          >
+            <Typography variant="h6">Menu</Typography>
+          </Box>
+          <Box sx={{ overflowY: "auto" }}>
+            <List>
+              <ListItem disablePadding>
+                <ListItemButton
+                  sx={{ height: 64, padding: 0, pl: 2 }}
+                  selected={currentSection === "accounts"}
+                  onClick={() => handleMenuItemClick("accounts")}
+                >
+                  <ListItemText primary="Accounts" />
+                </ListItemButton>
+              </ListItem>
+            </List>
+          </Box>
+        </Box>
+      </Box>
+
       {/* Main Content Area with App Bar */}
       <Box
         sx={{
@@ -124,52 +222,14 @@ export function App() {
           overflow: "hidden",
         }}
       >
-        {/* App Bar with Hamburger Menu */}
+        {/* App Bar */}
         <AppBar position="static">
           <Toolbar>
-            <IconButton
-              color="inherit"
-              aria-label="open menu"
-              edge="start"
-              onClick={handleMenuToggle}
-              sx={{ mr: 2 }}
-            >
-              <MenuIcon />
-            </IconButton>
             <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
               Aztec Keychain
             </Typography>
           </Toolbar>
         </AppBar>
-
-        {/* Navigation Drawer (Left Side) */}
-        <Drawer
-          anchor="left"
-          open={menuOpen}
-          onClose={handleMenuToggle}
-          sx={{
-            "& .MuiDrawer-paper": {
-              width: MENU_DRAWER_WIDTH,
-            },
-          }}
-        >
-          <Toolbar />
-          <Box sx={{ overflowY: "auto" }}>
-            <List>
-              <ListItem disablePadding>
-                <ListItemButton
-                  selected={currentSection === "accounts"}
-                  onClick={() => handleMenuItemClick("accounts")}
-                >
-                  <ListItemIcon>
-                    <AccountBalanceWalletIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Accounts" />
-                </ListItemButton>
-              </ListItem>
-            </List>
-          </Box>
-        </Drawer>
 
         {/* Main Content */}
         <Box

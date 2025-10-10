@@ -9,6 +9,7 @@ import type { MessagePortMain } from "electron";
 import {
   ExternalWallet,
   InternalWallet,
+  type AuthorizationResponse,
 } from "./wallet-utils/native-wallet.ts";
 import { InternalWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
 import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
@@ -21,6 +22,7 @@ import { WalletDB } from "./wallet-utils/wallet_db.ts";
 import { z } from "zod";
 import { homedir } from "node:os";
 import { inspect } from "node:util";
+import type { PromiseWithResolvers } from "@aztec/foundation/promise";
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
@@ -100,9 +102,26 @@ async function init(
         options
       );
 
-      // Create both wallet instances sharing the same db and pxe
-      const externalWallet = new ExternalWallet(pxe, node, db, appId);
-      const internalWallet = new InternalWallet(pxe, node, db, appId);
+      const pendingAuthorizations = new Map<
+        string,
+        PromiseWithResolvers<AuthorizationResponse>
+      >();
+
+      // Create both wallet instances sharing the same db, pxe and authorization logic
+      const externalWallet = new ExternalWallet(
+        pxe,
+        node,
+        db,
+        pendingAuthorizations,
+        appId
+      );
+      const internalWallet = new InternalWallet(
+        pxe,
+        node,
+        db,
+        pendingAuthorizations,
+        appId
+      );
 
       // Wire up events from both wallets to internal port
       const setupWalletEvents = (wallet: ExternalWallet | InternalWallet) => {
@@ -156,6 +175,7 @@ const handleEvent = async (
   let result;
   let error;
   try {
+    console.log(`calling ${type}`);
     result = await wallet[type](...sanitizedArgs);
   } catch (err) {
     error = err;
@@ -204,25 +224,7 @@ async function main() {
         );
       });
       internalPort.on("message", async (event) => {
-        const { type, messageId, args, appId, chainInfo, authResponse } =
-          event.data;
-
-        // Handle authorization responses. This is slightly convoluted, since it's an internal
-        // communication that is resolved by the external wallet (which is the one that emitted
-        // the request in the first place)
-        if (type === "authorization-response" && authResponse) {
-          const parsedChainInfo = ChainInfoSchema.parse(JSON.parse(chainInfo));
-          const wallets = await init(
-            parsedChainInfo as unknown as ChainInfo,
-            appId,
-            internalPort,
-            logPort
-          );
-          // Resolve authorization on external wallet
-          wallets.external.resolveAuthorization(authResponse);
-          return;
-        }
-
+        const { type, messageId, args, appId, chainInfo } = event.data;
         if (!messageId) {
           return;
         }
