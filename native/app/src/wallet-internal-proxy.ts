@@ -26,12 +26,8 @@ type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
 };
 
-export type OnWalletUpdateListener = (
-  interaction: WalletInteraction<any>
-) => void;
-export type OnAuthorizationRequestListener = (
-  request: AuthorizationRequest
-) => void;
+type OnWalletUpdateListener = (interaction: WalletInteraction<any>) => void;
+type OnAuthorizationRequestListener = (request: AuthorizationRequest) => void;
 
 // Internal wallet interface - extends external with internal-only methods
 export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
@@ -45,6 +41,8 @@ export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
   getAccounts(): Promise<InternalAccount[]>; // Override with enriched type
   getInteractions(): Promise<WalletInteraction<WalletInteractionType>[]>;
   resolveAuthorization(response: AuthorizationResponse): void;
+  onWalletUpdate(callback: OnWalletUpdateListener): void;
+  onAuthorizationRequest(callback: OnAuthorizationRequestListener): void;
 };
 
 export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface> =
@@ -103,15 +101,14 @@ export class WalletInternalProxy {
     port.on("message", async (event) => {
       const { type, content } = event.data;
 
-      // Handle authorization requests
+      // Handle typed events
       if (type === "authorization-request") {
-        const authRequest = JSON.parse(content);
-        wallet.authRequestCallback?.(authRequest);
+        wallet.authRequestCallback?.(event.data);
         return;
       }
 
       if (type === "wallet-update") {
-        wallet.internalEventCallback?.(JSON.parse(content));
+        wallet.internalEventCallback?.(event.data);
         return;
       }
 

@@ -64,7 +64,7 @@ async function init(
 
       const configOverrides = {
         dataDirectory: resolve(keychainHomeDir, `./pxe-${rollupAddress}`),
-        proverEnabled: true,
+        proverEnabled: false,
       };
       const options = {
         loggers: {
@@ -107,7 +107,11 @@ async function init(
       // Wire up events from both wallets to internal port
       const setupWalletEvents = (wallet: ExternalWallet | InternalWallet) => {
         wallet.addEventListener("wallet-update", (event: CustomEvent) => {
-          internalPort.postMessage({ origin: "wallet", content: event.detail });
+          internalPort.postMessage({
+            origin: "wallet",
+            type: "wallet-update",
+            content: event.detail,
+          });
         });
 
         wallet.addEventListener(

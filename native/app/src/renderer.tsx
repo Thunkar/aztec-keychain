@@ -53,4 +53,6 @@ function Root() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<Root />);
+const rootElement = document.getElementById("root")!;
+const root = createRoot(rootElement);
+root.render(<Root />);

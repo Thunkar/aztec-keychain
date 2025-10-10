@@ -24,8 +24,8 @@ import { WalletContext } from "../renderer.tsx";
 import type {
   WalletInteraction,
   WalletInteractionType,
-  AuthorizationRequest,
 } from "../wallet-utils/wallet-interaction.ts";
+import type { AuthorizationRequest } from "../wallet-utils/native-wallet.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const MENU_DRAWER_WIDTH = 240;
@@ -54,7 +54,6 @@ export function App() {
   useEffect(() => {
     loadInteractions();
     walletAPI.onWalletUpdate((interaction) => {
-      console.log(interaction);
       setEvents((prevEvents) => {
         // Deduplicate by ID to prevent React strict mode duplicates
         const eventsMap = new Map(prevEvents.map((e) => [e.id, e]));
@@ -78,12 +77,11 @@ export function App() {
     setMenuOpen(false);
   };
 
-  const handleAuthApprove = (modifiedParams?: any) => {
+  const handleAuthApprove = () => {
     if (pendingAuth) {
       walletAPI.resolveAuthorization({
         id: pendingAuth.id,
         approved: true,
-        modifiedParams,
       });
       setPendingAuth(null);
     }
