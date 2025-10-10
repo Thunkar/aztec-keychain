@@ -54,6 +54,7 @@ export type AuthorizationRequest = {
 export type AuthorizationResponse = {
   id: string;
   approved: boolean;
+  appId: string;
 };
 
 export class AuthorizationRequestEvent extends CustomEvent<string> {
@@ -118,8 +119,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       timestamp: Date.now(),
     };
 
-    console.log(`created authrequest ${authRequest.id}`);
-
     const { promise, resolve } = promiseWithResolvers<AuthorizationResponse>();
     this.pendingAuthorizations.set(authRequest.id, {
       promise,
@@ -127,7 +126,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       reject: () => {},
     });
 
-    this.dispatchEvent(new AuthorizationRequestEvent(authRequest));
+    const event = new AuthorizationRequestEvent(authRequest);
+    this.dispatchEvent(event);
 
     const response = await promise;
     console.log("wait over");
@@ -139,7 +139,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   }
 
   resolveAuthorization(response: AuthorizationResponse) {
-    console.log(`resolving ${response.id}`);
     const pending = this.pendingAuthorizations.get(response.id);
     console.log(`pending is ${pending}`);
     if (pending) {
@@ -359,6 +358,7 @@ export class InternalWallet extends ExternalWallet {
     return {
       id: crypto.randomUUID(),
       approved: true,
+      appId: "this",
     };
   }
 

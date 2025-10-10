@@ -8,7 +8,6 @@ import Typography from "@mui/material/Typography";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import Dialog from "@mui/material/Dialog";
@@ -83,6 +82,7 @@ export function App() {
       walletAPI.resolveAuthorization({
         id: pendingAuth.id,
         approved: true,
+        appId: pendingAuth.appId, // Include the appId of the dApp
       });
       setPendingAuth(null);
     }
@@ -93,6 +93,7 @@ export function App() {
       walletAPI.resolveAuthorization({
         id: pendingAuth.id,
         approved: false,
+        appId: pendingAuth.appId, // Include the appId of the dApp
       });
       setPendingAuth(null);
     }

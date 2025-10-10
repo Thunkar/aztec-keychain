@@ -152,7 +152,10 @@ export class WalletInternalProxy {
     args: any[];
   }) {
     const messageId = globalThis.crypto.randomUUID();
-    const chainInfo: ChainInfo = { chainId: new Fr(31337), version: new Fr(1) };
+    const chainInfo: ChainInfo = {
+      chainId: new Fr(31337),
+      version: new Fr(878863971),
+    };
     const appId = "this";
     const message = {
       type,

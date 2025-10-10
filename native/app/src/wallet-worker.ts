@@ -30,7 +30,9 @@ const ChainInfoSchema = z.object({
 });
 
 const chainInfoToNodeURL = {
-  31337: "http://localhost:8080",
+  31337: {
+    878863971: "http://localhost:8080",
+  },
   1115111: {
     1714840162: "https://rpc.testnet.aztec-labs.com/",
   },
@@ -38,7 +40,7 @@ const chainInfoToNodeURL = {
 
 const RUNNING_SESSIONS = new Map<
   string,
-  Map<string, { external: ExternalWallet; internal: InternalWallet }>
+  Map<string, Promise<{ external: ExternalWallet; internal: InternalWallet }>>
 >();
 
 async function init(
@@ -55,6 +57,9 @@ async function init(
         ];
   const sessionId = `${chainInfo.chainId.toNumber()}-${chainInfo.version.toNumber()}`;
   if (!RUNNING_SESSIONS.get(appId)?.has(sessionId)) {
+    console.log(
+      `Creating new wallet session for appId=${appId}, sessionId=${sessionId}`
+    );
     const internalInit = async () => {
       const node = createAztecNodeClient(nodeURL);
 
@@ -152,9 +157,15 @@ async function init(
     };
     const appMap = RUNNING_SESSIONS.get(appId) ?? new Map();
     RUNNING_SESSIONS.set(appId, appMap);
-    appMap.set(sessionId, internalInit());
+    const walletPromise = internalInit();
+    appMap.set(sessionId, walletPromise);
+  } else {
+    console.log(
+      `Reusing wallet session for appId=${appId}, sessionId=${sessionId}`
+    );
   }
-  return RUNNING_SESSIONS.get(appId)!.get(sessionId)!;
+  const wallets = await RUNNING_SESSIONS.get(appId)!.get(sessionId)!;
+  return wallets;
 }
 
 const handleEvent = async (
@@ -205,6 +216,9 @@ async function main() {
           return;
         }
         const { type, messageId, args, appId, chainInfo } = JSON.parse(content);
+        if (appId === "this") {
+          throw new Error("External messages cannot have this as appId");
+        }
         userLog.debug("Received external message:", event.data);
         const parsedChainInfo = ChainInfoSchema.parse(chainInfo);
         const wallets = await init(
@@ -214,6 +228,10 @@ async function main() {
           logPort
         );
         // Use external wallet for external requests
+        console.log(
+          `[External Request] Using external wallet instance:`,
+          wallets.external
+        );
         handleEvent(
           externalPort,
           wallets.external,
@@ -224,7 +242,13 @@ async function main() {
         );
       });
       internalPort.on("message", async (event) => {
-        const { type, messageId, args, appId, chainInfo } = event.data;
+        const {
+          type,
+          messageId,
+          args,
+          appId: originalAppId,
+          chainInfo,
+        } = event.data;
         if (!messageId) {
           return;
         }
@@ -234,8 +258,16 @@ async function main() {
           messageId,
           args,
           chainInfo: parsedChainInfo,
-          appId,
+          originalAppId,
         });
+
+        // If this is an authorization response, it originated from an app, but
+        // was handled interally. Recover the original app from the args.
+        console.log(args);
+        const appId =
+          type === "resolveAuthorization" && args[0].appId !== "this"
+            ? args[0].appId
+            : originalAppId;
 
         const wallets = await init(
           parsedChainInfo as unknown as ChainInfo,
@@ -243,10 +275,16 @@ async function main() {
           internalPort,
           logPort
         );
-        // Use internal wallet for internal requests
+        // Use internal wallet for internal requests, except when handling
+        // resolveAuthorization (which was always originated by the external one)
+        const wallet =
+          type === "resolveAuthorization" && appId !== "this"
+            ? wallets.external
+            : wallets.internal;
+        console.log(appId);
         handleEvent(
           internalPort,
-          wallets.internal,
+          wallet,
           InternalWalletInterfaceSchema,
           type,
           messageId,
