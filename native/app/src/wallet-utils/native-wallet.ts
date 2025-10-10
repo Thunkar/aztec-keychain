@@ -255,7 +255,13 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    this.storeAndEmitInteraction(new WalletInteraction());
+    const interaction = WalletInteraction.from({
+      type: "simulateTx",
+      title: "Simulating interaction",
+      complete: false,
+      status: "SIMULATING",
+    });
+    await this.storeAndEmitInteraction(interaction);
     const feeOptions = opts.fee?.estimateGas
       ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
       : await this.getDefaultFeeOptions(opts.from, opts.fee);
@@ -283,7 +289,7 @@ export class NativeWallet extends BaseWallet implements EventTarget {
     const contractOverrides = {
       [opts.from.toString()]: { instance, artifact },
     };
-    return this.pxe.simulateTx(
+    const result = this.pxe.simulateTx(
       txRequest,
       true /* simulatePublic */,
       true,
@@ -292,6 +298,10 @@ export class NativeWallet extends BaseWallet implements EventTarget {
         contracts: contractOverrides,
       }
     );
+    this.storeAndEmitInteraction(
+      interaction.update({ complete: true, status: "SIMULATED" })
+    );
+    return result;
   }
 
   getInteractions() {

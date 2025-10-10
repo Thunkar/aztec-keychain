@@ -18,6 +18,7 @@ import { createProxyLogger } from "./wallet-utils/logger";
 import { WalletDB } from "./wallet-utils/wallet_db.ts";
 import { z } from "zod";
 import { homedir } from "node:os";
+import { inspect } from "node:util";
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
@@ -137,7 +138,9 @@ async function main() {
   let userLog;
   process.on("unhandledRejection", (error: Error) => {
     if (userLog) {
-      userLog.error(`Unhandled rejection ${error.message}`);
+      userLog.error(
+        `Unhandled rejection ${typeof error.message == "object" ? inspect(error.message) : error.message}`
+      );
     }
   });
   process.parentPort.once("message", async (message: any) => {

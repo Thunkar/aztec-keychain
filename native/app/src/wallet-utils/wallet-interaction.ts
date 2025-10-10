@@ -33,12 +33,12 @@ export const WalletInteractionSchema = z
 
 export class WalletInteraction<T extends WalletInteractionType> {
   private constructor(
-    public id: string = crypto.randomUUID(),
+    public id: string,
     public type: T,
     public status: string,
     public complete: boolean,
-    public title?: string,
-    public description?: string
+    public title: string,
+    public description: string
   ) {}
 
   update({
@@ -48,7 +48,7 @@ export class WalletInteraction<T extends WalletInteractionType> {
     description,
   }: Partial<
     Omit<FieldsOf<WalletInteraction<WalletInteractionType>>, "id" | "type">
-  >) {
+  >): WalletInteraction<WalletInteractionType> {
     this.status = status ?? this.status;
     this.complete = complete ?? this.complete;
     this.title = title ?? this.title;
@@ -63,23 +63,26 @@ export class WalletInteraction<T extends WalletInteractionType> {
     complete,
     title,
     description,
-  }: Optional<FieldsOf<WalletInteraction<WalletInteractionType>>, "id">) {
+  }: Optional<
+    FieldsOf<WalletInteraction<WalletInteractionType>>,
+    "id" | "title" | "description"
+  >) {
     return new WalletInteraction(
-      id,
+      id ?? crypto.randomUUID(),
       type,
       status,
       complete,
-      title,
-      description
+      title ?? "",
+      description ?? ""
     );
   }
 
   toBuffer() {
     return serializeToBuffer(
+      this.id,
       this.type,
       this.status,
       this.complete,
-      this.id,
       this.title,
       this.description
     );

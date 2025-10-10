@@ -1,0 +1,107 @@
+import { AztecAddress, Fr, type Aliased } from "@aztec/aztec.js";
+import { useContext, useEffect, useState } from "react";
+import Box from "@mui/material/Box";
+import Fab from "@mui/material/Fab";
+import AddIcon from "@mui/icons-material/Add";
+import Typography from "@mui/material/Typography";
+import { randomBytes } from "@aztec/foundation/crypto";
+import { AccountBox } from "./AccountBox.tsx";
+import { WalletContext } from "../../renderer.tsx";
+
+const INTERACTIONS_PANEL_WIDTH = 400;
+
+export function AccountsManager() {
+  const [accounts, setAccounts] = useState<Aliased<AztecAddress>[]>([]);
+  const [fabPosition, setFabPosition] = useState({ bottom: 16, right: INTERACTIONS_PANEL_WIDTH + 16 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const { walletAPI } = useContext(WalletContext);
+
+  const loadAccounts = async () => {
+    const accounts = await walletAPI.getAccounts();
+    setAccounts(accounts);
+  };
+
+  useEffect(() => {
+    loadAccounts();
+  }, []);
+
+  const handleFabMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - (window.innerWidth - fabPosition.right),
+      y: e.clientY - (window.innerHeight - fabPosition.bottom),
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const newRight = window.innerWidth - e.clientX + dragOffset.x;
+        const newBottom = window.innerHeight - e.clientY + dragOffset.y;
+        setFabPosition({
+          right: Math.max(16, newRight),
+          bottom: Math.max(16, newBottom),
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
+  return (
+    <>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Typography variant="h5" component="h2">
+          Accounts
+        </Typography>
+        <Box sx={{ display: "flex", width: "100%", flexDirection: "column", gap: 1 }}>
+          {accounts.map((account, index) => (
+            <AccountBox key={index} QRButton account={account} />
+          ))}
+        </Box>
+      </Box>
+
+      {/* Draggable FAB for creating accounts */}
+      <Fab
+        color="primary"
+        sx={{
+          position: "absolute",
+          bottom: fabPosition.bottom,
+          right: fabPosition.right,
+          cursor: isDragging ? "grabbing" : "grab",
+        }}
+        onMouseDown={handleFabMouseDown}
+        onClick={async (e) => {
+          if (isDragging) {
+            e.preventDefault();
+            return;
+          }
+          await walletAPI.createAccount(
+            `ECDSAR1 ${accounts.length}`,
+            "ecdsasecp256r1",
+            Fr.random(),
+            Fr.random(),
+            randomBytes(32)
+          );
+          await loadAccounts();
+        }}
+      >
+        <AddIcon />
+      </Fab>
+    </>
+  );
+}
