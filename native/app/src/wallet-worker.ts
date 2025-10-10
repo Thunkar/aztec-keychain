@@ -57,9 +57,6 @@ async function init(
         ];
   const sessionId = `${chainInfo.chainId.toNumber()}-${chainInfo.version.toNumber()}`;
   if (!RUNNING_SESSIONS.get(appId)?.has(sessionId)) {
-    console.log(
-      `Creating new wallet session for appId=${appId}, sessionId=${sessionId}`
-    );
     const internalInit = async () => {
       const node = createAztecNodeClient(nodeURL);
 
@@ -159,10 +156,6 @@ async function init(
     RUNNING_SESSIONS.set(appId, appMap);
     const walletPromise = internalInit();
     appMap.set(sessionId, walletPromise);
-  } else {
-    console.log(
-      `Reusing wallet session for appId=${appId}, sessionId=${sessionId}`
-    );
   }
   const wallets = await RUNNING_SESSIONS.get(appId)!.get(sessionId)!;
   return wallets;
@@ -186,7 +179,6 @@ const handleEvent = async (
   let result;
   let error;
   try {
-    console.log(`calling ${type}`);
     result = await wallet[type](...sanitizedArgs);
   } catch (err) {
     error = err;

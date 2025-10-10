@@ -202,7 +202,7 @@ export function App() {
             <List>
               <ListItem disablePadding>
                 <ListItemButton
-                  sx={{ height: 64, padding: 0, pl: 2 }}
+                  sx={{ height: 64 }}
                   selected={currentSection === "accounts"}
                   onClick={() => handleMenuItemClick("accounts")}
                 >
