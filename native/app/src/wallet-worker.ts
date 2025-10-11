@@ -220,10 +220,6 @@ async function main() {
           logPort
         );
         // Use external wallet for external requests
-        console.log(
-          `[External Request] Using external wallet instance:`,
-          wallets.external
-        );
         handleEvent(
           externalPort,
           wallets.external,
@@ -273,7 +269,6 @@ async function main() {
           type === "resolveAuthorization" && appId !== "this"
             ? wallets.external
             : wallets.internal;
-        console.log(appId);
         handleEvent(
           internalPort,
           wallet,

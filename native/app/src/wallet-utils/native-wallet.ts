@@ -130,7 +130,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     this.dispatchEvent(event);
 
     const response = await promise;
-    console.log("wait over");
     if (!response.approved) {
       throw new Error(`User denied ${method} request`);
     }
@@ -140,9 +139,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   resolveAuthorization(response: AuthorizationResponse) {
     const pending = this.pendingAuthorizations.get(response.id);
-    console.log(`pending is ${pending}`);
     if (pending) {
-      console.log(`resolving with response ${response}`);
       pending.resolve(response);
       this.pendingAuthorizations.delete(response.id);
     }
