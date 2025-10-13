@@ -23,7 +23,7 @@ import type {
   WalletInteraction,
   WalletInteractionType,
 } from "../wallet-utils/wallet-interaction.ts";
-import type { AuthorizationRequest } from "../wallet-utils/native-wallet.ts";
+import type { AuthorizationRequest } from "../wallet-utils/authorization.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const MENU_DRAWER_WIDTH = 240;

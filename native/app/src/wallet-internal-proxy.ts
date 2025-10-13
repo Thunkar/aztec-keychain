@@ -16,11 +16,11 @@ import type {
   WalletInteractionType,
 } from "./wallet-utils/wallet-interaction";
 import { WalletInteractionSchema } from "./wallet-utils/wallet-interaction";
+import type { InternalAccount } from "./wallet-utils/native-wallet";
 import type {
   AuthorizationRequest,
   AuthorizationResponse,
-  InternalAccount,
-} from "./wallet-utils/native-wallet";
+} from "./wallet-utils/authorization";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
@@ -78,7 +78,9 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
     // @ts-ignore
     resolveAuthorization: z
       .function()
-      .args(z.object({ id: z.string(), approved: z.boolean() })),
+      .args(
+        z.object({ id: z.string(), approved: z.boolean(), appId: z.string() })
+      ),
   };
 
 export class WalletInternalProxy {

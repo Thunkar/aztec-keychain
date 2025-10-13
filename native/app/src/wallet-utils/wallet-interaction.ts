@@ -1,6 +1,7 @@
 import type { FieldsOf } from "@aztec/aztec.js";
 import { optional } from "@aztec/foundation/schemas";
 import { serializeToBuffer, BufferReader } from "@aztec/foundation/serialize";
+import { jsonStringify } from "@aztec/foundation/json-rpc";
 
 import { z } from "zod";
 
@@ -102,5 +103,11 @@ export class WalletInteraction<T extends WalletInteractionType> {
       reader.readString(),
       reader.readString()
     );
+  }
+}
+
+export class WalletUpdateEvent extends CustomEvent<string> {
+  constructor(content: WalletInteraction<any>) {
+    super("wallet-update", { detail: jsonStringify(content) });
   }
 }

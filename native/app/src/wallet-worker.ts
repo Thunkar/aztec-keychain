@@ -9,7 +9,6 @@ import type { MessagePortMain } from "electron";
 import {
   ExternalWallet,
   InternalWallet,
-  type AuthorizationResponse,
 } from "./wallet-utils/native-wallet.ts";
 import { InternalWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
 import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
@@ -23,6 +22,7 @@ import { z } from "zod";
 import { homedir } from "node:os";
 import { inspect } from "node:util";
 import type { PromiseWithResolvers } from "@aztec/foundation/promise";
+import type { AuthorizationResponse } from "./wallet-utils/authorization.ts";
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
@@ -115,14 +115,16 @@ async function init(
         node,
         db,
         pendingAuthorizations,
-        appId
+        appId,
+        chainInfo
       );
       const internalWallet = new InternalWallet(
         pxe,
         node,
         db,
         pendingAuthorizations,
-        appId
+        appId,
+        chainInfo
       );
 
       // Wire up events from both wallets to internal port

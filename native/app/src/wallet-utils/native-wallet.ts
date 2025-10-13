@@ -7,6 +7,7 @@ import {
   getContractInstanceFromInstantiationParams,
   type AztecNode,
   type Aliased,
+  type ChainInfo,
 } from "@aztec/aztec.js";
 import {
   ExecutionPayload,
@@ -27,41 +28,20 @@ import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { type PXE } from "@aztec/pxe/server";
 import { WalletDB, type AccountType } from "./wallet_db";
 import type { DefaultAccountEntrypointOptions } from "@aztec/entrypoints/account";
-import { jsonStringify } from "@aztec/foundation/json-rpc";
 import {
   WalletInteraction,
+  WalletUpdateEvent,
   type WalletInteractionType,
 } from "./wallet-interaction";
 import {
   promiseWithResolvers,
   type PromiseWithResolvers,
 } from "@aztec/foundation/promise";
-
-export class WalletUpdateEvent extends CustomEvent<string> {
-  constructor(content: WalletInteraction<any>) {
-    super("wallet-update", { detail: jsonStringify(content) });
-  }
-}
-
-export type AuthorizationRequest = {
-  id: string;
-  appId: string;
-  method: string;
-  params: any;
-  timestamp: number;
-};
-
-export type AuthorizationResponse = {
-  id: string;
-  approved: boolean;
-  appId: string;
-};
-
-export class AuthorizationRequestEvent extends CustomEvent<string> {
-  constructor(content: AuthorizationRequest) {
-    super("authorization-request", { detail: jsonStringify(content) });
-  }
-}
+import {
+  AuthorizationRequestEvent,
+  type AuthorizationRequest,
+  type AuthorizationResponse,
+} from "./authorization";
 
 export class ExternalWallet extends BaseWallet implements EventTarget {
   private eventEmitter = new EventTarget();
@@ -74,9 +54,14 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       string,
       PromiseWithResolvers<AuthorizationResponse>
     >,
-    protected appId: string
+    protected appId: string,
+    protected chainInfo: ChainInfo
   ) {
     super(pxe, node);
+  }
+
+  override getChainInfo(): Promise<ChainInfo> {
+    return Promise.resolve(this.chainInfo);
   }
 
   dispatchEvent(event: Event): boolean {
