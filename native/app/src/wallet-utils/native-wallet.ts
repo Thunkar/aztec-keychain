@@ -409,11 +409,6 @@ export class InternalWallet extends ExternalWallet {
     );
   }
 
-  // Internal-only method: Get account with full details
-  async getAccountDetails(addressOrAlias: AztecAddress | string) {
-    return this.db.retrieveAccount(addressOrAlias);
-  }
-
   // Internal-only method: Delete account
   async deleteAccount(address: AztecAddress) {
     await this.db.deleteAccount(address);
@@ -422,22 +417,5 @@ export class InternalWallet extends ExternalWallet {
   // Internal-only: Get all interactions (unfiltered)
   getInteractions() {
     return this.db.listInteractions();
-  }
-
-  // Internal-only: Direct access to store account metadata
-  async storeAccountMetadata(
-    aliasOrAddress: AztecAddress | string,
-    metadataKey: string,
-    metadata: Buffer
-  ) {
-    return this.db.storeAccountMetadata(aliasOrAddress, metadataKey, metadata);
-  }
-
-  // Internal-only: Retrieve account metadata
-  async retrieveAccountMetadata(
-    aliasOrAddress: AztecAddress | string,
-    metadataKey: string
-  ) {
-    return this.db.retrieveAccountMetadata(aliasOrAddress, metadataKey);
   }
 }

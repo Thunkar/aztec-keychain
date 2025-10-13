@@ -11,7 +11,7 @@ import { QRDialog } from "./QRDialog";
 import type { Aliased, AztecAddress } from "@aztec/aztec.js";
 
 interface AccountBoxProps {
-  account: Aliased<AztecAddress>;
+  account: Aliased<AztecAddress> & { type: string };
   QRButton?: boolean;
 }
 
@@ -37,6 +37,19 @@ export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
         >
           {account.item ? addressToShortStr(account.item) : "Uninitialized"}
         </Typography>
+        <Typography
+          variant="overline"
+          sx={{
+            color: "text.secondary",
+            fontSize: "0.8rem",
+            textTransform: "unset",
+            marginLeft: "0.5rem",
+            marginRight: "0.5rem",
+            lineHeight: "3.5rem",
+          }}
+        >
+          ({account.type})
+        </Typography>
         {QRButton && account.item && (
           <IconButton onClick={() => setOpenQR(true)}>
             <QrCode />
@@ -48,7 +61,7 @@ export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
         <QRDialog
           open={openQR}
           onClose={() => setOpenQR(false)}
-          address={account.item!}
+          address={account.item!.toString()}
         />
       )}
     </Box>

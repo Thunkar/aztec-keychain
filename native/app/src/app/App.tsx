@@ -35,7 +35,7 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSection, setCurrentSection] = useState<MenuSection>("accounts");
 
-  const [events, setEvents] = useState<
+  const [interactions, setInteractions] = useState<
     WalletInteraction<WalletInteractionType>[]
   >([]);
 
@@ -47,13 +47,13 @@ export function App() {
 
   const loadInteractions = async () => {
     const interactions = await walletAPI.getInteractions();
-    setEvents(interactions);
+    setInteractions(interactions);
   };
 
   useEffect(() => {
     loadInteractions();
     walletAPI.onWalletUpdate((interaction) => {
-      setEvents((prevEvents) => {
+      setInteractions((prevEvents) => {
         // Deduplicate by ID to prevent React strict mode duplicates
         const eventsMap = new Map(prevEvents.map((e) => [e.id, e]));
         eventsMap.set(interaction.id, interaction);
@@ -265,7 +265,7 @@ export function App() {
           </Typography>
         </Box>
         <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
-          <InteractionsList interactions={events} />
+          <InteractionsList interactions={interactions} />
         </Box>
       </Box>
 
