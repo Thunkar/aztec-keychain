@@ -1,4 +1,4 @@
-import { schemaHasMethod } from "@aztec/foundation/schemas";
+import { schemaHasMethod, type Fr } from "@aztec/foundation/schemas";
 import {
   InternalWalletInterfaceSchema,
   type InternalWalletInterface,
@@ -6,15 +6,18 @@ import {
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 
 export class WalletApi {
-  private static instance: WalletApi;
-
-  private constructor() {
+  private constructor(chainId: Fr, version: Fr) {
+    const safeCallback = (callback: any) => (stringifiedEvent: any) => {
+      const event = JSON.parse(stringifiedEvent.content);
+      callback(event);
+    };
     return new Proxy(
       {},
       {
         get: (_, prop) => {
           if (schemaHasMethod(InternalWalletInterfaceSchema, prop.toString())) {
             return async (...args: any[]) => {
+              args.unshift(chainId, version);
               const safeArgs = jsonStringify(args);
               const result = await window.walletAPI[prop](safeArgs);
               return InternalWalletInterfaceSchema[
@@ -25,19 +28,13 @@ export class WalletApi {
             };
           } else if (prop.toString() === "onWalletUpdate") {
             return (callback: any) => {
-              const safeCallback = (stringifiedEvent: any) => {
-                const event = JSON.parse(stringifiedEvent.content);
-                callback(event);
-              };
-              return window.walletAPI.onWalletUpdate(safeCallback);
+              return window.walletAPI.onWalletUpdate(safeCallback(callback));
             };
           } else if (prop.toString() === "onAuthorizationRequest") {
             return (callback: any) => {
-              const safeCallback = (stringifiedEvent: any) => {
-                const event = JSON.parse(stringifiedEvent.content);
-                callback(event);
-              };
-              return window.walletAPI.onAuthorizationRequest(safeCallback);
+              return window.walletAPI.onAuthorizationRequest(
+                safeCallback(callback)
+              );
             };
           } else {
             throw new Error("Invalid method");
@@ -47,10 +44,7 @@ export class WalletApi {
     ) as unknown as InternalWalletInterface;
   }
 
-  static getInstance() {
-    if (!WalletApi.instance) {
-      WalletApi.instance = new WalletApi();
-    }
-    return WalletApi.instance as InternalWalletInterface;
+  static create(chainId: Fr, version: Fr): InternalWalletInterface {
+    return new WalletApi(chainId, version) as InternalWalletInterface;
   }
 }

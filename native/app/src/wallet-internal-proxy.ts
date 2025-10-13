@@ -86,7 +86,7 @@ export class WalletInternalProxy {
   private internalEventCallback!: OnWalletUpdateListener;
   private authRequestCallback!: OnAuthorizationRequestListener;
 
-  private constructor(private port: MessagePortMain) {}
+  private constructor(private internalPort: MessagePortMain) {}
 
   public onWalletUpdate(callback: OnWalletUpdateListener) {
     this.internalEventCallback = callback;
@@ -96,9 +96,9 @@ export class WalletInternalProxy {
     this.authRequestCallback = callback;
   }
 
-  static create(port: MessagePortMain) {
-    const wallet = new WalletInternalProxy(port);
-    port.on("message", async (event) => {
+  static create(internalPort: MessagePortMain) {
+    const wallet = new WalletInternalProxy(internalPort);
+    internalPort.on("message", async (event) => {
       const { type, content } = event.data;
 
       // Handle typed events
@@ -127,7 +127,7 @@ export class WalletInternalProxy {
       }
       wallet.inFlight.delete(messageId);
     });
-    port.start();
+    internalPort.start();
     return new Proxy(wallet, {
       get: (target, prop) => {
         if (schemaHasMethod(InternalWalletInterfaceSchema, prop.toString())) {
@@ -152,19 +152,16 @@ export class WalletInternalProxy {
     args: any[];
   }) {
     const messageId = globalThis.crypto.randomUUID();
-    const chainInfo: ChainInfo = {
-      chainId: new Fr(31337),
-      version: new Fr(878863971),
-    };
     const appId = "this";
+    const [chainId, version, ...originaArgs] = args;
     const message = {
       type,
-      args,
+      args: originaArgs,
       messageId,
       appId,
-      chainInfo: jsonStringify(chainInfo),
+      chainInfo: { chainId, version },
     };
-    this.port.postMessage(message);
+    this.internalPort.postMessage(message);
     const { promise, resolve, reject } = promiseWithResolvers<any>();
     this.inFlight.set(messageId, { promise, resolve, reject });
     return promise;

@@ -11,6 +11,7 @@ import { colors } from "./styles.js";
 import { App } from "./app/App.js";
 import { WalletApi } from "./app/utils/wallet-api.js";
 import type { InternalWalletInterface } from "./wallet-internal-proxy.js";
+import { Fr } from "@aztec/aztec.js";
 
 const themeOptions: ThemeOptions = {
   palette: {
@@ -37,7 +38,7 @@ export const WalletContext = createContext<{
 }>({ walletAPI: null! });
 
 function Root() {
-  const walletAPI = WalletApi.getInstance();
+  const walletAPI = WalletApi.create(new Fr(31337), new Fr(878863971));
   const initialContext = {
     walletAPI,
   };

@@ -5,7 +5,6 @@ import type {
   WalletInteraction,
   WalletInteractionType,
 } from "./wallet-utils/wallet-interaction";
-import type { AuthorizationResponse } from "./wallet-utils/native-wallet";
 
 contextBridge.exposeInMainWorld("walletAPI", {
   getTxReceipt(stringifiedArgs: string): Promise<TxReceipt> {
@@ -14,11 +13,11 @@ contextBridge.exposeInMainWorld("walletAPI", {
   registerSender(stringifiedArgs: string): Promise<AztecAddress> {
     return ipcRenderer.invoke("registerSender", stringifiedArgs);
   },
-  getSenders(): Promise<Aliased<AztecAddress>[]> {
-    return ipcRenderer.invoke("getSenders");
+  getSenders(stringifiedArgs: string): Promise<Aliased<AztecAddress>[]> {
+    return ipcRenderer.invoke("getSenders", stringifiedArgs);
   },
-  getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    return ipcRenderer.invoke("getAccounts");
+  getAccounts(stringifiedArgs: string): Promise<Aliased<AztecAddress>[]> {
+    return ipcRenderer.invoke("getAccounts", stringifiedArgs);
   },
   createAccount(stringifiedArgs: string): Promise<TxHash> {
     return ipcRenderer.invoke("createAccount", stringifiedArgs);

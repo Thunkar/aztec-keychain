@@ -240,7 +240,7 @@ async function main() {
         if (!messageId) {
           return;
         }
-        const parsedChainInfo = ChainInfoSchema.parse(JSON.parse(chainInfo));
+        const parsedChainInfo = ChainInfoSchema.parse(chainInfo);
         userLog.debug("Received internal message:", {
           type,
           messageId,
@@ -251,8 +251,9 @@ async function main() {
 
         // If this is an authorization response, it originated from an app, but
         // was handled interally. Recover the original app from the args.
-        console.log(args);
         const appId =
+          // This is sligthly ugly since we're takinga advantage of the fact that
+          // we know the shape of the args for this specific method.
           type === "resolveAuthorization" && args[0].appId !== "this"
             ? args[0].appId
             : originalAppId;
