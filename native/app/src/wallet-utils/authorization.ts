@@ -12,6 +12,8 @@ export type AuthorizationResponse = {
   id: string;
   approved: boolean;
   appId: string;
+  // Optional data returned from authorization (e.g., selected accounts, metadata)
+  data?: any;
 };
 
 export class AuthorizationRequestEvent extends CustomEvent<string> {

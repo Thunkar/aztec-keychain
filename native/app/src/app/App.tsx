@@ -17,6 +17,7 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import { InteractionsList } from "./components/InteractionsList.tsx";
 import { AccountsManager } from "./components/AccountsManager.tsx";
+import { AuthorizeAccountsDialog } from "./components/AuthorizeAccountsDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {
@@ -77,12 +78,13 @@ export function App() {
     setMenuOpen(false);
   };
 
-  const handleAuthApprove = () => {
+  const handleAuthApprove = (data?: any) => {
     if (pendingAuth) {
       walletAPI.resolveAuthorization({
         id: pendingAuth.id,
         approved: true,
-        appId: pendingAuth.appId, // Include the appId of the dApp
+        appId: pendingAuth.appId,
+        data,
       });
       setPendingAuth(null);
     }
@@ -93,7 +95,7 @@ export function App() {
       walletAPI.resolveAuthorization({
         id: pendingAuth.id,
         approved: false,
-        appId: pendingAuth.appId, // Include the appId of the dApp
+        appId: pendingAuth.appId,
       });
       setPendingAuth(null);
     }
@@ -270,45 +272,52 @@ export function App() {
       </Box>
 
       {/* Authorization Dialog */}
-      {pendingAuth && (
-        <Dialog open={true} maxWidth="sm" fullWidth>
-          <DialogTitle>Authorization Request</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              App <strong>{pendingAuth.appId}</strong> requests:
-            </Typography>
-            <Typography variant="h6" gutterBottom>
-              {pendingAuth.method}
-            </Typography>
-            <Box
-              sx={{
-                mt: 2,
-                p: 2,
-                bgcolor: "background.default",
-                borderRadius: 1,
-                maxHeight: 300,
-                overflow: "auto",
-              }}
-            >
-              <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                {JSON.stringify(pendingAuth.params, null, 2)}
-              </pre>
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleAuthDeny} color="error">
-              Deny
-            </Button>
-            <Button
-              onClick={() => handleAuthApprove()}
-              color="primary"
-              variant="contained"
-            >
-              Approve
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+      {pendingAuth &&
+        (pendingAuth.method === "getAccounts" ? (
+          <AuthorizeAccountsDialog
+            request={pendingAuth}
+            onApprove={handleAuthApprove}
+            onDeny={handleAuthDeny}
+          />
+        ) : (
+          <Dialog open={true} maxWidth="sm" fullWidth>
+            <DialogTitle>Authorization Request</DialogTitle>
+            <DialogContent>
+              <Typography variant="body1" gutterBottom>
+                App <strong>{pendingAuth.appId}</strong> requests:
+              </Typography>
+              <Typography variant="h6" gutterBottom>
+                {pendingAuth.method}
+              </Typography>
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 2,
+                  bgcolor: "background.default",
+                  borderRadius: 1,
+                  maxHeight: 300,
+                  overflow: "auto",
+                }}
+              >
+                <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                  {JSON.stringify(pendingAuth.params, null, 2)}
+                </pre>
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleAuthDeny} color="error">
+                Deny
+              </Button>
+              <Button
+                onClick={() => handleAuthApprove()}
+                color="primary"
+                variant="contained"
+              >
+                Approve
+              </Button>
+            </DialogActions>
+          </Dialog>
+        ))}
     </Box>
   );
 }

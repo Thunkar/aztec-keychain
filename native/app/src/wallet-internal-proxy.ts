@@ -79,7 +79,12 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
     resolveAuthorization: z
       .function()
       .args(
-        z.object({ id: z.string(), approved: z.boolean(), appId: z.string() })
+        z.object({
+          id: z.string(),
+          approved: z.boolean(),
+          appId: z.string(),
+          data: z.any().optional(),
+        })
       ),
   };
 

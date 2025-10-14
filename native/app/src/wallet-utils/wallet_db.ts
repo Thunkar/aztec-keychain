@@ -5,6 +5,7 @@ import {
   WalletInteraction,
   type WalletInteractionType,
 } from "./wallet-interaction";
+import { jsonStringify } from "@aztec/foundation/json-rpc";
 
 export const AccountTypes = [
   "schnorr",
@@ -19,6 +20,7 @@ export class WalletDB {
     private aliases: AztecAsyncMap<string, Buffer>,
     private bridgedFeeJuice: AztecAsyncMap<string, Buffer>,
     private interactions: AztecAsyncMap<string, Buffer>,
+    private authorizations: AztecAsyncMap<string, Buffer>,
     private userLog: LogFn
   ) {}
 
@@ -27,11 +29,13 @@ export class WalletDB {
     const aliases = store.openMap<string, Buffer>("aliases");
     const bridgedFeeJuice = store.openMap<string, Buffer>("bridgedFeeJuice");
     const interactions = store.openMap<string, Buffer>("interactions");
+    const authorizations = store.openMap<string, Buffer>("authorizations");
     return new WalletDB(
       accounts,
       aliases,
       bridgedFeeJuice,
       interactions,
+      authorizations,
       userLog
     );
   }
@@ -193,7 +197,10 @@ export class WalletDB {
     const result = [];
     for await (const [alias, item] of this.aliases.entriesAsync()) {
       if (alias.startsWith("accounts:")) {
-        result.push({ alias, item: AztecAddress.fromString(item.toString()) });
+        result.push({
+          alias: alias.replace("accounts:", ""),
+          item: AztecAddress.fromString(item.toString()),
+        });
       }
     }
     return result;
@@ -248,5 +255,28 @@ export class WalletDB {
       result.push(WalletInteraction.fromBuffer(item));
     }
     return result;
+  }
+
+  async storePersistentAuthorization(
+    appId: string,
+    method: string,
+    data: any,
+    log: LogFn = this.userLog
+  ) {
+    const key = `${appId}:${method}`;
+    await this.authorizations.set(key, Buffer.from(jsonStringify(data)));
+    log(`Persistent authorization stored for appId ${appId}, method ${method}`);
+  }
+
+  async retrievePersistentAuthorization(
+    appId: string,
+    method: string
+  ): Promise<any | undefined> {
+    const key = `${appId}:${method}`;
+    const result = await this.authorizations.getAsync(key);
+    if (!result) {
+      return undefined;
+    }
+    return JSON.parse(result.toString());
   }
 }

@@ -22,7 +22,10 @@ import { z } from "zod";
 import { homedir } from "node:os";
 import { inspect } from "node:util";
 import type { PromiseWithResolvers } from "@aztec/foundation/promise";
-import type { AuthorizationResponse } from "./wallet-utils/authorization.ts";
+import type {
+  AuthorizationRequest,
+  AuthorizationResponse,
+} from "./wallet-utils/authorization.ts";
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
@@ -106,7 +109,10 @@ async function init(
 
       const pendingAuthorizations = new Map<
         string,
-        PromiseWithResolvers<AuthorizationResponse>
+        {
+          promise: PromiseWithResolvers<AuthorizationResponse>;
+          request: AuthorizationRequest;
+        }
       >();
 
       // Create both wallet instances sharing the same db, pxe and authorization logic

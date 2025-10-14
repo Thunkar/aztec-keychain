@@ -52,7 +52,10 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     protected db: WalletDB,
     protected pendingAuthorizations: Map<
       string,
-      PromiseWithResolvers<AuthorizationResponse>
+      {
+        promise: PromiseWithResolvers<AuthorizationResponse>;
+        request: AuthorizationRequest;
+      }
     >,
     protected appId: string,
     protected chainInfo: ChainInfo
@@ -94,8 +97,26 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   protected async requestAuthorization(
     method: string,
-    params: any
+    params: any[],
+    persistent = false
   ): Promise<AuthorizationResponse> {
+    // Check for existing persistent authorization
+    if (persistent) {
+      const existingAuth = await this.db.retrievePersistentAuthorization(
+        this.appId,
+        method
+      );
+      if (existingAuth) {
+        // Return stored authorization without prompting user
+        return {
+          id: crypto.randomUUID(),
+          approved: true,
+          appId: this.appId,
+          data: existingAuth,
+        };
+      }
+    }
+
     const authRequest: AuthorizationRequest = {
       id: crypto.randomUUID(),
       appId: this.appId,
@@ -104,19 +125,27 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       timestamp: Date.now(),
     };
 
-    const { promise, resolve } = promiseWithResolvers<AuthorizationResponse>();
+    const responseHandle = promiseWithResolvers<AuthorizationResponse>();
     this.pendingAuthorizations.set(authRequest.id, {
-      promise,
-      resolve,
-      reject: () => {},
+      promise: responseHandle,
+      request: authRequest,
     });
 
     const event = new AuthorizationRequestEvent(authRequest);
     this.dispatchEvent(event);
 
-    const response = await promise;
+    const response = await responseHandle.promise;
     if (!response.approved) {
       throw new Error(`User denied ${method} request`);
+    }
+
+    if (persistent && response.data) {
+      // Store the authorization for future use
+      await this.db.storePersistentAuthorization(
+        this.appId,
+        method,
+        response.data
+      );
     }
 
     return response;
@@ -125,7 +154,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   resolveAuthorization(response: AuthorizationResponse) {
     const pending = this.pendingAuthorizations.get(response.id);
     if (pending) {
-      pending.resolve(response);
+      pending.promise.resolve(response);
       this.pendingAuthorizations.delete(response.id);
     }
   }
@@ -205,25 +234,34 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestAuthorization("getAccounts", {});
-    return this.db.listAccounts();
+    const response = await this.requestAuthorization("getAccounts", [], true);
+    // Return the authorized accounts with their (potentially overridden) aliases
+    if (!response.data || !response.data.accounts) {
+      throw new Error("Authorization response missing account data");
+    }
+
+    const { accounts } = response.data;
+    return accounts.map((acc: any) => ({
+      alias: acc.alias,
+      item: AztecAddress.fromString(acc.item),
+    }));
   }
 
   override async registerSender(
     address: AztecAddress,
     alias: string
   ): Promise<AztecAddress> {
-    await this.requestAuthorization("registerSender", {
-      address: address.toString(),
+    await this.requestAuthorization("registerSender", [
+      address.toString(),
       alias,
-    });
+    ]);
 
     await this.db.storeSender(address, alias);
     return this.pxe.registerSender(address);
   }
 
   override async getSenders(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestAuthorization("getSenders", {});
+    await this.requestAuthorization("getSenders", []);
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -267,9 +305,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    await this.requestAuthorization("simulateTx", {
-      from: opts.from.toString(),
-    });
+    await this.requestAuthorization("simulateTx", [executionPayload, opts]);
 
     const interaction = WalletInteraction.from({
       type: "simulateTx",
