@@ -18,6 +18,7 @@ import Button from "@mui/material/Button";
 import { InteractionsList } from "./components/InteractionsList.tsx";
 import { AccountsManager } from "./components/AccountsManager.tsx";
 import { AuthorizeAccountsDialog } from "./components/AuthorizeAccountsDialog.tsx";
+import { AuthorizeContractDialog } from "./components/AuthorizeContractDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {
@@ -277,6 +278,12 @@ export function App() {
           <AuthorizeAccountsDialog
             request={pendingAuth}
             onApprove={handleAuthApprove}
+            onDeny={handleAuthDeny}
+          />
+        ) : pendingAuth.method === "registerContract" ? (
+          <AuthorizeContractDialog
+            request={pendingAuth}
+            onApprove={() => handleAuthApprove()}
             onDeny={handleAuthDeny}
           />
         ) : (

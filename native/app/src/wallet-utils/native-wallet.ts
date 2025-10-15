@@ -8,7 +8,13 @@ import {
   type AztecNode,
   type Aliased,
   type ChainInfo,
+  Contract,
 } from "@aztec/aztec.js";
+import type { ContractArtifact } from "@aztec/stdlib/abi";
+import type {
+  ContractInstanceWithAddress,
+  ContractInstantiationData,
+} from "@aztec/stdlib/contract";
 import {
   ExecutionPayload,
   mergeExecutionPayloads,
@@ -42,6 +48,12 @@ import {
   type AuthorizationRequest,
   type AuthorizationResponse,
 } from "./authorization";
+
+// TODO: remove this once aztec.js exports it
+export type ContractInstanceAndArtifact = Pick<
+  Contract,
+  "artifact" | "instance"
+>;
 
 export class ExternalWallet extends BaseWallet implements EventTarget {
   private eventEmitter = new EventTarget();
@@ -245,6 +257,50 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       alias: acc.alias,
       item: AztecAddress.fromString(acc.item),
     }));
+  }
+
+  override async registerContract(
+    instanceData:
+      | AztecAddress
+      | ContractInstanceWithAddress
+      | ContractInstantiationData
+      | ContractInstanceAndArtifact,
+    artifact?: ContractArtifact,
+    secretKey?: Fr
+  ): Promise<ContractInstanceWithAddress> {
+    // Determine the contract address to check
+    let addressToCheck: AztecAddress;
+    if (instanceData instanceof AztecAddress) {
+      addressToCheck = instanceData;
+    } else if ("address" in instanceData) {
+      addressToCheck = instanceData.address;
+    } else if ("instance" in instanceData) {
+      addressToCheck = instanceData.instance.address;
+    } else {
+      // ContractInstantiationData - compute the address
+      const instance = await getContractInstanceFromInstantiationParams(
+        artifact!,
+        instanceData
+      );
+      addressToCheck = instance.address;
+    }
+
+    // Check if contract already exists in PXE
+    const metadata = await this.getContractMetadata(addressToCheck);
+    if (metadata.contractInstance) {
+      // Contract already registered, no need to prompt
+      return metadata.contractInstance;
+    }
+
+    // Request authorization with persistent storage
+    await this.requestAuthorization("registerContract", [
+      {
+        address: addressToCheck.toString(),
+      },
+    ]);
+
+    // Register the contract with PXE
+    return await super.registerContract(instanceData, artifact, secretKey);
   }
 
   override async registerSender(

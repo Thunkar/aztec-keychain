@@ -26,6 +26,7 @@ import type {
   AuthorizationRequest,
   AuthorizationResponse,
 } from "./wallet-utils/authorization.ts";
+import type { Logger } from "pino";
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
@@ -34,7 +35,7 @@ const ChainInfoSchema = z.object({
 
 const chainInfoToNodeURL = {
   31337: {
-    878863971: "http://localhost:8080",
+    809002548: "http://localhost:8080",
   },
   1115111: {
     1714840162: "https://rpc.testnet.aztec-labs.com/",
@@ -175,7 +176,8 @@ const handleEvent = async (
   schema: typeof WalletSchema | typeof InternalWalletInterfaceSchema,
   type: string,
   messageId: string,
-  args: any[]
+  args: any[],
+  userLog: Logger
 ) => {
   if (!schemaHasMethod(schema, type)) {
     throw new Error(`Unknown method: ${type}`);
@@ -188,7 +190,8 @@ const handleEvent = async (
   let error;
   try {
     result = await wallet[type](...sanitizedArgs);
-  } catch (err) {
+  } catch (err: any) {
+    userLog.error(`Error handling ${type}: ${err.message}`);
     error = err;
   }
   port.postMessage({
@@ -234,7 +237,8 @@ async function main() {
           WalletSchema,
           type,
           messageId,
-          args
+          args,
+          userLog
         );
       });
       internalPort.on("message", async (event) => {
@@ -284,7 +288,8 @@ async function main() {
           InternalWalletInterfaceSchema,
           type,
           messageId,
-          args
+          args,
+          userLog
         );
       });
       externalPort.start();
