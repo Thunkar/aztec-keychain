@@ -9,8 +9,15 @@ import {
   type Aliased,
   type ChainInfo,
   Contract,
+  type SendOptions,
+  type UserFeeOptions,
+  SponsoredFeePaymentMethod,
+  type FeeOptions,
 } from "@aztec/aztec.js";
-import type { ContractArtifact } from "@aztec/stdlib/abi";
+import {
+  FunctionType,
+  type ContractArtifact,
+} from "@aztec/stdlib/abi";
 import type {
   ContractInstanceWithAddress,
   ContractInstantiationData,
@@ -25,7 +32,11 @@ import {
   StubAccountContractArtifact,
   createStubAccount,
 } from "@aztec/accounts/stub";
-import type { TxSimulationResult } from "@aztec/stdlib/tx";
+import {
+  collectOffchainEffects,
+  type TxProvingResult,
+  type TxSimulationResult,
+} from "@aztec/stdlib/tx";
 import {
   EcdsaKAccountContract,
   EcdsaRAccountContract,
@@ -33,7 +44,10 @@ import {
 import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { type PXE } from "@aztec/pxe/server";
 import { WalletDB, type AccountType } from "./wallet_db";
-import type { DefaultAccountEntrypointOptions } from "@aztec/entrypoints/account";
+import {
+  AccountFeePaymentMethodOptions,
+  type DefaultAccountEntrypointOptions,
+} from "@aztec/entrypoints/account";
 import {
   WalletInteraction,
   WalletUpdateEvent,
@@ -48,6 +62,9 @@ import {
   type AuthorizationRequest,
   type AuthorizationResponse,
 } from "./authorization";
+import { GasSettings } from "@aztec/stdlib/gas";
+import { prepareForFeePayment } from "./sponsoredFPC";
+import { CallAuthorizationFormatter } from "./call-authorization-formatter";
 
 // TODO: remove this once aztec.js exports it
 export type ContractInstanceAndArtifact = Pick<
@@ -73,6 +90,40 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     protected chainInfo: ChainInfo
   ) {
     super(pxe, node);
+  }
+
+  override async getDefaultFeeOptions(
+    from: AztecAddress,
+    userFeeOptions: UserFeeOptions | undefined
+  ): Promise<FeeOptions> {
+    const maxFeesPerGas =
+      userFeeOptions?.gasSettings?.maxFeesPerGas ??
+      (await this.aztecNode.getCurrentBaseFees()).mul(1 + this.baseFeePadding);
+    let walletFeePaymentMethod;
+    let accountFeePaymentMethodOptions;
+    // The transaction does not include a fee payment method, so we set a default
+    if (!userFeeOptions?.embeddedPaymentMethodFeePayer) {
+      walletFeePaymentMethod = await prepareForFeePayment(this);
+      accountFeePaymentMethodOptions = AccountFeePaymentMethodOptions.EXTERNAL;
+    } else {
+      // The transaction includes fee payment method, so we check if we are the fee payer for it
+      // (this can only happen if the embedded payment method is FeeJuiceWithClaim)
+      accountFeePaymentMethodOptions = from.equals(
+        userFeeOptions.embeddedPaymentMethodFeePayer
+      )
+        ? AccountFeePaymentMethodOptions.FEE_JUICE_WITH_CLAIM
+        : AccountFeePaymentMethodOptions.EXTERNAL;
+    }
+    const gasSettings: GasSettings = GasSettings.default({
+      ...userFeeOptions?.gasSettings,
+      maxFeesPerGas,
+    });
+    this.log.debug(`Using L2 gas settings`, gasSettings);
+    return {
+      gasSettings,
+      walletFeePaymentMethod,
+      accountFeePaymentMethodOptions,
+    };
   }
 
   override getChainInfo(): Promise<ChainInfo> {
@@ -332,7 +383,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   }
 
   async getFakeAccountDataFor(address: AztecAddress) {
-    const nodeInfo = await this.pxe.getNodeInfo();
+    const chainInfo = await this.getChainInfo();
     const originalAccount = await this.getAccountFromAddress(address);
     const originalAddress = originalAccount.getCompleteAddress();
     const { contractInstance } = await this.pxe.getContractMetadata(
@@ -343,7 +394,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         `No contract instance found for address: ${originalAddress.address}`
       );
     }
-    const stubAccount = createStubAccount(originalAddress, nodeInfo);
+    const stubAccount = createStubAccount(originalAddress, chainInfo);
     const instance = await getContractInstanceFromInstantiationParams(
       StubAccountContractArtifact,
       {
@@ -357,11 +408,85 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     };
   }
 
+  override async proveTx(
+    exec: ExecutionPayload,
+    opts: SendOptions
+  ): Promise<TxProvingResult> {
+    const interaction = WalletInteraction.from({
+      type: "proveTx",
+      status: "SIMULATING",
+      complete: false,
+      title: `Proving transaction`,
+    });
+    await this.storeAndEmitInteraction(interaction);
+    const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
+
+    const simulationResult = await this.simulateTx(exec, opts);
+
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "COMPUTING REQUIRED AUTHORIZATIONS" })
+    );
+
+    const offChainEffects = collectOffchainEffects(
+      simulationResult.privateExecutionResult
+    );
+
+    // Parse call authorizations from offchain effects
+    const formatter = new CallAuthorizationFormatter(this.pxe, this.db);
+    const callAuthorizations = await Promise.all(
+      offChainEffects.map((effect) => formatter.parseCallAuthorizationFromEffect(effect))
+    );
+
+    const filteredCallAuthorizations = callAuthorizations.filter(Boolean);
+
+    // Format for display
+    const readableCallAuthorizations = await formatter.formatCallAuthorizationsForDisplay(
+      filteredCallAuthorizations
+    );
+
+    const authWitnesses = await Promise.all(
+      filteredCallAuthorizations.map((auth) =>
+        this.createAuthWit(opts.from, {
+          caller: auth.caller,
+          call: auth.functionCall,
+        })
+      )
+    );
+
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "REQUESTION AUTHORIZATION" })
+    );
+
+    await this.requestAuthorization(
+      "proveTx",
+      [readableCallAuthorizations, authWitnesses],
+      false
+    );
+
+    exec.authWitnesses.push(...authWitnesses);
+
+    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+      exec,
+      opts.from,
+      fee
+    );
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "PROVING" })
+    );
+
+    const provenTx = await this.pxe.proveTx(txRequest);
+
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "PROVEN", complete: true })
+    );
+    return provenTx;
+  }
+
   override async simulateTx(
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    await this.requestAuthorization("simulateTx", [executionPayload, opts]);
+    //await this.requestAuthorization("simulateTx", [executionPayload, opts]);
 
     const interaction = WalletInteraction.from({
       type: "simulateTx",

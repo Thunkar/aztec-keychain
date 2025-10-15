@@ -140,10 +140,10 @@ export class WalletDB {
     log: LogFn = this.userLog
   ) {
     await this.aliases.set(
-      `accounts:${alias}`,
+      `senders:${alias}`,
       Buffer.from(address.toString())
     );
-    log(`Account stored in database with alias ${alias} as a sender`);
+    log(`Sender stored in database with alias ${alias}`);
   }
 
   async storeAccountMetadata(

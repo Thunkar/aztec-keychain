@@ -10,6 +10,7 @@ import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import ContactsIcon from "@mui/icons-material/Contacts";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -17,8 +18,10 @@ import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import { InteractionsList } from "./components/InteractionsList.tsx";
 import { AccountsManager } from "./components/AccountsManager.tsx";
+import { ContactsManager } from "./components/ContactsManager.tsx";
 import { AuthorizeAccountsDialog } from "./components/AuthorizeAccountsDialog.tsx";
 import { AuthorizeContractDialog } from "./components/AuthorizeContractDialog.tsx";
+import { AuthorizeProveTxDialog } from "./components/AuthorizeProveTxDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {
@@ -31,7 +34,7 @@ const INTERACTIONS_PANEL_WIDTH = 400;
 const MENU_DRAWER_WIDTH = 240;
 const SIDEBAR_WIDTH = 64;
 
-type MenuSection = "accounts";
+type MenuSection = "accounts" | "contacts";
 
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -106,6 +109,8 @@ export function App() {
     switch (currentSection) {
       case "accounts":
         return <AccountsManager />;
+      case "contacts":
+        return <ContactsManager />;
       default:
         return null;
     }
@@ -176,6 +181,19 @@ export function App() {
                 <AccountBalanceWalletIcon />
               </ListItemButton>
             </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={currentSection === "contacts"}
+                onClick={() => handleMenuItemClick("contacts")}
+                sx={{
+                  flexDirection: "column",
+                  py: 2,
+                  minHeight: SIDEBAR_WIDTH,
+                }}
+              >
+                <ContactsIcon />
+              </ListItemButton>
+            </ListItem>
           </List>
         </Box>
 
@@ -210,6 +228,15 @@ export function App() {
                   onClick={() => handleMenuItemClick("accounts")}
                 >
                   <ListItemText primary="Accounts" />
+                </ListItemButton>
+              </ListItem>
+              <ListItem disablePadding>
+                <ListItemButton
+                  sx={{ height: 64 }}
+                  selected={currentSection === "contacts"}
+                  onClick={() => handleMenuItemClick("contacts")}
+                >
+                  <ListItemText primary="Contacts" />
                 </ListItemButton>
               </ListItem>
             </List>
@@ -282,6 +309,12 @@ export function App() {
           />
         ) : pendingAuth.method === "registerContract" ? (
           <AuthorizeContractDialog
+            request={pendingAuth}
+            onApprove={() => handleAuthApprove()}
+            onDeny={handleAuthDeny}
+          />
+        ) : pendingAuth.method === "proveTx" ? (
+          <AuthorizeProveTxDialog
             request={pendingAuth}
             onApprove={() => handleAuthApprove()}
             onDeny={handleAuthDeny}
