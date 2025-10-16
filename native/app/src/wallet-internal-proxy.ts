@@ -1,4 +1,4 @@
-import { Fr, type ChainInfo } from "@aztec/aztec.js";
+import { Fr } from "@aztec/aztec.js";
 import { type Wallet, WalletSchema } from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,
@@ -6,7 +6,6 @@ import {
 } from "@aztec/foundation/promise";
 import { schemaHasMethod } from "@aztec/foundation/schemas";
 import { schemas } from "@aztec/stdlib/schemas";
-import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron/main";
 import { z } from "zod";
 import { type ApiSchemaFor } from "@aztec/stdlib/schemas";
@@ -16,11 +15,11 @@ import type {
   WalletInteractionType,
 } from "./wallet-utils/wallet-interaction";
 import { WalletInteractionSchema } from "./wallet-utils/wallet-interaction";
-import type { InternalAccount } from "./wallet-utils/external-wallet";
 import type {
   AuthorizationRequest,
   AuthorizationResponse,
 } from "./wallet-utils/authorization";
+import type { InternalAccount } from "./wallet-utils/internal-wallet";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];

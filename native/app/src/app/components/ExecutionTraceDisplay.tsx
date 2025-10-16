@@ -12,20 +12,44 @@ import TableRow from "@mui/material/TableRow";
 import CallMadeIcon from "@mui/icons-material/CallMade";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import PublicIcon from "@mui/icons-material/Public";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import type {
   DecodedExecutionTrace,
   ExecutionEvent,
   PrivateCallEvent,
   PublicEnqueueEvent,
 } from "../../wallet-utils/decoding/tx-callstack-decoder";
+import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
 
 interface ExecutionTraceDisplayProps {
   trace: DecodedExecutionTrace;
+  callAuthorizations?: ReadableCallAuthorization[];
 }
 
-function PrivateCallDisplay({ call }: { call: PrivateCallEvent }) {
+// Helper to check if a call requires authorization
+function requiresAuthorization(
+  call: PrivateCallEvent,
+  authorizations?: ReadableCallAuthorization[]
+): boolean {
+  if (!authorizations || authorizations.length === 0) return false;
+
+  return authorizations.some(
+    (auth) =>
+      auth.contract.address === call.contract.address &&
+      auth.function === call.function
+  );
+}
+
+function PrivateCallDisplay({
+  call,
+  authorizations,
+}: {
+  call: PrivateCallEvent;
+  authorizations?: ReadableCallAuthorization[];
+}) {
   const hasNestedEvents = call.nestedEvents.length > 0;
   const hasReturnValues = call.returnValues.length > 0;
+  const needsAuth = requiresAuthorization(call, authorizations);
 
   return (
     <Box
@@ -38,14 +62,14 @@ function PrivateCallDisplay({ call }: { call: PrivateCallEvent }) {
       }}
     >
       <Accordion
-        defaultExpanded={call.depth < 2}
+        defaultExpanded={false}
         sx={{
           bgcolor: "background.default",
           boxShadow: 1,
         }}
       >
         <AccordionSummary
-          expandIcon={hasNestedEvents ? <ExpandMoreIcon /> : null}
+          expandIcon={<ExpandMoreIcon />}
         >
           <Box
             sx={{
@@ -63,6 +87,15 @@ function PrivateCallDisplay({ call }: { call: PrivateCallEvent }) {
             >
               {call.contract.name}.{call.function}()
             </Typography>
+            {needsAuth && (
+              <Chip
+                icon={<VpnKeyIcon />}
+                label="Requires Authorization"
+                size="small"
+                color="warning"
+                variant="filled"
+              />
+            )}
             {call.isStaticCall && (
               <Chip label="static" size="small" variant="outlined" />
             )}
@@ -229,7 +262,11 @@ function PrivateCallDisplay({ call }: { call: PrivateCallEvent }) {
       {hasNestedEvents && (
         <Box sx={{ mt: 1 }}>
           {call.nestedEvents.map((event, i) => (
-            <ExecutionEventDisplay key={i} event={event} />
+            <ExecutionEventDisplay
+              key={i}
+              event={event}
+              authorizations={authorizations}
+            />
           ))}
         </Box>
       )}
@@ -282,15 +319,24 @@ function PublicEnqueueDisplay({ enqueue }: { enqueue: PublicEnqueueEvent }) {
   );
 }
 
-function ExecutionEventDisplay({ event }: { event: ExecutionEvent }) {
+function ExecutionEventDisplay({
+  event,
+  authorizations,
+}: {
+  event: ExecutionEvent;
+  authorizations?: ReadableCallAuthorization[];
+}) {
   if (event.type === "private-call") {
-    return <PrivateCallDisplay call={event} />;
+    return <PrivateCallDisplay call={event} authorizations={authorizations} />;
   } else {
     return <PublicEnqueueDisplay enqueue={event} />;
   }
 }
 
-export function ExecutionTraceDisplay({ trace }: ExecutionTraceDisplayProps) {
+export function ExecutionTraceDisplay({
+  trace,
+  callAuthorizations,
+}: ExecutionTraceDisplayProps) {
   return (
     <Box>
       {/* Private Execution Section */}
@@ -299,7 +345,10 @@ export function ExecutionTraceDisplay({ trace }: ExecutionTraceDisplayProps) {
           Execution trace
         </Typography>
         <Box sx={{ mt: 2 }}>
-          <PrivateCallDisplay call={trace.privateExecution} />
+          <PrivateCallDisplay
+            call={trace.privateExecution}
+            authorizations={callAuthorizations}
+          />
         </Box>
       </Box>
     </Box>

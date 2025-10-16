@@ -1,21 +1,15 @@
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Checkbox from "@mui/material/Checkbox";
 import type { AuthorizationItem } from "../../wallet-utils/authorization";
 
 interface AuthorizeSenderContentProps {
   request: AuthorizationItem;
-  persistent?: boolean;
-  onTogglePersistent?: () => void;
   showAppId?: boolean;
 }
 
 // Reusable content component for displaying registerSender authorization details
 export function AuthorizeSenderContent({
   request,
-  persistent = false,
-  onTogglePersistent,
   showAppId = true,
 }: AuthorizeSenderContentProps) {
   const address = request.params.address || "Unknown";
@@ -65,20 +59,6 @@ export function AuthorizeSenderContent({
         This will allow the app to register this address as a known sender in
         your wallet.
       </Typography>
-
-      {onTogglePersistent && (
-        <Box sx={{ mt: 2 }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={persistent}
-                onChange={onTogglePersistent}
-              />
-            }
-            label="Remember this authorization"
-          />
-        </Box>
-      )}
     </>
   );
 }

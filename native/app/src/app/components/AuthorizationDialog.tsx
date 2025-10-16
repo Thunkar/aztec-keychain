@@ -211,10 +211,6 @@ export function AuthorizationDialog({
                     {item.method === "proveTx" && (
                       <AuthorizeProveTxContent
                         request={item}
-                        persistent={state.persistent}
-                        onTogglePersistent={() =>
-                          handleTogglePersistent(item.id)
-                        }
                         showAppId={false}
                       />
                     )}
@@ -222,10 +218,6 @@ export function AuthorizationDialog({
                     {item.method === "registerContract" && (
                       <AuthorizeContractContent
                         request={item}
-                        persistent={state.persistent}
-                        onTogglePersistent={() =>
-                          handleTogglePersistent(item.id)
-                        }
                         showAppId={false}
                       />
                     )}
@@ -233,10 +225,6 @@ export function AuthorizationDialog({
                     {item.method === "registerSender" && (
                       <AuthorizeSenderContent
                         request={item}
-                        persistent={state.persistent}
-                        onTogglePersistent={() =>
-                          handleTogglePersistent(item.id)
-                        }
                         showAppId={false}
                       />
                     )}
@@ -244,6 +232,10 @@ export function AuthorizationDialog({
                     {item.method === "getAccounts" && (
                       <AuthorizeAccountsContent
                         request={item}
+                        persistent={state.persistent}
+                        onTogglePersistent={() =>
+                          handleTogglePersistent(item.id)
+                        }
                         onAccountsChange={(accounts) => {
                           handleItemDataChange(item.id, { accounts });
                         }}

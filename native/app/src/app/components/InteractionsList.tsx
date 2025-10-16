@@ -18,15 +18,15 @@ interface InteractionsListProps {
 }
 
 const getStatusColor = (status: string, complete: boolean) => {
-  if (complete) return "success";
   if (status.includes("ERROR") || status.includes("FAIL")) return "error";
+  if (complete) return "success";
   return "primary";
 };
 
 const getStatusIcon = (status: string, complete: boolean) => {
-  if (complete) return <CheckCircle fontSize="small" />;
   if (status.includes("ERROR") || status.includes("FAIL"))
     return <ErrorIcon fontSize="small" />;
+  if (complete) return <CheckCircle fontSize="small" />;
   return <Pending fontSize="small" />;
 };
 
@@ -52,7 +52,7 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
   }
 
   return (
-    <List sx={{ width: "100%", heigth: "100%", overflowY: "auto" }}>
+    <List sx={{ width: "100%", height: "100%", overflowY: "auto" }}>
       {interactions
         .slice()
         .reverse()

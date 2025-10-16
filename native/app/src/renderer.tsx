@@ -38,7 +38,7 @@ export const WalletContext = createContext<{
 }>({ walletAPI: null! });
 
 function Root() {
-  const walletAPI = WalletApi.create(new Fr(31337), new Fr(809002548));
+  const walletAPI = WalletApi.create(new Fr(31337), new Fr(1681471542));
   const initialContext = {
     walletAPI,
   };

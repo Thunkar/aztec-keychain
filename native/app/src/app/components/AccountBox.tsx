@@ -1,7 +1,10 @@
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
 import ArrowDropDown from "@mui/icons-material/ArrowDropDown";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CheckIcon from "@mui/icons-material/Check";
 
 import { addressToShortStr, keyToShortStr } from "../utils/format";
 import IconButton from "@mui/material/IconButton";
@@ -17,45 +20,84 @@ interface AccountBoxProps {
 
 export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
   const [openQR, setOpenQR] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (account.item) {
+      await navigator.clipboard.writeText(account.item.toString());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
-    <Box sx={{ width: "100%", margin: 0 }}>
+    <Card
+      sx={{
+        width: "100%",
+        boxShadow: 2,
+        transition: "box-shadow 0.2s, transform 0.2s",
+        "&:hover": {
+          boxShadow: 4,
+          transform: "translateY(-2px)",
+        },
+      }}
+    >
       <Box
         sx={{
           display: "flex",
-          padding: "0.1rem 0.5rem",
+          alignItems: "center",
+          padding: "1rem",
+          gap: 1,
         }}
       >
-        <Typography
-          variant="overline"
-          sx={{
-            fontSize: "0.8rem",
-            textTransform: "unset",
-            marginLeft: "0.5rem",
-            marginRight: "0.5rem",
-            lineHeight: "3.5rem",
-          }}
-        >
-          {account.item ? addressToShortStr(account.item) : "Uninitialized"}
-        </Typography>
-        <Typography
-          variant="overline"
-          sx={{
-            color: "text.secondary",
-            fontSize: "0.8rem",
-            textTransform: "unset",
-            marginLeft: "0.5rem",
-            marginRight: "0.5rem",
-            lineHeight: "3.5rem",
-          }}
-        >
-          ({account.type})
-        </Typography>
-        {QRButton && account.item && (
-          <IconButton onClick={() => setOpenQR(true)}>
-            <QrCode />
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 600,
+              mb: 0.5,
+            }}
+          >
+            {account.alias}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              fontFamily: "monospace",
+              fontSize: "0.75rem",
+              color: "text.secondary",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {account.item ? account.item.toString() : "Uninitialized"}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              fontSize: "0.7rem",
+            }}
+          >
+            {account.type}
+          </Typography>
+        </Box>
+        {account.item && (
+          <IconButton
+            size="small"
+            onClick={handleCopy}
+            sx={{
+              color: copied ? "success.main" : "action.active",
+            }}
+          >
+            {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
           </IconButton>
         )}
-        <div css={{ flexGrow: 1 }}></div>
+        {QRButton && account.item && (
+          <IconButton size="small" onClick={() => setOpenQR(true)}>
+            <QrCode fontSize="small" />
+          </IconButton>
+        )}
       </Box>
       {openQR && account.item && (
         <QRDialog
@@ -64,6 +106,6 @@ export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
           address={account.item!.toString()}
         />
       )}
-    </Box>
+    </Card>
   );
 }

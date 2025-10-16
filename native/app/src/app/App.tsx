@@ -26,6 +26,8 @@ import type {
 } from "../wallet-utils/authorization.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
+const INTERACTIONS_PANEL_MIN_WIDTH = 300;
+const INTERACTIONS_PANEL_MAX_WIDTH = 800;
 const MENU_DRAWER_WIDTH = 240;
 const SIDEBAR_WIDTH = 64;
 
@@ -34,6 +36,8 @@ type MenuSection = "accounts" | "contacts";
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSection, setCurrentSection] = useState<MenuSection>("accounts");
+  const [interactionsPanelWidth, setInteractionsPanelWidth] = useState(INTERACTIONS_PANEL_WIDTH);
+  const [isResizing, setIsResizing] = useState(false);
 
   const [interactions, setInteractions] = useState<
     WalletInteraction<WalletInteractionType>[]
@@ -118,6 +122,36 @@ export function App() {
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth >= INTERACTIONS_PANEL_MIN_WIDTH && newWidth <= INTERACTIONS_PANEL_MAX_WIDTH) {
+        setInteractionsPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   const renderContent = () => {
     switch (currentSection) {
       case "accounts":
@@ -136,6 +170,8 @@ export function App() {
         height: "100%",
         overflow: "hidden",
         width: "100%",
+        cursor: isResizing ? "col-resize" : "default",
+        userSelect: isResizing ? "none" : "auto",
       }}
     >
       {/* Combined Sidebar - Expands when menu opens */}
@@ -293,21 +329,40 @@ export function App() {
       {/* Fixed Right Interactions Panel */}
       <Box
         sx={{
-          width: INTERACTIONS_PANEL_WIDTH,
+          width: interactionsPanelWidth,
           flexShrink: 0,
-          borderLeft: 1,
-          borderColor: "divider",
           display: "flex",
           flexDirection: "column",
           bgcolor: "background.paper",
+          position: "relative",
         }}
       >
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        {/* Resize Handle */}
+        <Box
+          onMouseDown={handleMouseDown}
+          sx={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 4,
+            cursor: "col-resize",
+            bgcolor: "divider",
+            transition: "background-color 0.2s",
+            "&:hover": {
+              bgcolor: "primary.main",
+            },
+            ...(isResizing && {
+              bgcolor: "primary.main",
+            }),
+          }}
+        />
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider", borderLeft: 1 }}>
           <Typography variant="h6" component="h2">
             Interactions
           </Typography>
         </Box>
-        <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
+        <Box sx={{ flexGrow: 1, overflow: "auto", borderLeft: 1, borderColor: "divider" }}>
           <InteractionsList interactions={interactions} />
         </Box>
       </Box>

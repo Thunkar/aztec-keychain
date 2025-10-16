@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { AccountBox } from "./AccountBox.tsx";
 import { WalletContext } from "../../renderer.tsx";
-import type { InternalAccount } from "../../wallet-utils/external-wallet.ts";
+import type { InternalAccount } from "../../wallet-utils/internal-wallet.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 

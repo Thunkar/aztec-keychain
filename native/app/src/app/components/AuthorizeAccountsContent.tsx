@@ -17,12 +17,16 @@ type SelectedAccount = {
 
 interface AuthorizeAccountsContentProps {
   request: AuthorizationItem;
+  persistent?: boolean;
+  onTogglePersistent?: () => void;
   onAccountsChange?: (accounts: any[]) => void;
   showAppId?: boolean;
 }
 
 export function AuthorizeAccountsContent({
   request,
+  persistent = false,
+  onTogglePersistent,
   onAccountsChange,
   showAppId = true,
 }: AuthorizeAccountsContentProps) {
@@ -149,6 +153,17 @@ export function AuthorizeAccountsContent({
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           No accounts available. Please create an account first.
         </Typography>
+      )}
+
+      {onTogglePersistent && (
+        <Box sx={{ mt: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox checked={persistent} onChange={onTogglePersistent} />
+            }
+            label="Remember this authorization"
+          />
+        </Box>
       )}
     </>
   );

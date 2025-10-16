@@ -6,10 +6,7 @@ import {
 } from "@aztec/aztec.js";
 import { ExternalWallet } from "./external-wallet";
 import type { AccountType } from "./wallet_db";
-import type {
-  AuthorizationData,
-  GetAccountsAuthData,
-} from "./authorization";
+import type { AuthorizationData, GetAccountsAuthData } from "./authorization";
 import { WalletInteraction } from "./wallet-interaction";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 
@@ -26,7 +23,7 @@ export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
  */
 export class InternalWallet extends ExternalWallet {
   // Override authorization to always approve instantly
-  protected override async requestAuthorization(
+  protected override async requestSingleAuthorization(
     method: string,
     _params: any,
     _persistent = false

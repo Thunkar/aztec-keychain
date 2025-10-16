@@ -9,8 +9,6 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableRow from "@mui/material/TableRow";
 import Divider from "@mui/material/Divider";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Checkbox from "@mui/material/Checkbox";
 import type { AuthorizationItem } from "../../wallet-utils/authorization";
 import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
 import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
@@ -18,8 +16,6 @@ import { ExecutionTraceDisplay } from "./ExecutionTraceDisplay";
 
 interface AuthorizeProveTxContentProps {
   request: AuthorizationItem;
-  persistent?: boolean;
-  onTogglePersistent?: () => void;
   showAppId?: boolean;
 }
 
@@ -27,8 +23,6 @@ interface AuthorizeProveTxContentProps {
 // Reusable content component for displaying proveTx authorization details
 export function AuthorizeProveTxContent({
   request,
-  persistent = false,
-  onTogglePersistent,
   showAppId = true,
 }: AuthorizeProveTxContentProps) {
   const params = request.params as {
@@ -202,7 +196,10 @@ export function AuthorizeProveTxContent({
         {executionTrace && (
           <>
             <Divider sx={{ my: 3 }} />
-            <ExecutionTraceDisplay trace={executionTrace} />
+            <ExecutionTraceDisplay
+              trace={executionTrace}
+              callAuthorizations={callAuthorizations}
+            />
           </>
         )}
 
@@ -210,20 +207,6 @@ export function AuthorizeProveTxContent({
         By approving, you authorize the app to execute these function calls on
         your behalf.
       </Typography>
-
-      {onTogglePersistent && (
-        <Box sx={{ mt: 2 }}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={persistent}
-                onChange={onTogglePersistent}
-              />
-            }
-            label="Remember this authorization"
-          />
-        </Box>
-      )}
     </>
   );
 }

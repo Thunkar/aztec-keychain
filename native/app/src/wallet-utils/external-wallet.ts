@@ -459,62 +459,77 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       title: `Proving transaction`,
     });
     await this.storeAndEmitInteraction(interaction);
-    const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
 
-    let callAuthorizations;
-    if (!txInformation) {
-      let executionTrace: DecodedExecutionTrace;
+    try {
+      const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
 
-      await this.storeAndEmitInteraction(
-        interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
+      let callAuthorizations: ReadableCallAuthorization[];
+      if (!txInformation) {
+        let executionTrace: DecodedExecutionTrace;
+
+        await this.storeAndEmitInteraction(
+          interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
+        );
+
+        ({ callAuthorizations, executionTrace } = await this.extractTxInformation(
+          exec,
+          opts,
+          interaction
+        ));
+
+        await this.storeAndEmitInteraction(
+          interaction.update({ status: "REQUESTING AUTHORIZATION" })
+        );
+
+        await this.requestSingleAuthorization(
+          "proveTx",
+          {
+            callAuthorizations,
+            executionTrace,
+          },
+          false
+        );
+      } else {
+        callAuthorizations = txInformation.callAuthorizations;
+      }
+
+      const authWitnesses = await Promise.all(
+        callAuthorizations.map((auth) =>
+          this.createAuthWit(opts.from, {
+            caller: auth.rawData.caller,
+            call: auth.rawData.functionCall,
+          })
+        )
       );
 
-      ({ callAuthorizations, executionTrace } = await this.extractTxInformation(
+      exec.authWitnesses.push(...authWitnesses);
+
+      const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
         exec,
-        opts,
-        interaction
-      ));
+        opts.from,
+        fee
+      );
+      await this.storeAndEmitInteraction(
+        interaction.update({ status: "PROVING" })
+      );
+
+      const provenTx = await this.pxe.proveTx(txRequest);
 
       await this.storeAndEmitInteraction(
-        interaction.update({ status: "REQUESTING AUTHORIZATION" })
+        interaction.update({ status: "PROVEN", complete: true })
       );
-
-      await this.requestSingleAuthorization(
-        "proveTx",
-        {
-          callAuthorizations,
-          executionTrace,
-        },
-        false
-      );
-    }
-
-    const authWitnesses = await Promise.all(
-      callAuthorizations.map((auth) =>
-        this.createAuthWit(opts.from, {
-          caller: auth.rawData.caller,
-          call: auth.rawData.functionCall,
+      return provenTx;
+    } catch (error) {
+      // Update interaction to reflect error before rethrowing
+      await this.storeAndEmitInteraction(
+        interaction.update({
+          complete: true,
+          status: "PROVING FAILED",
+          description: error instanceof Error ? error.message : String(error),
         })
-      )
-    );
-
-    exec.authWitnesses.push(...authWitnesses);
-
-    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-      exec,
-      opts.from,
-      fee
-    );
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "PROVING" })
-    );
-
-    const provenTx = await this.pxe.proveTx(txRequest);
-
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "PROVEN", complete: true })
-    );
-    return provenTx;
+      );
+      throw error;
+    }
   }
 
   private async extractTxInformation(
@@ -694,47 +709,60 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         status: "SIMULATING",
       });
     await this.storeAndEmitInteraction(interaction);
-    const feeOptions = opts.fee?.estimateGas
-      ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
-      : await this.getDefaultFeeOptions(opts.from, opts.fee);
-    const feeExecutionPayload =
-      await feeOptions.walletFeePaymentMethod?.getExecutionPayload();
-    const executionOptions: DefaultAccountEntrypointOptions = {
-      txNonce: Fr.random(),
-      cancellable: this.cancellableTransactions,
-      feePaymentMethodOptions: feeOptions.accountFeePaymentMethodOptions,
-    };
-    const finalExecutionPayload = feeExecutionPayload
-      ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
-      : executionPayload;
 
-    const {
-      account: fromAccount,
-      instance,
-      artifact,
-    } = await this.getFakeAccountDataFor(opts.from);
-    const txRequest = await fromAccount.createTxExecutionRequest(
-      finalExecutionPayload,
-      feeOptions.gasSettings,
-      executionOptions
-    );
-    const contractOverrides = {
-      [opts.from.toString()]: { instance, artifact },
-    };
-    const result = this.pxe.simulateTx(
-      txRequest,
-      true /* simulatePublic */,
-      true,
-      true,
-      {
-        contracts: contractOverrides,
-      }
-    );
-    if (!existingInteraction) {
-      this.storeAndEmitInteraction(
-        interaction.update({ complete: true, status: "SIMULATED" })
+    try {
+      const feeOptions = opts.fee?.estimateGas
+        ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
+        : await this.getDefaultFeeOptions(opts.from, opts.fee);
+      const feeExecutionPayload =
+        await feeOptions.walletFeePaymentMethod?.getExecutionPayload();
+      const executionOptions: DefaultAccountEntrypointOptions = {
+        txNonce: Fr.random(),
+        cancellable: this.cancellableTransactions,
+        feePaymentMethodOptions: feeOptions.accountFeePaymentMethodOptions,
+      };
+      const finalExecutionPayload = feeExecutionPayload
+        ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
+        : executionPayload;
+
+      const {
+        account: fromAccount,
+        instance,
+        artifact,
+      } = await this.getFakeAccountDataFor(opts.from);
+      const txRequest = await fromAccount.createTxExecutionRequest(
+        finalExecutionPayload,
+        feeOptions.gasSettings,
+        executionOptions
       );
+      const contractOverrides = {
+        [opts.from.toString()]: { instance, artifact },
+      };
+      const result = await this.pxe.simulateTx(
+        txRequest,
+        true /* simulatePublic */,
+        true,
+        true,
+        {
+          contracts: contractOverrides,
+        }
+      );
+      if (!existingInteraction) {
+        await this.storeAndEmitInteraction(
+          interaction.update({ complete: true, status: "SIMULATED" })
+        );
+      }
+      return result;
+    } catch (error) {
+      // Update interaction to reflect error before rethrowing
+      await this.storeAndEmitInteraction(
+        interaction.update({
+          complete: true,
+          status: "SIMULATION FAILED",
+          description: error instanceof Error ? error.message : String(error),
+        })
+      );
+      throw error;
     }
-    return result;
   }
 }
