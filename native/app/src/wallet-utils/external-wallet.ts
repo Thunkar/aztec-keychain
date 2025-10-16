@@ -62,9 +62,7 @@ import {
 } from "./authorization";
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
-import {
-  TxDecodingService,
-} from "./decoding/tx-decoding-service";
+import { TxDecodingService } from "./decoding/tx-decoding-service";
 import type { ReadableCallAuthorization } from "./decoding/call-authorization-formatter";
 import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
 
@@ -165,7 +163,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return interaction;
   }
 
-  protected async requestAuthorization(
+  protected async requestSingleAuthorization(
     method: string,
     params: any,
     persistent = false
@@ -313,10 +311,37 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return accountManager;
   }
 
+  /**
+   * Helper method to resolve contract address from various instanceData formats.
+   */
+  private async resolveContractAddress(
+    instanceData:
+      | AztecAddress
+      | ContractInstanceWithAddress
+      | ContractInstantiationData
+      | ContractInstanceAndArtifact,
+    artifact?: ContractArtifact
+  ): Promise<AztecAddress> {
+    if (instanceData instanceof AztecAddress) {
+      return instanceData;
+    } else if ("address" in instanceData) {
+      return instanceData.address;
+    } else if ("instance" in instanceData) {
+      return instanceData.instance.address;
+    } else {
+      // ContractInstantiationData - compute the address
+      const instance = await getContractInstanceFromInstantiationParams(
+        artifact!,
+        instanceData
+      );
+      return instance.address;
+    }
+  }
+
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    const data = await this.requestAuthorization("getAccounts", {}, true);
+    const data = await this.requestSingleAuthorization("getAccounts", {}, true);
     // Return the authorized accounts with their (potentially overridden) aliases
     const authData = data as GetAccountsAuthData;
     if (!authData || !authData.accounts) {
@@ -337,24 +362,14 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       | ContractInstantiationData
       | ContractInstanceAndArtifact,
     artifact?: ContractArtifact,
-    secretKey?: Fr
+    secretKey?: Fr,
+    skipAuth?: boolean
   ): Promise<ContractInstanceWithAddress> {
     // Determine the contract address to check
-    let addressToCheck: AztecAddress;
-    if (instanceData instanceof AztecAddress) {
-      addressToCheck = instanceData;
-    } else if ("address" in instanceData) {
-      addressToCheck = instanceData.address;
-    } else if ("instance" in instanceData) {
-      addressToCheck = instanceData.instance.address;
-    } else {
-      // ContractInstantiationData - compute the address
-      const instance = await getContractInstanceFromInstantiationParams(
-        artifact!,
-        instanceData
-      );
-      addressToCheck = instance.address;
-    }
+    const addressToCheck = await this.resolveContractAddress(
+      instanceData,
+      artifact
+    );
 
     // Check if contract already exists in PXE
     const metadata = await this.getContractMetadata(addressToCheck);
@@ -363,10 +378,12 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       return metadata.contractInstance;
     }
 
-    // Request authorization with persistent storage
-    await this.requestAuthorization("registerContract", {
-      address: addressToCheck.toString(),
-    });
+    // Request authorization with persistent storage (unless skipped for batch)
+    if (!skipAuth) {
+      await this.requestSingleAuthorization("registerContract", {
+        address: addressToCheck.toString(),
+      });
+    }
 
     // Register the contract with PXE
     return await super.registerContract(instanceData, artifact, secretKey);
@@ -374,19 +391,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   override async registerSender(
     address: AztecAddress,
-    alias: string
+    alias: string,
+    skipAuth?: boolean
   ): Promise<AztecAddress> {
-    await this.requestAuthorization("registerSender", {
-      address: address.toString(),
-      alias,
-    });
+    // Request authorization (unless skipped for batch)
+    if (!skipAuth) {
+      await this.requestSingleAuthorization("registerSender", {
+        address: address.toString(),
+        alias,
+      });
+    }
 
     await this.db.storeSender(address, alias);
     return this.pxe.registerSender(address);
   }
 
   override async getSenders(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestAuthorization("getSenders", {});
+    await this.requestSingleAuthorization("getSenders", {});
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -458,7 +479,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         interaction.update({ status: "REQUESTING AUTHORIZATION" })
       );
 
-      await this.requestAuthorization(
+      await this.requestSingleAuthorization(
         "proveTx",
         {
           callAuthorizations,
@@ -529,7 +550,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       );
 
       if (persistentAuth) {
-        // TODO: Add param matching logic if needed
         cachedResults.push(persistentAuth);
         continue;
       }
@@ -548,22 +568,31 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           executionTrace: displayData.executionTrace,
         };
       } else if (name === "registerContract") {
-        // Extract address for display
-        const [instanceData] = args;
-        let address: AztecAddress;
-        if (instanceData instanceof AztecAddress) {
-          address = instanceData;
-        } else if ("address" in instanceData) {
-          address = instanceData.address;
-        } else {
-          address = AztecAddress.ZERO; // Placeholder
+        // Check if contract already exists in PXE
+        const [instanceData, artifact] = args;
+        const address = await this.resolveContractAddress(
+          instanceData,
+          artifact
+        );
+        const metadata = await this.getContractMetadata(address);
+
+        if (metadata.contractInstance) {
+          // Contract already registered, skip authorization
+          cachedResults.push(metadata.contractInstance);
+          continue;
         }
+
+        // Contract not registered, need authorization
+        // Add skipAuth flag to args so it bypasses auth in the execution phase
+        args.push(true);
         params = {
           originalArgs: args,
           contractAddress: address,
         };
       } else if (name === "registerSender") {
+        // Add skipAuth flag to args
         const [address, alias] = args;
+        args.push(true);
         params = {
           originalArgs: args,
           address,
@@ -618,12 +647,13 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       itemMethodMap
     );
 
-    // 5. Execute approved items
+    // 5. Execute approved items using dynamic dispatch (like BaseWallet)
     const results: any[] = [];
     let itemIndex = 0;
 
     for (let i = 0; i < methods.length; i++) {
       if (cachedResults[i] !== null) {
+        // Use cached result (from persistent auth or PXE check)
         results.push(cachedResults[i]);
       } else {
         const item = items[itemIndex];
@@ -633,25 +663,13 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           throw new Error(`Authorization denied for ${item.method}`);
         }
 
-        const batchedMethod = methods[i];
-        // Call the base class method
-        if (batchedMethod.name === "proveTx") {
-          const [exec, opts, txInformation] = batchedMethod.args;
-          const result = await this.proveTx(exec, opts, txInformation);
-          results.push(result);
-        } else if (batchedMethod.name === "registerContract") {
-          const [instanceData, artifact, secretKey] = batchedMethod.args;
-          const result = await super.registerContract(
-            instanceData,
-            artifact,
-            secretKey
-          );
-          results.push(result);
-        } else if (batchedMethod.name === "registerSender") {
-          const [address, alias] = batchedMethod.args;
-          const result = await super.registerSender(address, alias);
-          results.push(result);
-        }
+        const { name, args } = methods[i];
+
+        // Use dynamic dispatch to call the method, just like BaseWallet.batch()
+        // The skipAuth flag (added during preprocessing) bypasses authorization
+        const fn = (this as any)[name] as (...args: any[]) => Promise<any>;
+        const result = await fn.apply(this, args);
+        results.push(result);
 
         itemIndex++;
       }
@@ -665,7 +683,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     opts: SimulateOptions,
     existingInteraction?: WalletInteraction<WalletInteractionType>
   ): Promise<TxSimulationResult> {
-    //await this.requestAuthorization("simulateTx", [executionPayload, opts]);
+    //await this.requestSingleAuthorization("simulateTx", [executionPayload, opts]);
 
     const interaction =
       existingInteraction ??
