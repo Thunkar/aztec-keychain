@@ -11,18 +11,10 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import ContactsIcon from "@mui/icons-material/Contacts";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import Button from "@mui/material/Button";
 import { InteractionsList } from "./components/InteractionsList.tsx";
 import { AccountsManager } from "./components/AccountsManager.tsx";
 import { ContactsManager } from "./components/ContactsManager.tsx";
-import { AuthorizeAccountsDialog } from "./components/AuthorizeAccountsDialog.tsx";
-import { AuthorizeContractDialog } from "./components/AuthorizeContractDialog.tsx";
-import { AuthorizeProveTxDialog } from "./components/AuthorizeProveTxDialog.tsx";
-import { AuthorizeBatchDialog } from "./components/AuthorizeBatchDialog.tsx";
+import { AuthorizationDialog } from "./components/AuthorizationDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {
@@ -31,7 +23,6 @@ import type {
 } from "../wallet-utils/wallet-interaction.ts";
 import type {
   AuthorizationRequest,
-  BatchAuthorizationRequest,
 } from "../wallet-utils/authorization.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
@@ -48,9 +39,8 @@ export function App() {
     WalletInteraction<WalletInteractionType>[]
   >([]);
 
-  const [pendingAuth, setPendingAuth] = useState<AuthorizationRequest | null>(
-    null
-  );
+  const [authQueue, setAuthQueue] = useState<AuthorizationRequest[]>([]);
+  const currentAuth = authQueue[0] || null;
 
   const { walletAPI } = useContext(WalletContext);
 
@@ -72,8 +62,14 @@ export function App() {
 
     // Listen for authorization requests from external dApps
     walletAPI.onAuthorizationRequest((request: AuthorizationRequest) => {
-      console.log(request);
-      setPendingAuth(request);
+      console.log("New authorization request:", request);
+      setAuthQueue((prev) => {
+        // Deduplicate by ID to prevent React strict mode duplicates
+        if (prev.some((req) => req.id === request.id)) {
+          return prev;
+        }
+        return [...prev, request];
+      });
     });
   }, []);
 
@@ -86,26 +82,39 @@ export function App() {
     setMenuOpen(false);
   };
 
-  const handleAuthApprove = (data?: any) => {
-    if (pendingAuth) {
+  const handleAuthApprove = (itemResponses: Record<string, any>) => {
+    if (currentAuth) {
       walletAPI.resolveAuthorization({
-        id: pendingAuth.id,
+        id: currentAuth.id,
         approved: true,
-        appId: pendingAuth.appId,
-        data,
+        appId: currentAuth.appId,
+        itemResponses,
       });
-      setPendingAuth(null);
+      // Remove the processed request from the queue
+      setAuthQueue((prev) => prev.slice(1));
     }
   };
 
   const handleAuthDeny = () => {
-    if (pendingAuth) {
+    if (currentAuth) {
+      // Create denied responses for all items
+      const itemResponses: Record<string, any> = {};
+      for (const item of currentAuth.items) {
+        itemResponses[item.id] = {
+          id: item.id,
+          approved: false,
+          appId: item.appId,
+        };
+      }
+
       walletAPI.resolveAuthorization({
-        id: pendingAuth.id,
+        id: currentAuth.id,
         approved: false,
-        appId: pendingAuth.appId,
+        appId: currentAuth.appId,
+        itemResponses,
       });
-      setPendingAuth(null);
+      // Remove the processed request from the queue
+      setAuthQueue((prev) => prev.slice(1));
     }
   };
 
@@ -303,71 +312,15 @@ export function App() {
         </Box>
       </Box>
 
-      {/* Authorization Dialog */}
-      {pendingAuth &&
-        (pendingAuth.method === "batch" ? (
-          <AuthorizeBatchDialog
-            request={pendingAuth as BatchAuthorizationRequest}
-            onApprove={(data) => handleAuthApprove(data)}
-            onDeny={handleAuthDeny}
-          />
-        ) : pendingAuth.method === "getAccounts" ? (
-          <AuthorizeAccountsDialog
-            request={pendingAuth}
-            onApprove={handleAuthApprove}
-            onDeny={handleAuthDeny}
-          />
-        ) : pendingAuth.method === "registerContract" ? (
-          <AuthorizeContractDialog
-            request={pendingAuth}
-            onApprove={() => handleAuthApprove()}
-            onDeny={handleAuthDeny}
-          />
-        ) : pendingAuth.method === "proveTx" ? (
-          <AuthorizeProveTxDialog
-            request={pendingAuth}
-            onApprove={() => handleAuthApprove()}
-            onDeny={handleAuthDeny}
-          />
-        ) : (
-          <Dialog open={true} maxWidth="sm" fullWidth>
-            <DialogTitle>Authorization Request</DialogTitle>
-            <DialogContent>
-              <Typography variant="body1" gutterBottom>
-                App <strong>{pendingAuth.appId}</strong> requests:
-              </Typography>
-              <Typography variant="h6" gutterBottom>
-                {pendingAuth.method}
-              </Typography>
-              <Box
-                sx={{
-                  mt: 2,
-                  p: 2,
-                  bgcolor: "background.default",
-                  borderRadius: 1,
-                  maxHeight: 300,
-                  overflow: "auto",
-                }}
-              >
-                <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                  {JSON.stringify(pendingAuth.params, null, 2)}
-                </pre>
-              </Box>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleAuthDeny} color="error">
-                Deny
-              </Button>
-              <Button
-                onClick={() => handleAuthApprove()}
-                color="primary"
-                variant="contained"
-              >
-                Approve
-              </Button>
-            </DialogActions>
-          </Dialog>
-        ))}
+      {/* Authorization Dialog - All requests are now batches */}
+      {currentAuth && (
+        <AuthorizationDialog
+          request={currentAuth}
+          onApprove={handleAuthApprove}
+          onDeny={handleAuthDeny}
+          queueLength={authQueue.length}
+        />
+      )}
     </Box>
   );
 }

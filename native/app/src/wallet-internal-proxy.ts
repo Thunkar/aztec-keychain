@@ -81,7 +81,7 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
         id: z.string(),
         approved: z.boolean(),
         appId: z.string(),
-        data: z.any().optional(),
+        itemResponses: z.record(z.any()),
       })
     ),
   };

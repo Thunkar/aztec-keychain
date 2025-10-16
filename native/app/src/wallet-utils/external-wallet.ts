@@ -57,8 +57,9 @@ import {
   AuthorizationRequestEvent,
   type AuthorizationRequest,
   type AuthorizationResponse,
-  type BatchAuthorizationRequest,
-  type BatchAuthorizationResponse,
+  type AuthorizationItem,
+  type GetAccountsAuthData,
+  type AuthorizationData,
 } from "./authorization";
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
@@ -172,7 +173,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     method: string,
     params: any,
     persistent = false
-  ): Promise<AuthorizationResponse> {
+  ): Promise<AuthorizationData> {
     // Check for existing persistent authorization
     if (persistent) {
       const existingAuth = await this.db.retrievePersistentAuthorization(
@@ -180,21 +181,25 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         method
       );
       if (existingAuth) {
-        // Return stored authorization without prompting user
-        return {
-          id: crypto.randomUUID(),
-          approved: true,
-          appId: this.appId,
-          data: existingAuth,
-        };
+        // Return stored authorization data directly
+        return existingAuth;
       }
     }
 
+    // Create a single item batch request
+    const itemId = crypto.randomUUID();
     const authRequest: AuthorizationRequest = {
       id: crypto.randomUUID(),
       appId: this.appId,
-      method,
-      params,
+      items: [
+        {
+          id: itemId,
+          appId: this.appId,
+          method,
+          params,
+          timestamp: Date.now(),
+        },
+      ],
       timestamp: Date.now(),
     };
 
@@ -208,20 +213,28 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     this.dispatchEvent(event);
 
     const response = await responseHandle.promise;
+
     if (!response.approved) {
       throw new Error(`User denied ${method} request`);
     }
 
-    if (persistent && response.data) {
+    // Extract the single item response
+    const itemResponse = response.itemResponses?.[itemId];
+
+    if (!itemResponse || !itemResponse.approved) {
+      throw new Error(`User denied ${method} request`);
+    }
+
+    if (persistent && itemResponse.data) {
       // Store the authorization for future use
       await this.db.storePersistentAuthorization(
         this.appId,
         method,
-        response.data
+        itemResponse.data
       );
     }
 
-    return response;
+    return itemResponse.data;
   }
 
   resolveAuthorization(response: AuthorizationResponse) {
@@ -307,13 +320,14 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    const response = await this.requestAuthorization("getAccounts", {}, true);
+    const data = await this.requestAuthorization("getAccounts", {}, true);
     // Return the authorized accounts with their (potentially overridden) aliases
-    if (!response.data || !response.data.accounts) {
+    const authData = data as GetAccountsAuthData;
+    if (!authData || !authData.accounts) {
       throw new Error("Authorization response missing account data");
     }
 
-    const { accounts } = response.data;
+    const { accounts } = authData;
     return accounts.map((acc: any) => ({
       alias: acc.alias,
       item: AztecAddress.fromString(acc.item),
@@ -423,28 +437,30 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   ): Promise<TxProvingResult> {
     const interaction = WalletInteraction.from({
       type: "proveTx",
-      status: "SIMULATING",
+      status: "CREATING",
       complete: false,
       title: `Proving transaction`,
     });
     await this.storeAndEmitInteraction(interaction);
     const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
 
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "COMPUTING REQUIRED AUTHORIZATIONS" })
-    );
-
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "REQUESTING AUTHORIZATION" })
-    );
-
     let callAuthorizations;
     if (!txInformation) {
       let executionTrace: DecodedExecutionTrace;
+
+      await this.storeAndEmitInteraction(
+        interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
+      );
+
       ({ callAuthorizations, executionTrace } = await this.extractTxInformation(
         exec,
-        opts
+        opts,
+        interaction
       ));
+
+      await this.storeAndEmitInteraction(
+        interaction.update({ status: "REQUESTING AUTHORIZATION" })
+      );
 
       await this.requestAuthorization(
         "proveTx",
@@ -486,9 +502,14 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   private async extractTxInformation(
     exec: ExecutionPayload,
-    opts: SendOptions
+    opts: SendOptions,
+    existingInteraction?: WalletInteraction<WalletInteractionType>
   ) {
-    const simulationResult = await super.simulateTx(exec, opts);
+    const simulationResult = await this.simulateTx(
+      exec,
+      opts,
+      existingInteraction
+    );
 
     const offChainEffects = collectOffchainEffects(
       simulationResult.privateExecutionResult
@@ -523,8 +544,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   // TODO: Fix types once @aztec/aztec.js exports BatchedMethod, BatchableMethods, and BatchResults from the main package
   override async batch(methods: any): Promise<any> {
-    // 1. Convert methods to AuthorizationRequests, checking persistent cache
-    const items: AuthorizationRequest[] = [];
+    // 1. Convert methods to AuthorizationItems, checking persistent cache
+    const items: AuthorizationItem[] = [];
     const cachedResults: (any | null)[] = [];
     const itemMethodMap = new Map<string, string>();
 
@@ -543,7 +564,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         continue;
       }
 
-      // Create AuthorizationRequest for this item
+      // Create AuthorizationItem for this item
       let params: any = args;
 
       // Pre-process proveTx to include display data
@@ -598,25 +619,32 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       return super.batch(methods);
     }
 
-    // 3. Request batch authorization
-    const batchRequest: BatchAuthorizationRequest = {
+    // 3. Request batch authorization using unified flow
+    const authRequest: AuthorizationRequest = {
       id: Fr.random().toString(),
       appId: this.appId,
-      method: "batch",
-      params: { items },
+      items: items,
       timestamp: Date.now(),
     };
 
-    const batchResponse = (await this.requestAuthorization(
-      "batch",
-      batchRequest.params,
-      false
-    )) as BatchAuthorizationResponse["data"];
+    const responseHandle = promiseWithResolvers<AuthorizationResponse>();
+    this.pendingAuthorizations.set(authRequest.id, {
+      promise: responseHandle,
+      request: authRequest,
+    });
+
+    const event = new AuthorizationRequestEvent(authRequest);
+    this.dispatchEvent(event);
+
+    const response = await responseHandle.promise;
+    if (!response.approved) {
+      throw new Error("User denied batch request");
+    }
 
     // 4. Store persistent authorizations
     await this.db.storeBatchPersistentAuthorizations(
       this.appId,
-      batchResponse.itemResponses,
+      response.itemResponses,
       itemMethodMap
     );
 
@@ -629,7 +657,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         results.push(cachedResults[i]);
       } else {
         const item = items[itemIndex];
-        const itemResponse = batchResponse.itemResponses[item.id];
+        const itemResponse = response.itemResponses[item.id];
 
         if (!itemResponse || !itemResponse.approved) {
           throw new Error(`Authorization denied for ${item.method}`);
@@ -664,16 +692,19 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   override async simulateTx(
     executionPayload: ExecutionPayload,
-    opts: SimulateOptions
+    opts: SimulateOptions,
+    existingInteraction?: WalletInteraction<WalletInteractionType>
   ): Promise<TxSimulationResult> {
     //await this.requestAuthorization("simulateTx", [executionPayload, opts]);
 
-    const interaction = WalletInteraction.from({
-      type: "simulateTx",
-      title: "Simulating interaction",
-      complete: false,
-      status: "SIMULATING",
-    });
+    const interaction =
+      existingInteraction ??
+      WalletInteraction.from({
+        type: "simulateTx",
+        title: "Simulating interaction",
+        complete: false,
+        status: "SIMULATING",
+      });
     await this.storeAndEmitInteraction(interaction);
     const feeOptions = opts.fee?.estimateGas
       ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
@@ -711,9 +742,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         contracts: contractOverrides,
       }
     );
-    this.storeAndEmitInteraction(
-      interaction.update({ complete: true, status: "SIMULATED" })
-    );
+    if (!existingInteraction) {
+      this.storeAndEmitInteraction(
+        interaction.update({ complete: true, status: "SIMULATED" })
+      );
+    }
     return result;
   }
 }

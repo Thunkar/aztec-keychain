@@ -2,10 +2,10 @@ import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
-import type { AuthorizationRequest } from "../../wallet-utils/authorization";
+import type { AuthorizationItem } from "../../wallet-utils/authorization";
 
 interface AuthorizeSenderContentProps {
-  request: AuthorizationRequest;
+  request: AuthorizationItem;
   persistent?: boolean;
   onTogglePersistent?: () => void;
   showAppId?: boolean;

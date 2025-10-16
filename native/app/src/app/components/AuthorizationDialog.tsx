@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -12,23 +12,25 @@ import AccordionDetails from "@mui/material/AccordionDetails";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Checkbox from "@mui/material/Checkbox";
 import type {
-  BatchAuthorizationRequest,
-  BatchAuthorizationResponse,
-  AuthorizationResponse,
+  AuthorizationRequest,
+  AuthorizationItemResponse,
 } from "../../wallet-utils/authorization";
-import { AuthorizeProveTxContent } from "./AuthorizeProveTxDialog";
-import { AuthorizeContractContent } from "./AuthorizeContractDialog";
+import { AuthorizeProveTxContent } from "./AuthorizeProveTxContent";
+import { AuthorizeContractContent } from "./AuthorizeContractContent";
 import { AuthorizeSenderContent } from "./AuthorizeSenderContent";
+import { AuthorizeAccountsContent } from "./AuthorizeAccountsContent";
 
-interface AuthorizeBatchDialogProps {
-  request: BatchAuthorizationRequest;
-  onApprove: (response: BatchAuthorizationResponse["data"]) => void;
+interface AuthorizationDialogProps {
+  request: AuthorizationRequest;
+  onApprove: (itemResponses: Record<string, AuthorizationItemResponse>) => void;
   onDeny: () => void;
+  queueLength?: number;
 }
 
 interface ItemState {
   approved: boolean;
   persistent: boolean;
+  data?: any; // Method-specific data (e.g., selected accounts for getAccounts)
 }
 
 function formatMethodName(method: string): string {
@@ -39,23 +41,35 @@ function formatMethodName(method: string): string {
       return "Register Contract";
     case "registerSender":
       return "Register Sender";
+    case "getAccounts":
+      return "Get Accounts";
     default:
       return method;
   }
 }
 
-export function AuthorizeBatchDialog({
+export function AuthorizationDialog({
   request,
   onApprove,
   onDeny,
-}: AuthorizeBatchDialogProps) {
-  const items = request.params.items;
+  queueLength = 1,
+}: AuthorizationDialogProps) {
+  const items = request.items;
 
   const [itemStates, setItemStates] = useState<Map<string, ItemState>>(
     new Map(
       items.map((item) => [item.id, { approved: true, persistent: false }])
     )
   );
+
+  // Reset state when request changes (new item from queue)
+  useEffect(() => {
+    setItemStates(
+      new Map(
+        items.map((item) => [item.id, { approved: true, persistent: false }])
+      )
+    );
+  }, [request.id, items]); // Reset when request ID or items change
 
   const handleToggleApproval = (itemId: string) => {
     setItemStates((prev) => {
@@ -75,25 +89,41 @@ export function AuthorizeBatchDialog({
     });
   };
 
+  const handleItemDataChange = (itemId: string, data: any) => {
+    setItemStates((prev) => {
+      const newMap = new Map(prev);
+      const current = newMap.get(itemId)!;
+      newMap.set(itemId, { ...current, data });
+      return newMap;
+    });
+  };
+
   const handleApprove = () => {
-    const itemResponses: Record<string, AuthorizationResponse> = {};
+    const itemResponses: Record<string, AuthorizationItemResponse> = {};
 
     for (const item of items) {
-      const state = itemStates.get(item.id)!;
+      const state = itemStates.get(item.id);
+
+      // Skip items that haven't been initialized yet
+      if (!state) {
+        continue;
+      }
+
       itemResponses[item.id] = {
         id: item.id,
         approved: state.approved,
         appId: item.appId,
-        data: state.persistent
-          ? {
-              persistent: true,
-              params: item.params,
-            }
-          : undefined,
+        data:
+          state.data ||
+          (state.persistent
+            ? ({
+                persistent: true,
+              } as any)
+            : undefined),
       };
     }
 
-    onApprove({ itemResponses });
+    onApprove(itemResponses);
   };
 
   const approvedCount = Array.from(itemStates.values()).filter(
@@ -102,7 +132,32 @@ export function AuthorizeBatchDialog({
 
   return (
     <Dialog open={true} maxWidth="lg" fullWidth>
-      <DialogTitle>Batch Authorization Request</DialogTitle>
+      <DialogTitle>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>Authorization Request</span>
+          {queueLength > 1 && (
+            <Typography
+              variant="caption"
+              sx={{
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+                px: 1.5,
+                py: 0.5,
+                borderRadius: 1,
+                fontWeight: "bold",
+              }}
+            >
+              {queueLength} pending
+            </Typography>
+          )}
+        </Box>
+      </DialogTitle>
       <DialogContent>
         <Typography variant="body1" gutterBottom>
           App <strong>{request.appId}</strong> is requesting to perform{" "}
@@ -111,7 +166,12 @@ export function AuthorizeBatchDialog({
 
         <Box sx={{ mt: 2 }}>
           {items.map((item, index) => {
-            const state = itemStates.get(item.id)!;
+            const state = itemStates.get(item.id);
+
+            // Skip rendering if state hasn't been initialized yet
+            if (!state) {
+              return null;
+            }
 
             return (
               <Accordion
@@ -177,6 +237,16 @@ export function AuthorizeBatchDialog({
                         onTogglePersistent={() =>
                           handleTogglePersistent(item.id)
                         }
+                        showAppId={false}
+                      />
+                    )}
+
+                    {item.method === "getAccounts" && (
+                      <AuthorizeAccountsContent
+                        request={item}
+                        onAccountsChange={(accounts) => {
+                          handleItemDataChange(item.id, { accounts });
+                        }}
                         showAppId={false}
                       />
                     )}

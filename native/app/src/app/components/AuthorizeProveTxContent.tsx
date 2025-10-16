@@ -1,9 +1,3 @@
-import { useState } from "react";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
-import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Accordion from "@mui/material/Accordion";
@@ -17,23 +11,18 @@ import TableRow from "@mui/material/TableRow";
 import Divider from "@mui/material/Divider";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
-import type { AuthorizationRequest } from "../../wallet-utils/authorization";
+import type { AuthorizationItem } from "../../wallet-utils/authorization";
 import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
 import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
 import { ExecutionTraceDisplay } from "./ExecutionTraceDisplay";
 
 interface AuthorizeProveTxContentProps {
-  request: AuthorizationRequest;
+  request: AuthorizationItem;
   persistent?: boolean;
   onTogglePersistent?: () => void;
   showAppId?: boolean;
 }
 
-interface AuthorizeProveTxDialogProps {
-  request: AuthorizationRequest;
-  onApprove: () => void;
-  onDeny: () => void;
-}
 
 // Reusable content component for displaying proveTx authorization details
 export function AuthorizeProveTxContent({
@@ -236,34 +225,5 @@ export function AuthorizeProveTxContent({
         </Box>
       )}
     </>
-  );
-}
-
-export function AuthorizeProveTxDialog({
-  request,
-  onApprove,
-  onDeny,
-}: AuthorizeProveTxDialogProps) {
-  const [persistent, setPersistent] = useState(false);
-
-  return (
-    <Dialog open={true} maxWidth="lg" fullWidth>
-      <DialogTitle>Transaction Authorization Request</DialogTitle>
-      <DialogContent>
-        <AuthorizeProveTxContent
-          request={request}
-          persistent={persistent}
-          onTogglePersistent={() => setPersistent(!persistent)}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onDeny} color="error">
-          Deny
-        </Button>
-        <Button onClick={onApprove} color="primary" variant="contained">
-          Approve
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 }

@@ -1,6 +1,8 @@
 import { jsonStringify } from "@aztec/foundation/json-rpc";
+import type { Aliased, AztecAddress } from "@aztec/aztec.js";
 
-export type AuthorizationRequest = {
+// Base authorization item - represents a single authorization request
+export type AuthorizationItem = {
   id: string;
   appId: string;
   method: string;
@@ -8,28 +10,62 @@ export type AuthorizationRequest = {
   timestamp: number;
 };
 
-export type AuthorizationResponse = {
+// Authorization data types for different methods
+export type GetAccountsAuthData = {
+  accounts: Aliased<AztecAddress>[];
+};
+
+export type RegisterContractAuthData = {
+  persistent?: boolean;
+  address?: string;
+};
+
+export type RegisterSenderAuthData = {
+  persistent?: boolean;
+  address: string;
+  alias: string;
+};
+
+export type ProveTxAuthData = {
+  persistent?: boolean;
+};
+
+// Union of all possible authorization data types
+export type AuthorizationData =
+  | GetAccountsAuthData
+  | RegisterContractAuthData
+  | RegisterSenderAuthData
+  | ProveTxAuthData
+  | undefined;
+
+// Item response for a single authorization
+export type AuthorizationItemResponse = {
   id: string;
   approved: boolean;
   appId: string;
   // Optional data returned from authorization (e.g., selected accounts, metadata)
-  data?: any;
+  data?: AuthorizationData;
 };
 
-// Batch authorization types - reuse existing AuthorizationRequest
-export type BatchAuthorizationRequest = AuthorizationRequest & {
-  method: "batch";
-  params: {
-    items: AuthorizationRequest[];
-  };
+// All authorization requests are treated as batches internally
+// Single requests are just batches with one item
+export type AuthorizationRequest = {
+  id: string;
+  appId: string;
+  items: AuthorizationItem[];
+  timestamp: number;
 };
 
-export type BatchAuthorizationResponse = AuthorizationResponse & {
+export type AuthorizationResponse = {
+  id: string;
   approved: boolean;
-  data: {
-    itemResponses: Record<string, AuthorizationResponse>;
-  };
+  appId: string;
+  itemResponses: Record<string, AuthorizationItemResponse>;
 };
+
+// Legacy type aliases for backwards compatibility during transition
+export type BatchAuthorizationRequest = AuthorizationRequest;
+export type BatchAuthorizationResponse = AuthorizationResponse;
 
 export class AuthorizationRequestEvent extends CustomEvent<string> {
   constructor(content: AuthorizationRequest) {
