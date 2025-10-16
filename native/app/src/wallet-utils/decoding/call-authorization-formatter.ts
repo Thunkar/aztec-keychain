@@ -9,10 +9,9 @@ import {
   getFunctionArtifact,
   type AbiDecoded,
 } from "@aztec/stdlib/abi";
-import type { PXE } from "@aztec/pxe/server";
-import type { WalletDB } from "../wallet_db";
 import type { OffchainEffect } from "@aztec/stdlib/tx";
-import { getAddressAlias } from "./utils";
+import { formatAbiValue } from "./utils";
+import type { TxDecodingCache } from "./tx-decoding-cache";
 
 export interface ReadableCallAuthorization {
   contract: {
@@ -41,8 +40,7 @@ export interface ReadableCallAuthorization {
 
 export class CallAuthorizationFormatter {
   constructor(
-    private pxe: PXE,
-    private db: WalletDB
+    private cache: TxDecodingCache
   ) {}
 
   private formatAbiValue(value: AbiDecoded): string {
@@ -77,12 +75,11 @@ export class CallAuthorizationFormatter {
       callAuthorizationRequest = await CallAuthorizationRequest.fromFields(
         effect.data
       );
-      const instance = await this.pxe.getContractMetadata(
+      const instance = await this.cache.getContractMetadata(
         effect.contractAddress
       );
-      const { artifact } = await this.pxe.getContractClassMetadata(
-        instance.contractInstance!.currentContractClassId,
-        true
+      const artifact = await this.cache.getContractArtifact(
+        instance.contractInstance!.currentContractClassId
       );
       const functionAbi = await getFunctionArtifact(
         artifact,
@@ -129,14 +126,10 @@ export class CallAuthorizationFormatter {
     const functionName = auth.functionCall.name;
 
     // Get contract alias/name
-    const contractName = await getAddressAlias(
-      this.pxe,
-      this.db,
-      contractAddress
-    );
+    const contractName = await this.cache.getAddressAlias(contractAddress);
 
     // Get caller alias
-    const callerAlias = await getAddressAlias(this.pxe, this.db, auth.caller);
+    const callerAlias = await this.cache.getAddressAlias(auth.caller);
 
     // Format parameters
     const parameters = await Promise.all(
@@ -153,7 +146,7 @@ export class CallAuthorizationFormatter {
           if (valueStr.startsWith("0x") && valueStr.length === 66) {
             try {
               const addr = AztecAddress.fromString(valueStr);
-              const alias = await getAddressAlias(this.pxe, this.db, addr);
+              const alias = await this.cache.getAddressAlias(addr);
               formattedValue = `${alias} (${formattedValue.slice(0, 10)}...${formattedValue.slice(-8)})`;
             } catch {
               // Not a valid address, use original formatted value

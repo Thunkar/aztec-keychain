@@ -29,7 +29,6 @@ import {
   createStubAccount,
 } from "@aztec/accounts/stub";
 import {
-  collectOffchainEffects,
   type TxProvingResult,
   type TxSimulationResult,
 } from "@aztec/stdlib/tx";
@@ -64,13 +63,10 @@ import {
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
 import {
-  CallAuthorizationFormatter,
-  type ReadableCallAuthorization,
-} from "./decoding/call-authorization-formatter";
-import {
-  TxCallStackDecoder,
-  type DecodedExecutionTrace,
-} from "./decoding/tx-callstack-decoder";
+  TxDecodingService,
+} from "./decoding/tx-decoding-service";
+import type { ReadableCallAuthorization } from "./decoding/call-authorization-formatter";
+import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
 
 // TODO: remove this once aztec.js exports it
 export type ContractInstanceAndArtifact = Pick<
@@ -511,35 +507,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       existingInteraction
     );
 
-    const offChainEffects = collectOffchainEffects(
-      simulationResult.privateExecutionResult
-    );
-
-    // Parse call authorizations from offchain effects
-    const formatter = new CallAuthorizationFormatter(this.pxe, this.db);
-    const callAuthorizations = await Promise.all(
-      offChainEffects.map((effect) =>
-        formatter.parseCallAuthorizationFromEffect(effect)
-      )
-    );
-
-    const filteredCallAuthorizations = callAuthorizations.filter(Boolean);
-
-    // Format for display
-    const readableCallAuthorizations =
-      await formatter.formatCallAuthorizationsForDisplay(
-        filteredCallAuthorizations
-      );
-
-    // Decode execution call stack
-    const callStackDecoder = new TxCallStackDecoder(this.pxe, this.db);
-    const executionTrace =
-      await callStackDecoder.decodeSimulationResult(simulationResult);
-
-    return {
-      callAuthorizations: readableCallAuthorizations,
-      executionTrace,
-    };
+    // Use TxDecodingService to decode transaction information with caching
+    const decodingService = new TxDecodingService(this.pxe, this.db);
+    return await decodingService.decodeTransaction(simulationResult);
   }
 
   // TODO: Fix types once @aztec/aztec.js exports BatchedMethod, BatchableMethods, and BatchResults from the main package

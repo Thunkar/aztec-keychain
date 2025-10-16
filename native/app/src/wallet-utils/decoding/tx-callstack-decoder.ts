@@ -10,9 +10,8 @@ import {
   getAllFunctionAbis,
 } from "@aztec/stdlib/abi";
 import { decodeFromAbi } from "@aztec/aztec.js";
-import type { PXE } from "@aztec/pxe/server";
-import type { WalletDB } from "../wallet_db";
-import { formatAbiValue, getAddressAlias } from "./utils";
+import { formatAbiValue } from "./utils";
+import type { TxDecodingCache } from "./tx-decoding-cache";
 export type ExecutionEvent = PrivateCallEvent | PublicEnqueueEvent;
 
 export interface PrivateCallEvent {
@@ -47,8 +46,7 @@ export class TxCallStackDecoder {
   private calldataMap: Map<string, any[]> = new Map();
 
   constructor(
-    private pxe: PXE,
-    private db: WalletDB
+    private cache: TxDecodingCache
   ) {}
 
   private async formatAndResolveValue(value: AbiDecoded): Promise<string> {
@@ -60,7 +58,7 @@ export class TxCallStackDecoder {
       if (valueStr.startsWith("0x") && valueStr.length === 66) {
         try {
           const addr = AztecAddress.fromString(valueStr);
-          const alias = await getAddressAlias(this.pxe, this.db, addr);
+          const alias = await this.cache.getAddressAlias(addr);
           formatted = `${alias} (${formatted.slice(0, 10)}...${formatted.slice(-8)})`;
         } catch {
           // Not a valid address, use original formatted value
@@ -87,14 +85,10 @@ export class TxCallStackDecoder {
     );
 
     // Get contract and function names
-    const contractName = await getAddressAlias(
-      this.pxe,
-      this.db,
+    const contractName = await this.cache.getAddressAlias(
       callContext.contractAddress
     );
-    const callerName = await getAddressAlias(
-      this.pxe,
-      this.db,
+    const callerName = await this.cache.getAddressAlias(
       callContext.msgSender
     );
 
@@ -103,13 +97,12 @@ export class TxCallStackDecoder {
     let returnValues: Array<{ name: string; value: string }> = [];
 
     try {
-      const metadata = await this.pxe.getContractMetadata(
+      const metadata = await this.cache.getContractMetadata(
         callContext.contractAddress
       );
       if (metadata.contractInstance) {
-        const { artifact } = await this.pxe.getContractClassMetadata(
-          metadata.contractInstance.currentContractClassId,
-          true
+        const artifact = await this.cache.getContractArtifact(
+          metadata.contractInstance.currentContractClassId
         );
         const functionAbi = await getFunctionArtifact(
           artifact,
@@ -245,14 +238,10 @@ export class TxCallStackDecoder {
     depth: number,
     counter: number
   ): Promise<PublicEnqueueEvent> {
-    const contractName = await getAddressAlias(
-      this.pxe,
-      this.db,
+    const contractName = await this.cache.getAddressAlias(
       request.contractAddress
     );
-    const callerName = await getAddressAlias(
-      this.pxe,
-      this.db,
+    const callerName = await this.cache.getAddressAlias(
       request.msgSender
     );
 
@@ -268,13 +257,12 @@ export class TxCallStackDecoder {
 
         // Try to resolve function name from contract ABI
         try {
-          const metadata = await this.pxe.getContractMetadata(
+          const metadata = await this.cache.getContractMetadata(
             request.contractAddress
           );
           if (metadata.contractInstance) {
-            const { artifact } = await this.pxe.getContractClassMetadata(
-              metadata.contractInstance.currentContractClassId,
-              true
+            const artifact = await this.cache.getContractArtifact(
+              metadata.contractInstance.currentContractClassId
             );
             const allAbis = await getAllFunctionAbis(artifact);
             const abisWithSelector = await Promise.all(
