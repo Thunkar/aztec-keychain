@@ -22,13 +22,17 @@ import { ContactsManager } from "./components/ContactsManager.tsx";
 import { AuthorizeAccountsDialog } from "./components/AuthorizeAccountsDialog.tsx";
 import { AuthorizeContractDialog } from "./components/AuthorizeContractDialog.tsx";
 import { AuthorizeProveTxDialog } from "./components/AuthorizeProveTxDialog.tsx";
+import { AuthorizeBatchDialog } from "./components/AuthorizeBatchDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {
   WalletInteraction,
   WalletInteractionType,
 } from "../wallet-utils/wallet-interaction.ts";
-import type { AuthorizationRequest } from "../wallet-utils/authorization.ts";
+import type {
+  AuthorizationRequest,
+  BatchAuthorizationRequest,
+} from "../wallet-utils/authorization.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const MENU_DRAWER_WIDTH = 240;
@@ -301,7 +305,13 @@ export function App() {
 
       {/* Authorization Dialog */}
       {pendingAuth &&
-        (pendingAuth.method === "getAccounts" ? (
+        (pendingAuth.method === "batch" ? (
+          <AuthorizeBatchDialog
+            request={pendingAuth as BatchAuthorizationRequest}
+            onApprove={(data) => handleAuthApprove(data)}
+            onDeny={handleAuthDeny}
+          />
+        ) : pendingAuth.method === "getAccounts" ? (
           <AuthorizeAccountsDialog
             request={pendingAuth}
             onApprove={handleAuthApprove}

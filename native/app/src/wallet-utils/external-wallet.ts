@@ -57,17 +57,30 @@ import {
   AuthorizationRequestEvent,
   type AuthorizationRequest,
   type AuthorizationResponse,
+  type BatchAuthorizationRequest,
+  type BatchAuthorizationResponse,
 } from "./authorization";
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
-import { CallAuthorizationFormatter } from "./decoding/call-authorization-formatter";
-import { TxCallStackDecoder } from "./decoding/tx-callstack-decoder";
+import {
+  CallAuthorizationFormatter,
+  type ReadableCallAuthorization,
+} from "./decoding/call-authorization-formatter";
+import {
+  TxCallStackDecoder,
+  type DecodedExecutionTrace,
+} from "./decoding/tx-callstack-decoder";
 
 // TODO: remove this once aztec.js exports it
 export type ContractInstanceAndArtifact = Pick<
   Contract,
   "artifact" | "instance"
 >;
+
+type ReadableTxInformation = {
+  callAuthorizations: ReadableCallAuthorization[];
+  executionTrace: DecodedExecutionTrace;
+};
 
 export class ExternalWallet extends BaseWallet implements EventTarget {
   private eventEmitter = new EventTarget();
@@ -405,7 +418,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   override async proveTx(
     exec: ExecutionPayload,
-    opts: SendOptions
+    opts: SendOptions,
+    txInformation?: ReadableTxInformation
   ): Promise<TxProvingResult> {
     const interaction = WalletInteraction.from({
       type: "proveTx",
@@ -416,11 +430,65 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     await this.storeAndEmitInteraction(interaction);
     const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
 
-    const simulationResult = await this.simulateTx(exec, opts);
-
     await this.storeAndEmitInteraction(
       interaction.update({ status: "COMPUTING REQUIRED AUTHORIZATIONS" })
     );
+
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "REQUESTING AUTHORIZATION" })
+    );
+
+    let callAuthorizations;
+    if (!txInformation) {
+      let executionTrace: DecodedExecutionTrace;
+      ({ callAuthorizations, executionTrace } = await this.extractTxInformation(
+        exec,
+        opts
+      ));
+
+      await this.requestAuthorization(
+        "proveTx",
+        {
+          callAuthorizations,
+          executionTrace,
+        },
+        false
+      );
+    }
+
+    const authWitnesses = await Promise.all(
+      callAuthorizations.map((auth) =>
+        this.createAuthWit(opts.from, {
+          caller: auth.rawData.caller,
+          call: auth.rawData.functionCall,
+        })
+      )
+    );
+
+    exec.authWitnesses.push(...authWitnesses);
+
+    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+      exec,
+      opts.from,
+      fee
+    );
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "PROVING" })
+    );
+
+    const provenTx = await this.pxe.proveTx(txRequest);
+
+    await this.storeAndEmitInteraction(
+      interaction.update({ status: "PROVEN", complete: true })
+    );
+    return provenTx;
+  }
+
+  private async extractTxInformation(
+    exec: ExecutionPayload,
+    opts: SendOptions
+  ) {
+    const simulationResult = await super.simulateTx(exec, opts);
 
     const offChainEffects = collectOffchainEffects(
       simulationResult.privateExecutionResult
@@ -447,45 +515,151 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     const executionTrace =
       await callStackDecoder.decodeSimulationResult(simulationResult);
 
-    const authWitnesses = await Promise.all(
-      filteredCallAuthorizations.map((auth) =>
-        this.createAuthWit(opts.from, {
-          caller: auth.caller,
-          call: auth.functionCall,
-        })
-      )
-    );
+    return {
+      callAuthorizations: readableCallAuthorizations,
+      executionTrace,
+    };
+  }
 
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "REQUESTING AUTHORIZATION" })
-    );
+  // TODO: Fix types once @aztec/aztec.js exports BatchedMethod, BatchableMethods, and BatchResults from the main package
+  override async batch(methods: any): Promise<any> {
+    // 1. Convert methods to AuthorizationRequests, checking persistent cache
+    const items: AuthorizationRequest[] = [];
+    const cachedResults: (any | null)[] = [];
+    const itemMethodMap = new Map<string, string>();
 
-    await this.requestAuthorization(
-      "proveTx",
-      {
-        callAuthorizations: readableCallAuthorizations,
-        executionTrace,
-      },
+    for (const methodCall of methods) {
+      const { name, args } = methodCall;
+
+      // Check persistent cache
+      const persistentAuth = await this.db.retrievePersistentAuthorization(
+        this.appId,
+        name
+      );
+
+      if (persistentAuth) {
+        // TODO: Add param matching logic if needed
+        cachedResults.push(persistentAuth);
+        continue;
+      }
+
+      // Create AuthorizationRequest for this item
+      let params: any = args;
+
+      // Pre-process proveTx to include display data
+      if (name === "proveTx") {
+        const [exec, opts] = args as Parameters<typeof this.proveTx>;
+        const displayData = await this.extractTxInformation(exec, opts);
+        args.push(displayData);
+        params = {
+          originalArgs: args,
+          callAuthorizations: displayData.callAuthorizations,
+          executionTrace: displayData.executionTrace,
+        };
+      } else if (name === "registerContract") {
+        // Extract address for display
+        const [instanceData] = args;
+        let address: AztecAddress;
+        if (instanceData instanceof AztecAddress) {
+          address = instanceData;
+        } else if ("address" in instanceData) {
+          address = instanceData.address;
+        } else {
+          address = AztecAddress.ZERO; // Placeholder
+        }
+        params = {
+          originalArgs: args,
+          contractAddress: address,
+        };
+      } else if (name === "registerSender") {
+        const [address, alias] = args;
+        params = {
+          originalArgs: args,
+          address,
+          alias,
+        };
+      }
+
+      const itemId = Fr.random().toString();
+      items.push({
+        id: itemId,
+        appId: this.appId,
+        method: name,
+        params: params,
+        timestamp: Date.now(),
+      });
+      itemMethodMap.set(itemId, name);
+
+      cachedResults.push(null);
+    }
+
+    // 2. If all cached, execute without authorization
+    if (items.length === 0) {
+      return super.batch(methods);
+    }
+
+    // 3. Request batch authorization
+    const batchRequest: BatchAuthorizationRequest = {
+      id: Fr.random().toString(),
+      appId: this.appId,
+      method: "batch",
+      params: { items },
+      timestamp: Date.now(),
+    };
+
+    const batchResponse = (await this.requestAuthorization(
+      "batch",
+      batchRequest.params,
       false
+    )) as BatchAuthorizationResponse["data"];
+
+    // 4. Store persistent authorizations
+    await this.db.storeBatchPersistentAuthorizations(
+      this.appId,
+      batchResponse.itemResponses,
+      itemMethodMap
     );
 
-    exec.authWitnesses.push(...authWitnesses);
+    // 5. Execute approved items
+    const results: any[] = [];
+    let itemIndex = 0;
 
-    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-      exec,
-      opts.from,
-      fee
-    );
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "PROVING" })
-    );
+    for (let i = 0; i < methods.length; i++) {
+      if (cachedResults[i] !== null) {
+        results.push(cachedResults[i]);
+      } else {
+        const item = items[itemIndex];
+        const itemResponse = batchResponse.itemResponses[item.id];
 
-    const provenTx = await this.pxe.proveTx(txRequest);
+        if (!itemResponse || !itemResponse.approved) {
+          throw new Error(`Authorization denied for ${item.method}`);
+        }
 
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "PROVEN", complete: true })
-    );
-    return provenTx;
+        const batchedMethod = methods[i];
+        // Call the base class method
+        if (batchedMethod.name === "proveTx") {
+          const [exec, opts, txInformation] = batchedMethod.args;
+          const result = await this.proveTx(exec, opts, txInformation);
+          results.push(result);
+        } else if (batchedMethod.name === "registerContract") {
+          const [instanceData, artifact, secretKey] = batchedMethod.args;
+          const result = await super.registerContract(
+            instanceData,
+            artifact,
+            secretKey
+          );
+          results.push(result);
+        } else if (batchedMethod.name === "registerSender") {
+          const [address, alias] = batchedMethod.args;
+          const result = await super.registerSender(address, alias);
+          results.push(result);
+        }
+
+        itemIndex++;
+      }
+    }
+
+    return results as any;
   }
 
   override async simulateTx(

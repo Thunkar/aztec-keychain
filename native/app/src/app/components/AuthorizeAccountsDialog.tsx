@@ -10,7 +10,7 @@ import Checkbox from "@mui/material/Checkbox";
 import TextField from "@mui/material/TextField";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import { WalletContext } from "../../renderer.tsx";
-import type { InternalAccount } from "../../wallet-utils/external-wallet.ts";
+import type { InternalAccount } from "../../wallet-utils/internal-wallet.ts";
 import type { AuthorizationRequest } from "../../wallet-utils/authorization";
 
 type SelectedAccount = {

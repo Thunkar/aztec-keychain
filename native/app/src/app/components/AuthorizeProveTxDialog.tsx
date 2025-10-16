@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -14,10 +15,19 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableRow from "@mui/material/TableRow";
 import Divider from "@mui/material/Divider";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
 import type { AuthorizationRequest } from "../../wallet-utils/authorization";
 import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
 import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
 import { ExecutionTraceDisplay } from "./ExecutionTraceDisplay";
+
+interface AuthorizeProveTxContentProps {
+  request: AuthorizationRequest;
+  persistent?: boolean;
+  onTogglePersistent?: () => void;
+  showAppId?: boolean;
+}
 
 interface AuthorizeProveTxDialogProps {
   request: AuthorizationRequest;
@@ -25,11 +35,13 @@ interface AuthorizeProveTxDialogProps {
   onDeny: () => void;
 }
 
-export function AuthorizeProveTxDialog({
+// Reusable content component for displaying proveTx authorization details
+export function AuthorizeProveTxContent({
   request,
-  onApprove,
-  onDeny,
-}: AuthorizeProveTxDialogProps) {
+  persistent = false,
+  onTogglePersistent,
+  showAppId = true,
+}: AuthorizeProveTxContentProps) {
   const params = request.params as {
     callAuthorizations?: ReadableCallAuthorization[];
     executionTrace?: DecodedExecutionTrace;
@@ -38,15 +50,15 @@ export function AuthorizeProveTxDialog({
   const executionTrace = params.executionTrace;
 
   return (
-    <Dialog open={true} maxWidth="lg" fullWidth>
-      <DialogTitle>Transaction Authorization Request</DialogTitle>
-      <DialogContent>
+    <>
+      {showAppId && (
         <Typography variant="body1" gutterBottom>
           App <strong>{request.appId}</strong> wants to execute a transaction
           that requires your authorization.
         </Typography>
+      )}
 
-        {callAuthorizations.length === 0 ? (
+      {callAuthorizations.length === 0 ? (
           <Box
             sx={{
               mt: 2,
@@ -205,10 +217,44 @@ export function AuthorizeProveTxDialog({
           </>
         )}
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          By approving, you authorize the app to execute these function calls on
-          your behalf.
-        </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+        By approving, you authorize the app to execute these function calls on
+        your behalf.
+      </Typography>
+
+      {onTogglePersistent && (
+        <Box sx={{ mt: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={persistent}
+                onChange={onTogglePersistent}
+              />
+            }
+            label="Remember this authorization"
+          />
+        </Box>
+      )}
+    </>
+  );
+}
+
+export function AuthorizeProveTxDialog({
+  request,
+  onApprove,
+  onDeny,
+}: AuthorizeProveTxDialogProps) {
+  const [persistent, setPersistent] = useState(false);
+
+  return (
+    <Dialog open={true} maxWidth="lg" fullWidth>
+      <DialogTitle>Transaction Authorization Request</DialogTitle>
+      <DialogContent>
+        <AuthorizeProveTxContent
+          request={request}
+          persistent={persistent}
+          onTogglePersistent={() => setPersistent(!persistent)}
+        />
       </DialogContent>
       <DialogActions>
         <Button onClick={onDeny} color="error">

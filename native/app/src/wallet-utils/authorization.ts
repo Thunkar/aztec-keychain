@@ -16,6 +16,21 @@ export type AuthorizationResponse = {
   data?: any;
 };
 
+// Batch authorization types - reuse existing AuthorizationRequest
+export type BatchAuthorizationRequest = AuthorizationRequest & {
+  method: "batch";
+  params: {
+    items: AuthorizationRequest[];
+  };
+};
+
+export type BatchAuthorizationResponse = AuthorizationResponse & {
+  approved: boolean;
+  data: {
+    itemResponses: Record<string, AuthorizationResponse>;
+  };
+};
+
 export class AuthorizationRequestEvent extends CustomEvent<string> {
   constructor(content: AuthorizationRequest) {
     super("authorization-request", { detail: jsonStringify(content) });

@@ -8,7 +8,7 @@ import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
 import { ExternalWallet } from "./wallet-utils/external-wallet.ts";
 import { InternalWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
-import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
+import { createPXE, getPXEConfig } from "@aztec/pxe/server";
 import { schemas } from "@aztec/stdlib/schemas";
 
 import { createStore } from "@aztec/kv-store/lmdb-v2";

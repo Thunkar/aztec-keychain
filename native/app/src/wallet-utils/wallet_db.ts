@@ -139,10 +139,7 @@ export class WalletDB {
     alias: string,
     log: LogFn = this.userLog
   ) {
-    await this.aliases.set(
-      `senders:${alias}`,
-      Buffer.from(address.toString())
-    );
+    await this.aliases.set(`senders:${alias}`, Buffer.from(address.toString()));
     log(`Sender stored in database with alias ${alias}`);
   }
 
@@ -278,5 +275,26 @@ export class WalletDB {
       return undefined;
     }
     return JSON.parse(result.toString());
+  }
+
+  async storeBatchPersistentAuthorizations(
+    appId: string,
+    itemResponses: Record<string, any>,
+    itemMethods: Map<string, string>,
+    log: LogFn = this.userLog
+  ) {
+    for (const [itemId, response] of Object.entries(itemResponses)) {
+      if (response.approved && response.data?.persistent) {
+        const method = itemMethods.get(itemId);
+        if (method) {
+          await this.storePersistentAuthorization(
+            appId,
+            method,
+            response.data,
+            log
+          );
+        }
+      }
+    }
   }
 }
