@@ -16,7 +16,7 @@ import type {
   WalletInteractionType,
 } from "./wallet-utils/wallet-interaction";
 import { WalletInteractionSchema } from "./wallet-utils/wallet-interaction";
-import type { InternalAccount } from "./wallet-utils/native-wallet";
+import type { InternalAccount } from "./wallet-utils/external-wallet";
 import type {
   AuthorizationRequest,
   AuthorizationResponse,
@@ -76,16 +76,14 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
       .args()
       .returns(z.array(WalletInteractionSchema)),
     // @ts-ignore
-    resolveAuthorization: z
-      .function()
-      .args(
-        z.object({
-          id: z.string(),
-          approved: z.boolean(),
-          appId: z.string(),
-          data: z.any().optional(),
-        })
-      ),
+    resolveAuthorization: z.function().args(
+      z.object({
+        id: z.string(),
+        approved: z.boolean(),
+        appId: z.string(),
+        data: z.any().optional(),
+      })
+    ),
   };
 
 export class WalletInternalProxy {

@@ -6,10 +6,7 @@ import {
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
-import {
-  ExternalWallet,
-  InternalWallet,
-} from "./wallet-utils/native-wallet.ts";
+import { ExternalWallet } from "./wallet-utils/external-wallet.ts";
 import { InternalWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
 import { createPXE, getPXEConfig, type PXE } from "@aztec/pxe/server";
 import { schemas } from "@aztec/stdlib/schemas";
@@ -27,6 +24,7 @@ import type {
   AuthorizationResponse,
 } from "./wallet-utils/authorization.ts";
 import type { Logger } from "pino";
+import { InternalWallet } from "./wallet-utils/internal-wallet.ts";
 
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
