@@ -10,8 +10,9 @@ import {
   type AbiDecoded,
 } from "@aztec/stdlib/abi";
 import type { PXE } from "@aztec/pxe/server";
-import type { WalletDB } from "./wallet_db";
+import type { WalletDB } from "../wallet_db";
 import type { OffchainEffect } from "@aztec/stdlib/tx";
+import { getAddressAlias } from "./utils";
 
 export interface ReadableCallAuthorization {
   contract: {
@@ -43,39 +44,6 @@ export class CallAuthorizationFormatter {
     private pxe: PXE,
     private db: WalletDB
   ) {}
-
-  private async getAddressAlias(address: AztecAddress): Promise<string> {
-    // Check if it's an account
-    const accounts = await this.db.listAccounts();
-    const account = accounts.find((acc) => acc.item.equals(address));
-    if (account) {
-      return account.alias;
-    }
-
-    // Check if it's a registered sender (contact)
-    const senders = await this.db.listSenders();
-    const sender = senders.find((s) => s.item.equals(address));
-    if (sender) {
-      return sender.alias.replace("senders:", "");
-    }
-
-    // Try to get contract metadata for more info
-    try {
-      const metadata = await this.pxe.getContractMetadata(address);
-      const { artifact } = await this.pxe.getContractClassMetadata(
-        metadata.contractInstance!.currentContractClassId,
-        true
-      );
-      if (artifact) {
-        return artifact.name;
-      }
-    } catch {
-      // Ignore errors, use what we have
-    }
-
-    // Return shortened address if no alias found
-    return `${address.toString().slice(0, 10)}...${address.toString().slice(-8)}`;
-  }
 
   private formatAbiValue(value: AbiDecoded): string {
     if (value === null || value === undefined) {
@@ -161,10 +129,14 @@ export class CallAuthorizationFormatter {
     const functionName = auth.functionCall.name;
 
     // Get contract alias/name
-    const contractName = await this.getAddressAlias(contractAddress);
+    const contractName = await getAddressAlias(
+      this.pxe,
+      this.db,
+      contractAddress
+    );
 
     // Get caller alias
-    const callerAlias = await this.getAddressAlias(auth.caller);
+    const callerAlias = await getAddressAlias(this.pxe, this.db, auth.caller);
 
     // Format parameters
     const parameters = await Promise.all(
@@ -181,7 +153,7 @@ export class CallAuthorizationFormatter {
           if (valueStr.startsWith("0x") && valueStr.length === 66) {
             try {
               const addr = AztecAddress.fromString(valueStr);
-              const alias = await this.getAddressAlias(addr);
+              const alias = await getAddressAlias(this.pxe, this.db, addr);
               formattedValue = `${alias} (${formattedValue.slice(0, 10)}...${formattedValue.slice(-8)})`;
             } catch {
               // Not a valid address, use original formatted value

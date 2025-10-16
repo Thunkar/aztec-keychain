@@ -692,7 +692,7 @@
     viem "2.23.7"
     zod "^3.23.8"
 
-"@aztec/foundation@3.0.0-nightly.20251015":
+"@aztec/foundation@3.0.0-nightly.20251015", "@aztec/foundation@v3.0.0-nightly.20251015":
   version "3.0.0-nightly.20251015"
   resolved "https://registry.yarnpkg.com/@aztec/foundation/-/foundation-3.0.0-nightly.20251015.tgz#7889163d39289162223d04a2713979532b343b8c"
   integrity sha512-l9r6eD14Ite+0wUj5UGkiosG9iD/w3JKwuq6aP6D/CJIApk9+3rh5ZITXaHhFdPGWy9TOp9ileLs3bKe1e9kVw==

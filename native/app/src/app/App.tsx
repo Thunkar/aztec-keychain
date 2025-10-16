@@ -220,7 +220,7 @@ export function App() {
             <Typography variant="h6">Menu</Typography>
           </Box>
           <Box sx={{ overflowY: "auto" }}>
-            <List>
+            <List sx={{ padding: 0 }}>
               <ListItem disablePadding>
                 <ListItemButton
                   sx={{ height: 64 }}

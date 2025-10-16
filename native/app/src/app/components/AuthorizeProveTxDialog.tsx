@@ -13,8 +13,11 @@ import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableRow from "@mui/material/TableRow";
+import Divider from "@mui/material/Divider";
 import type { AuthorizationRequest } from "../../wallet-utils/authorization";
-import type { ReadableCallAuthorization } from "../../wallet-utils/call-authorization-formatter";
+import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
+import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
+import { ExecutionTraceDisplay } from "./ExecutionTraceDisplay";
 
 interface AuthorizeProveTxDialogProps {
   request: AuthorizationRequest;
@@ -27,14 +30,20 @@ export function AuthorizeProveTxDialog({
   onApprove,
   onDeny,
 }: AuthorizeProveTxDialogProps) {
-  const callAuthorizations = (request.params[0] || []) as ReadableCallAuthorization[];
+  const params = request.params as {
+    callAuthorizations?: ReadableCallAuthorization[];
+    executionTrace?: DecodedExecutionTrace;
+  };
+  const callAuthorizations = params.callAuthorizations || [];
+  const executionTrace = params.executionTrace;
 
   return (
-    <Dialog open={true} maxWidth="md" fullWidth>
+    <Dialog open={true} maxWidth="lg" fullWidth>
       <DialogTitle>Transaction Authorization Request</DialogTitle>
       <DialogContent>
         <Typography variant="body1" gutterBottom>
-          App <strong>{request.appId}</strong> wants to execute a transaction that requires your authorization.
+          App <strong>{request.appId}</strong> wants to execute a transaction
+          that requires your authorization.
         </Typography>
 
         {callAuthorizations.length === 0 ? (
@@ -53,10 +62,14 @@ export function AuthorizeProveTxDialog({
         ) : (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
-              Function Calls Requiring Authorization ({callAuthorizations.length}):
+              Function Calls Requiring Authorization (
+              {callAuthorizations.length}):
             </Typography>
             {callAuthorizations.map((auth, index) => (
-              <Accordion key={index} defaultExpanded={callAuthorizations.length === 1}>
+              <Accordion
+                key={index}
+                defaultExpanded={callAuthorizations.length === 1}
+              >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ flexGrow: 1 }}>
                     <Typography variant="subtitle1">
@@ -69,7 +82,11 @@ export function AuthorizeProveTxDialog({
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box>
-                    <Typography variant="caption" color="text.secondary" gutterBottom>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      gutterBottom
+                    >
                       Contract:
                     </Typography>
                     <Box
@@ -95,7 +112,11 @@ export function AuthorizeProveTxDialog({
                       </Typography>
                     </Box>
 
-                    <Typography variant="caption" color="text.secondary" gutterBottom>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      gutterBottom
+                    >
                       Caller:
                     </Typography>
                     <Box
@@ -123,7 +144,11 @@ export function AuthorizeProveTxDialog({
 
                     {auth.parameters.length > 0 && (
                       <>
-                        <Typography variant="caption" color="text.secondary" gutterBottom>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          gutterBottom
+                        >
                           Parameters:
                         </Typography>
                         <Box
@@ -172,8 +197,17 @@ export function AuthorizeProveTxDialog({
           </Box>
         )}
 
+        {/* Execution Trace */}
+        {executionTrace && (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <ExecutionTraceDisplay trace={executionTrace} />
+          </>
+        )}
+
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          By approving, you authorize the app to execute these function calls on your behalf.
+          By approving, you authorize the app to execute these function calls on
+          your behalf.
         </Typography>
       </DialogContent>
       <DialogActions>

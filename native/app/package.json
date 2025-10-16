@@ -57,6 +57,7 @@
     "@aztec/entrypoints": "v3.0.0-nightly.20251015",
     "@aztec/kv-store": "v3.0.0-nightly.20251015",
     "@aztec/noir-contracts.js": "v3.0.0-nightly.20251015",
+    "@aztec/foundation": "v3.0.0-nightly.20251015",
     "@aztec/pxe": "v3.0.0-nightly.20251015",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",

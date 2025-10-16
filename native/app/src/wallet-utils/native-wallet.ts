@@ -14,10 +14,7 @@ import {
   SponsoredFeePaymentMethod,
   type FeeOptions,
 } from "@aztec/aztec.js";
-import {
-  FunctionType,
-  type ContractArtifact,
-} from "@aztec/stdlib/abi";
+import { FunctionType, type ContractArtifact } from "@aztec/stdlib/abi";
 import type {
   ContractInstanceWithAddress,
   ContractInstantiationData,
@@ -64,7 +61,8 @@ import {
 } from "./authorization";
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
-import { CallAuthorizationFormatter } from "./call-authorization-formatter";
+import { CallAuthorizationFormatter } from "./decoding/call-authorization-formatter";
+import { TxCallStackDecoder } from "./decoding/tx-callstack-decoder";
 
 // TODO: remove this once aztec.js exports it
 export type ContractInstanceAndArtifact = Pick<
@@ -160,7 +158,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
   protected async requestAuthorization(
     method: string,
-    params: any[],
+    params: any,
     persistent = false
   ): Promise<AuthorizationResponse> {
     // Check for existing persistent authorization
@@ -297,7 +295,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    const response = await this.requestAuthorization("getAccounts", [], true);
+    const response = await this.requestAuthorization("getAccounts", {}, true);
     // Return the authorized accounts with their (potentially overridden) aliases
     if (!response.data || !response.data.accounts) {
       throw new Error("Authorization response missing account data");
@@ -344,11 +342,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
 
     // Request authorization with persistent storage
-    await this.requestAuthorization("registerContract", [
-      {
-        address: addressToCheck.toString(),
-      },
-    ]);
+    await this.requestAuthorization("registerContract", {
+      address: addressToCheck.toString(),
+    });
 
     // Register the contract with PXE
     return await super.registerContract(instanceData, artifact, secretKey);
@@ -358,17 +354,17 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     address: AztecAddress,
     alias: string
   ): Promise<AztecAddress> {
-    await this.requestAuthorization("registerSender", [
-      address.toString(),
+    await this.requestAuthorization("registerSender", {
+      address: address.toString(),
       alias,
-    ]);
+    });
 
     await this.db.storeSender(address, alias);
     return this.pxe.registerSender(address);
   }
 
   override async getSenders(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestAuthorization("getSenders", []);
+    await this.requestAuthorization("getSenders", {});
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -434,15 +430,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     // Parse call authorizations from offchain effects
     const formatter = new CallAuthorizationFormatter(this.pxe, this.db);
     const callAuthorizations = await Promise.all(
-      offChainEffects.map((effect) => formatter.parseCallAuthorizationFromEffect(effect))
+      offChainEffects.map((effect) =>
+        formatter.parseCallAuthorizationFromEffect(effect)
+      )
     );
 
     const filteredCallAuthorizations = callAuthorizations.filter(Boolean);
 
     // Format for display
-    const readableCallAuthorizations = await formatter.formatCallAuthorizationsForDisplay(
-      filteredCallAuthorizations
-    );
+    const readableCallAuthorizations =
+      await formatter.formatCallAuthorizationsForDisplay(
+        filteredCallAuthorizations
+      );
+
+    // Decode execution call stack
+    const callStackDecoder = new TxCallStackDecoder(this.pxe, this.db);
+    const executionTrace =
+      await callStackDecoder.decodeSimulationResult(simulationResult);
 
     const authWitnesses = await Promise.all(
       filteredCallAuthorizations.map((auth) =>
@@ -454,12 +458,15 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     );
 
     await this.storeAndEmitInteraction(
-      interaction.update({ status: "REQUESTION AUTHORIZATION" })
+      interaction.update({ status: "REQUESTING AUTHORIZATION" })
     );
 
     await this.requestAuthorization(
       "proveTx",
-      [readableCallAuthorizations, authWitnesses],
+      {
+        callAuthorizations: readableCallAuthorizations,
+        executionTrace,
+      },
       false
     );
 
@@ -583,6 +590,14 @@ export class InternalWallet extends ExternalWallet {
     salt: Fr,
     signingKey: Buffer
   ): Promise<void> {
+    const interaction = WalletInteraction.from({
+      type: "createAccount",
+      status: "CREATING",
+      complete: false,
+      title: `Registering and creating account ${alias}`,
+    });
+    await this.storeAndEmitInteraction(interaction);
+
     const accountManager = await this.createAccountInternal(
       type,
       secret,
@@ -596,13 +611,12 @@ export class InternalWallet extends ExternalWallet {
       alias,
       signingKey,
     });
-    const interaction = WalletInteraction.from({
-      type: "createAccount",
-      status: "PROVING",
-      complete: false,
-      title: `Registering and creating account ${accountManager.address}`,
-    });
-    await this.storeAndEmitInteraction(interaction);
+    await this.storeAndEmitInteraction(
+      interaction.update({
+        status: "CREATED",
+        description: `Address ${accountManager.address.toString()}`,
+      })
+    );
 
     const deployMethod = await accountManager.getDeployMethod();
     const { prepareForFeePayment } = await import("./sponsoredFPC");
@@ -624,6 +638,19 @@ export class InternalWallet extends ExternalWallet {
     await this.storeAndEmitInteraction(
       interaction.update({ status: "DEPLOYED", complete: true })
     );
+  }
+
+  override async proveTx(
+    exec: ExecutionPayload,
+    opts: SendOptions
+  ): Promise<TxProvingResult> {
+    const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
+    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+      exec,
+      opts.from,
+      fee
+    );
+    return this.pxe.proveTx(txRequest);
   }
 
   // Internal-only method: Delete account
