@@ -69,9 +69,7 @@ function PrivateCallDisplay({
           boxShadow: 1,
         }}
       >
-        <AccordionSummary
-          expandIcon={<ExpandMoreIcon />}
-        >
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Box
             sx={{
               display: "flex",
@@ -280,6 +278,8 @@ function PrivateCallDisplay({
 }
 
 function PublicEnqueueDisplay({ enqueue }: { enqueue: PublicEnqueueEvent }) {
+  const hasArgs = enqueue.args?.length > 0;
+
   return (
     <Box
       sx={{
@@ -300,7 +300,8 @@ function PublicEnqueueDisplay({ enqueue }: { enqueue: PublicEnqueueEvent }) {
           variant="body2"
           sx={{ fontFamily: "monospace", fontWeight: "medium" }}
         >
-          Enqueued Public: {enqueue.contract.name}.{enqueue.function}()
+          Enqueued Public: {enqueue.contract.name}.{enqueue.function}(
+          {hasArgs ? "..." : ""})
         </Typography>
         <Chip
           icon={<ScheduleIcon />}
@@ -320,6 +321,58 @@ function PublicEnqueueDisplay({ enqueue }: { enqueue: PublicEnqueueEvent }) {
       >
         Will execute on node after private execution completes
       </Typography>
+
+      {/* Arguments (if available) */}
+      {hasArgs && (
+        <Box sx={{ mt: 1.5 }}>
+          <Typography
+            variant="caption"
+            color="warning.dark"
+            gutterBottom
+            sx={{ fontWeight: "bold" }}
+          >
+            Arguments:
+          </Typography>
+          <Box
+            sx={{
+              p: 1,
+              bgcolor: "background.paper",
+              borderRadius: 1,
+              mt: 0.5,
+            }}
+          >
+            <Table size="small">
+              <TableBody>
+                {enqueue.args.map((arg, i) => (
+                  <TableRow key={i}>
+                    <TableCell
+                      sx={{
+                        fontFamily: "monospace",
+                        fontWeight: "medium",
+                        border: 0,
+                        py: 0.5,
+                        color: "warning.dark",
+                      }}
+                    >
+                      {arg.name}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontFamily: "monospace",
+                        wordBreak: "break-all",
+                        border: 0,
+                        py: 0.5,
+                      }}
+                    >
+                      {arg.value}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
