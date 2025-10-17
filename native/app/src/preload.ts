@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld("walletAPI", {
   ): Promise<WalletInteraction<WalletInteractionType>[]> {
     return ipcRenderer.invoke("getInteractions", stringifiedArgs);
   },
+  getExecutionTrace(stringifiedArgs: string): Promise<any> {
+    return ipcRenderer.invoke("getExecutionTrace", stringifiedArgs);
+  },
   onWalletUpdate(callback) {
     return ipcRenderer.on("wallet-update", (_event, stringifiedEvent) =>
       callback(stringifiedEvent)

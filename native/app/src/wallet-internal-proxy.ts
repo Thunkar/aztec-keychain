@@ -20,6 +20,7 @@ import type {
   AuthorizationResponse,
 } from "./wallet-utils/authorization";
 import type { InternalAccount } from "./wallet-utils/internal-wallet";
+import type { DecodedExecutionTrace } from "./wallet-utils/decoding/tx-callstack-decoder";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];
@@ -27,6 +28,52 @@ type FunctionsOf<T> = {
 
 type OnWalletUpdateListener = (interaction: WalletInteraction<any>) => void;
 type OnAuthorizationRequestListener = (request: AuthorizationRequest) => void;
+
+// Zod schema for execution trace components
+const ContractInfoSchema = z.object({
+  name: z.string(),
+  address: z.string(),
+});
+
+const ArgValueSchema = z.object({
+  name: z.string(),
+  value: z.string(),
+});
+
+const PublicEnqueueEventSchema: z.ZodType<any> = z.object({
+  type: z.literal("public-enqueue"),
+  depth: z.number(),
+  counter: z.number(),
+  contract: ContractInfoSchema,
+  function: z.string(),
+  caller: ContractInfoSchema,
+  isStaticCall: z.boolean(),
+});
+
+const PrivateCallEventSchema: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    type: z.literal("private-call"),
+    depth: z.number(),
+    counter: z.object({
+      start: z.number(),
+      end: z.number(),
+    }),
+    contract: ContractInfoSchema,
+    function: z.string(),
+    caller: ContractInfoSchema,
+    isStaticCall: z.boolean(),
+    args: z.array(ArgValueSchema),
+    returnValues: z.array(ArgValueSchema),
+    nestedEvents: z.array(
+      z.union([PrivateCallEventSchema, PublicEnqueueEventSchema])
+    ),
+  })
+);
+
+const DecodedExecutionTraceSchema = z.object({
+  privateExecution: PrivateCallEventSchema,
+  publicExecutionQueue: z.array(PublicEnqueueEventSchema),
+});
 
 // Internal wallet interface - extends external with internal-only methods
 export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
@@ -39,6 +86,9 @@ export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
   ): Promise<void>;
   getAccounts(): Promise<InternalAccount[]>; // Override with enriched type
   getInteractions(): Promise<WalletInteraction<WalletInteractionType>[]>;
+  getExecutionTrace(
+    interactionId: string
+  ): Promise<DecodedExecutionTrace | undefined>;
   resolveAuthorization(response: AuthorizationResponse): void;
   onWalletUpdate(callback: OnWalletUpdateListener): void;
   onAuthorizationRequest(callback: OnAuthorizationRequestListener): void;
@@ -74,6 +124,11 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
       .function()
       .args()
       .returns(z.array(WalletInteractionSchema)),
+    // @ts-ignore
+    getExecutionTrace: z
+      .function()
+      .args(z.string())
+      .returns(DecodedExecutionTraceSchema.optional()),
     // @ts-ignore
     resolveAuthorization: z.function().args(
       z.object({

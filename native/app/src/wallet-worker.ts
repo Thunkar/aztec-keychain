@@ -190,7 +190,8 @@ const handleEvent = async (
     result = await wallet[type](...sanitizedArgs);
   } catch (err: any) {
     userLog.error(`Error handling ${type}: ${err.message}`);
-    error = err;
+    // Serialize error properly - Error objects don't stringify well
+    error = err instanceof Error ? err.message : String(err);
   }
   port.postMessage({
     origin: "wallet",
@@ -262,7 +263,7 @@ async function main() {
         // If this is an authorization response, it originated from an app, but
         // was handled interally. Recover the original app from the args.
         const appId =
-          // This is sligthly ugly since we're takinga advantage of the fact that
+          // This is sligthly ugly since we're taking advantage of the fact that
           // we know the shape of the args for this specific method.
           type === "resolveAuthorization" && args[0].appId !== "this"
             ? args[0].appId

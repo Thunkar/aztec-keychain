@@ -6,6 +6,7 @@ import {
   type WalletInteractionType,
 } from "./wallet-interaction";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
+import { TxSimulationResult } from "@aztec/stdlib/tx";
 
 export const AccountTypes = [
   "schnorr",
@@ -21,6 +22,7 @@ export class WalletDB {
     private bridgedFeeJuice: AztecAsyncMap<string, Buffer>,
     private interactions: AztecAsyncMap<string, Buffer>,
     private authorizations: AztecAsyncMap<string, Buffer>,
+    private simulationResults: AztecAsyncMap<string, string>,
     private userLog: LogFn
   ) {}
 
@@ -30,12 +32,16 @@ export class WalletDB {
     const bridgedFeeJuice = store.openMap<string, Buffer>("bridgedFeeJuice");
     const interactions = store.openMap<string, Buffer>("interactions");
     const authorizations = store.openMap<string, Buffer>("authorizations");
+    const simulationResults = store.openMap<string, string>(
+      "simulationResults"
+    );
     return new WalletDB(
       accounts,
       aliases,
       bridgedFeeJuice,
       interactions,
       authorizations,
+      simulationResults,
       userLog
     );
   }
@@ -296,5 +302,25 @@ export class WalletDB {
         }
       }
     }
+  }
+
+  async storeSimulationResult(
+    interactionId: string,
+    simulationResult: TxSimulationResult,
+    log: LogFn = this.userLog
+  ) {
+    await this.simulationResults.set(
+      interactionId,
+      jsonStringify(simulationResult)
+    );
+    log(`Simulation result stored for interaction ${interactionId}`);
+  }
+
+  async getSimulationResult(interactionId: string): Promise<any | undefined> {
+    const result = await this.simulationResults.getAsync(interactionId);
+    if (!result) {
+      return undefined;
+    }
+    return JSON.parse(result);
   }
 }

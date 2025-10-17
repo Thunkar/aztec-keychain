@@ -10,7 +10,9 @@ import type { AuthorizationData, GetAccountsAuthData } from "./authorization";
 import { WalletInteraction } from "./wallet-interaction";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 
-import { type TxProvingResult } from "@aztec/stdlib/tx";
+import { TxSimulationResult, type TxProvingResult } from "@aztec/stdlib/tx";
+import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
+import { TxDecodingService } from "./decoding/tx-decoding-service";
 
 // Enriched account type for internal use
 export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
@@ -133,5 +135,22 @@ export class InternalWallet extends ExternalWallet {
   // Internal-only: Get all interactions (unfiltered)
   getInteractions() {
     return this.db.listInteractions();
+  }
+
+  async getExecutionTrace(
+    interactionId: string
+  ): Promise<DecodedExecutionTrace | undefined> {
+    // Retrieve the stored simulation result
+    const simulationResult = await this.db.getSimulationResult(interactionId);
+    if (!simulationResult) {
+      return undefined;
+    }
+    const decodingService = new TxDecodingService(this.pxe, this.db);
+    const parsedSimulationResult =
+      TxSimulationResult.schema.parse(simulationResult);
+    const { executionTrace } = await decodingService.decodeTransaction(
+      parsedSimulationResult
+    );
+    return executionTrace;
   }
 }

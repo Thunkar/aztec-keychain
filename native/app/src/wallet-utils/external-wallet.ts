@@ -471,11 +471,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
         );
 
-        ({ callAuthorizations, executionTrace } = await this.extractTxInformation(
-          exec,
-          opts,
-          interaction
-        ));
+        ({ callAuthorizations, executionTrace } =
+          await this.extractTxInformation(exec, opts, interaction));
 
         await this.storeAndEmitInteraction(
           interaction.update({ status: "REQUESTING AUTHORIZATION" })
@@ -545,7 +542,17 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
     // Use TxDecodingService to decode transaction information with caching
     const decodingService = new TxDecodingService(this.pxe, this.db);
-    return await decodingService.decodeTransaction(simulationResult);
+    const decoded = await decodingService.decodeTransaction(simulationResult);
+
+    // Persist simulation result for later retrieval if we have an interaction
+    if (existingInteraction) {
+      await this.db.storeSimulationResult(
+        existingInteraction.id,
+        simulationResult
+      );
+    }
+
+    return decoded;
   }
 
   // TODO: Fix types once @aztec/aztec.js exports BatchedMethod, BatchableMethods, and BatchResults from the main package
@@ -574,14 +581,21 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
       // Pre-process proveTx to include display data
       if (name === "proveTx") {
-        const [exec, opts] = args as Parameters<typeof this.proveTx>;
-        const displayData = await this.extractTxInformation(exec, opts);
-        args.push(displayData);
-        params = {
-          originalArgs: args,
-          callAuthorizations: displayData.callAuthorizations,
-          executionTrace: displayData.executionTrace,
-        };
+        try {
+          const [exec, opts] = args as Parameters<typeof this.proveTx>;
+          const displayData = await this.extractTxInformation(exec, opts);
+          args.push(displayData);
+          params = {
+            originalArgs: args,
+            callAuthorizations: displayData.callAuthorizations,
+            executionTrace: displayData.executionTrace,
+          };
+        } catch (error) {
+          // If simulation/extraction fails, don't add to batch
+          // Push error as cached result so it gets thrown later
+          cachedResults.push(Promise.reject(error));
+          continue;
+        }
       } else if (name === "registerContract") {
         // Check if contract already exists in PXE
         const [instanceData, artifact] = args;
@@ -668,8 +682,14 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
     for (let i = 0; i < methods.length; i++) {
       if (cachedResults[i] !== null) {
-        // Use cached result (from persistent auth or PXE check)
-        results.push(cachedResults[i]);
+        // Use cached result (from persistent auth, PXE check, or error)
+        // If it's a rejected promise (from simulation failure), await it to throw
+        const result = cachedResults[i];
+        if (result && typeof result.then === "function") {
+          results.push(await result);
+        } else {
+          results.push(result);
+        }
       } else {
         const item = items[itemIndex];
         const itemResponse = response.itemResponses[item.id];
@@ -704,7 +724,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       existingInteraction ??
       WalletInteraction.from({
         type: "simulateTx",
-        title: "Simulating interaction",
+        title: `Simulating transaction`,
+        description: `App: ${this.appId}`,
         complete: false,
         status: "SIMULATING",
       });
@@ -747,7 +768,16 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           contracts: contractOverrides,
         }
       );
+
+      // For standalone simulations (no existingInteraction), store the raw simulation result
       if (!existingInteraction) {
+        try {
+          await this.db.storeSimulationResult(interaction.id, result);
+        } catch (storageError) {
+          // If storage fails, just log it - don't fail the simulation
+          this.log.error(`Failed to store simulation result: ${storageError}`);
+        }
+
         await this.storeAndEmitInteraction(
           interaction.update({ complete: true, status: "SIMULATED" })
         );

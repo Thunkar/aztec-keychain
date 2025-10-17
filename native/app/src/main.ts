@@ -92,6 +92,7 @@ app.on("ready", async () => {
     "getTxReceipt",
     "createAccount",
     "getInteractions",
+    "getExecutionTrace",
     "resolveAuthorization",
   ];
   for (const method of internalMethods) {
