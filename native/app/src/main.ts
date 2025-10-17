@@ -4,10 +4,42 @@ import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
 import { WalletInternalProxy } from "./wallet-internal-proxy";
 import { inspect } from "node:util";
+import fs from "node:fs";
+import os from "node:os";
+
+// Setup logging to file for debugging
+const logFile = path.join(os.homedir(), "keychain", "aztec-keychain-debug.log");
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+function writeLog(level: string, ...args: any[]) {
+  const timestamp = new Date().toISOString();
+  const message = `[${timestamp}] [${level}] ${args
+    .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : String(arg)))
+    .join(" ")}\n`;
+
+  fs.appendFileSync(logFile, message);
+  if (level === "ERROR") {
+    originalConsoleError(...args);
+  } else {
+    originalConsoleLog(...args);
+  }
+}
+
+console.log = (...args: any[]) => writeLog("INFO", ...args);
+console.error = (...args: any[]) => writeLog("ERROR", ...args);
+
+console.log(`=== App Starting ===`);
+console.log(`Log file: ${logFile}`);
 
 // Replace placeholder paths with actual runtime paths for packaged app
 if (app.isPackaged) {
   const resourcesPath = process.resourcesPath;
+
+  console.log("=== Path Resolution ===");
+  console.log("process.resourcesPath:", resourcesPath);
+  console.log("process.cwd():", process.cwd());
+  console.log("__dirname:", __dirname);
 
   // Replace placeholders in environment variables
   if (process.env.BB_WASM_PATH?.includes("__RESOURCES_PATH__")) {
@@ -21,6 +53,42 @@ if (app.isPackaged) {
       "__RESOURCES_PATH__",
       resourcesPath
     );
+  }
+
+  console.log("BB_BINARY_PATH:", process.env.BB_BINARY_PATH);
+  console.log("BB_WASM_PATH:", process.env.BB_WASM_PATH);
+  console.log(
+    "BB_WORKING_DIRECTORY (from env):",
+    process.env.BB_WORKING_DIRECTORY
+  );
+
+  // Verify binary exists and is executable
+  try {
+    const stats = fs.statSync(process.env.BB_BINARY_PATH!);
+    console.log(
+      `BB binary found: ${stats.size} bytes, mode: ${stats.mode.toString(8)}`
+    );
+  } catch (error: any) {
+    console.error("BB binary check failed:", error.message);
+  }
+
+  // Ensure BB_WORKING_DIRECTORY is set to a writable location
+  const bbWorkingDir = path.join(os.tmpdir(), "bb");
+  process.env.BB_WORKING_DIRECTORY = bbWorkingDir;
+  console.log("BB_WORKING_DIRECTORY (updated):", bbWorkingDir);
+
+  // Set CRS_PATH to the same directory so bb can write .bb-crs there
+  process.env.CRS_PATH = bbWorkingDir;
+  console.log("CRS_PATH (set):", bbWorkingDir);
+
+  // Create the working directory if it doesn't exist
+  try {
+    if (!fs.existsSync(bbWorkingDir)) {
+      fs.mkdirSync(bbWorkingDir, { recursive: true });
+      console.log("Created BB_WORKING_DIRECTORY");
+    }
+  } catch (error: any) {
+    console.error("Failed to create BB_WORKING_DIRECTORY:", error.message);
   }
 }
 

@@ -4,6 +4,8 @@ import Box from "@mui/material/Box";
 import Fab from "@mui/material/Fab";
 import AddIcon from "@mui/icons-material/Add";
 import Typography from "@mui/material/Typography";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { AccountBox } from "./AccountBox.tsx";
 import { WalletContext } from "../../renderer.tsx";
@@ -18,6 +20,7 @@ export function AccountsManager() {
     right: INTERACTIONS_PANEL_WIDTH + 16,
   });
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const { walletAPI } = useContext(WalletContext);
@@ -101,18 +104,36 @@ export function AccountsManager() {
             e.preventDefault();
             return;
           }
-          await walletAPI.createAccount(
-            `ECDSAR1 ${accounts.length}`,
-            "ecdsasecp256r1",
-            Fr.random(),
-            Fr.random(),
-            randomBytes(32)
-          );
-          await loadAccounts();
+          try {
+            await walletAPI.createAccount(
+              `ECDSAR1 ${accounts.length}`,
+              "ecdsasecp256r1",
+              Fr.random(),
+              Fr.random(),
+              randomBytes(32)
+            );
+            await loadAccounts();
+          } catch (err: any) {
+            setError(err.message || "Failed to create account");
+          }
         }}
       >
         <AddIcon />
       </Fab>
+      <Snackbar
+        open={error !== null}
+        autoHideDuration={6000}
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setError(null)}
+          severity="error"
+          sx={{ width: "100%" }}
+        >
+          {error}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

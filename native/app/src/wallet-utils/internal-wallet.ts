@@ -72,46 +72,59 @@ export class InternalWallet extends ExternalWallet {
     });
     await this.storeAndEmitInteraction(interaction);
 
-    const accountManager = await this.createAccountInternal(
-      type,
-      secret,
-      salt,
-      signingKey
-    );
-    await this.db.storeAccount(accountManager.address, {
-      type,
-      secretKey: secret,
-      salt,
-      alias,
-      signingKey,
-    });
-    await this.storeAndEmitInteraction(
-      interaction.update({
-        status: "PROVING DEPLOYMENT",
-        description: `Address ${accountManager.address.toString()}`,
-      })
-    );
+    try {
+      const accountManager = await this.createAccountInternal(
+        type,
+        secret,
+        salt,
+        signingKey
+      );
+      await this.db.storeAccount(accountManager.address, {
+        type,
+        secretKey: secret,
+        salt,
+        alias,
+        signingKey,
+      });
+      await this.storeAndEmitInteraction(
+        interaction.update({
+          status: "PROVING DEPLOYMENT",
+          description: `Address ${accountManager.address.toString()}`,
+        })
+      );
 
-    const deployMethod = await accountManager.getDeployMethod();
-    const { prepareForFeePayment } = await import("./sponsoredFPC");
-    const paymentMethod = await prepareForFeePayment(this);
-    const opts = {
-      from: AztecAddress.ZERO,
-      fee: {
-        paymentMethod,
-      },
-      skipClassPublication: true,
-      skipInstancePublication: true,
-    };
+      const deployMethod = await accountManager.getDeployMethod();
+      const { prepareForFeePayment } = await import("./sponsoredFPC");
+      const paymentMethod = await prepareForFeePayment(this);
+      const opts = {
+        from: AztecAddress.ZERO,
+        fee: {
+          paymentMethod,
+        },
+        skipClassPublication: true,
+        skipInstancePublication: true,
+      };
 
-    const provenTx = await deployMethod.prove(opts);
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "SENDING DEPLOYMENT TX" })
-    );
-    await provenTx.send().wait();
-    await this.storeAndEmitInteraction(
-      interaction.update({ status: "DEPLOYED", complete: true })
-    );
+      const provenTx = await deployMethod.prove(opts);
+      await this.storeAndEmitInteraction(
+        interaction.update({ status: "SENDING DEPLOYMENT TX" })
+      );
+      await provenTx.send().wait();
+      await this.storeAndEmitInteraction(
+        interaction.update({ status: "DEPLOYED", complete: true })
+      );
+    } catch (error: any) {
+      // Update interaction with error status
+      await this.storeAndEmitInteraction(
+        interaction.update({
+          status: "ERROR",
+          complete: true,
+          description: `Failed: ${error.message || String(error)}`,
+        })
+      );
+      // Re-throw so the UI can also handle it
+      throw error;
+    }
   }
 
   override async proveTx(

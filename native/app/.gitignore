@@ -94,3 +94,5 @@ out/
 pxe-*
 
 bb/
+
+.bb-crs/
