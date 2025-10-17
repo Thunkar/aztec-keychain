@@ -92,6 +92,14 @@ export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
   resolveAuthorization(response: AuthorizationResponse): void;
   onWalletUpdate(callback: OnWalletUpdateListener): void;
   onAuthorizationRequest(callback: OnAuthorizationRequestListener): void;
+  // App authorization management
+  listAuthorizedApps(): Promise<string[]>;
+  getAppAuthorizations(appId: string): Promise<Record<string, any>>;
+  updateAccountAuthorization(
+    appId: string,
+    accounts: { alias: string; item: string }[]
+  ): Promise<void>;
+  revokeAppAuthorizations(appId: string): Promise<void>;
 };
 
 export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface> =
@@ -138,6 +146,22 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
         itemResponses: z.record(z.any()),
       })
     ),
+    // App authorization management
+    listAuthorizedApps: z.function().args().returns(z.array(z.string())),
+    // @ts-ignore
+    getAppAuthorizations: z
+      .function()
+      .args(z.string())
+      .returns(z.record(z.any())),
+    // @ts-ignore
+    updateAccountAuthorization: z
+      .function()
+      .args(
+        z.string(),
+        z.array(z.object({ alias: z.string(), item: z.string() }))
+      ),
+    // @ts-ignore
+    revokeAppAuthorizations: z.function().args(z.string()),
   };
 
 export class WalletInternalProxy {

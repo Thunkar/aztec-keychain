@@ -30,6 +30,7 @@ export const WalletInteractionSchema = z
     complete: z.boolean(),
     title: optional(z.string()),
     description: optional(z.string()),
+    timestamp: z.number(),
   })
   .transform((data: any) => WalletInteraction.from(data));
 
@@ -40,7 +41,8 @@ export class WalletInteraction<T extends WalletInteractionType> {
     public status: string,
     public complete: boolean,
     public title: string,
-    public description: string
+    public description: string,
+    public timestamp: number
   ) {}
 
   update({
@@ -65,9 +67,10 @@ export class WalletInteraction<T extends WalletInteractionType> {
     complete,
     title,
     description,
+    timestamp,
   }: Optional<
     FieldsOf<WalletInteraction<WalletInteractionType>>,
-    "id" | "title" | "description"
+    "id" | "title" | "description" | "timestamp"
   >) {
     return new WalletInteraction(
       id ?? crypto.randomUUID(),
@@ -75,7 +78,8 @@ export class WalletInteraction<T extends WalletInteractionType> {
       status,
       complete,
       title ?? "",
-      description ?? ""
+      description ?? "",
+      timestamp ?? Date.now()
     );
   }
 
@@ -86,7 +90,8 @@ export class WalletInteraction<T extends WalletInteractionType> {
       this.status,
       this.complete,
       this.title,
-      this.description
+      this.description,
+      BigInt(this.timestamp)
     );
   }
 
@@ -94,14 +99,27 @@ export class WalletInteraction<T extends WalletInteractionType> {
     const reader = BufferReader.asReader(buffer);
     const id = reader.readString();
     const type = reader.readString();
+    const status = reader.readString();
+    const complete = !!reader.readBoolean();
+    const title = reader.readString();
+    const description = reader.readString();
+
+    // Handle backwards compatibility: old interactions won't have timestamp
+    let timestamp: number;
+    try {
+      timestamp = Number(reader.readBigInt());
+    } catch {
+      timestamp = Date.now();
+    }
 
     return new WalletInteraction(
       id,
       type as WalletInteractionType,
-      reader.readString(),
-      !!reader.readBoolean(),
-      reader.readString(),
-      reader.readString()
+      status,
+      complete,
+      title,
+      description,
+      timestamp
     );
   }
 }

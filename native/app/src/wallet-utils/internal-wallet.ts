@@ -68,7 +68,7 @@ export class InternalWallet extends ExternalWallet {
       type: "createAccount",
       status: "CREATING",
       complete: false,
-      title: `Registering and creating account ${alias}`,
+      title: `Creating and deploying account ${alias}`,
     });
     await this.storeAndEmitInteraction(interaction);
 
@@ -87,7 +87,7 @@ export class InternalWallet extends ExternalWallet {
     });
     await this.storeAndEmitInteraction(
       interaction.update({
-        status: "CREATED",
+        status: "PROVING DEPLOYMENT",
         description: `Address ${accountManager.address.toString()}`,
       })
     );
@@ -106,7 +106,7 @@ export class InternalWallet extends ExternalWallet {
 
     const provenTx = await deployMethod.prove(opts);
     await this.storeAndEmitInteraction(
-      interaction.update({ status: "PROVEN" })
+      interaction.update({ status: "SENDING DEPLOYMENT TX" })
     );
     await provenTx.send().wait();
     await this.storeAndEmitInteraction(
@@ -152,5 +152,25 @@ export class InternalWallet extends ExternalWallet {
       parsedSimulationResult
     );
     return executionTrace;
+  }
+
+  // App authorization management methods
+  async listAuthorizedApps(): Promise<string[]> {
+    return await this.db.listAuthorizedApps();
+  }
+
+  async getAppAuthorizations(appId: string): Promise<Record<string, any>> {
+    return await this.db.getAppAuthorizations(appId);
+  }
+
+  async updateAccountAuthorization(
+    appId: string,
+    accounts: Aliased<AztecAddress>[]
+  ): Promise<void> {
+    await this.db.updateAccountAuthorization(appId, accounts);
+  }
+
+  async revokeAppAuthorizations(appId: string): Promise<void> {
+    await this.db.revokeAppAuthorizations(appId);
   }
 }

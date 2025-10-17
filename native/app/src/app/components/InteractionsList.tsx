@@ -80,10 +80,7 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
   return (
     <>
       <List sx={{ width: "100%", height: "100%", overflowY: "auto" }}>
-        {interactions
-          .slice()
-          .reverse()
-          .map((interaction) => (
+        {interactions.map((interaction) => (
             <ListItem key={interaction.id} sx={{ px: 0, py: 0.5 }}>
               <Card
                 sx={{

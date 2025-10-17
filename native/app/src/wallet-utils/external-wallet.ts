@@ -239,6 +239,35 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
   }
 
+  /**
+   * Check if the app has authorization to use a specific account
+   */
+  protected async checkAccountAuthorization(address: AztecAddress): Promise<void> {
+    // Check if there's a persistent getAccounts authorization
+    const authData = await this.db.retrievePersistentAuthorization(
+      this.appId,
+      "getAccounts"
+    );
+
+    if (!authData || !authData.accounts) {
+      throw new Error(
+        `App ${this.appId} does not have authorization to access any accounts. Please request getAccounts authorization first.`
+      );
+    }
+
+    // Check if the specific account is in the authorized list
+    const authorizedAddresses = authData.accounts.map((acc: any) =>
+      acc.item.toString()
+    );
+    const requestedAddress = address.toString();
+
+    if (!authorizedAddresses.includes(requestedAddress)) {
+      throw new Error(
+        `App ${this.appId} does not have authorization to use account ${requestedAddress}. Authorized accounts: ${authorizedAddresses.join(", ")}`
+      );
+    }
+  }
+
   protected async getAccountFromAddress(
     address: AztecAddress
   ): Promise<Account> {
@@ -452,6 +481,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     opts: SendOptions,
     txInformation?: ReadableTxInformation
   ): Promise<TxProvingResult> {
+    // Check account authorization before proceeding
+    await this.checkAccountAuthorization(opts.from);
+
     const interaction = WalletInteraction.from({
       type: "proveTx",
       status: "CREATING",
@@ -718,7 +750,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     opts: SimulateOptions,
     existingInteraction?: WalletInteraction<WalletInteractionType>
   ): Promise<TxSimulationResult> {
-    //await this.requestSingleAuthorization("simulateTx", [executionPayload, opts]);
+    // Check account authorization before proceeding
+    await this.checkAccountAuthorization(opts.from);
 
     const interaction =
       existingInteraction ??

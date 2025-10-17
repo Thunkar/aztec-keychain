@@ -3,13 +3,65 @@ import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
+import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { Walker, DepType } from "flora-colossus";
+import type { Module } from "flora-colossus";
+import fsp from "node:fs/promises";
+import path from "node:path";
+
+type CopyClass<T> = {
+  [P in keyof T]: T[P];
+};
+
+type CustomWalker = CopyClass<Walker> & {
+  modules: Module[];
+  walkDependenciesForModule: (moduleRoot: string, depType: DepType) => Promise<void>;
+};
+
+const externalDependencies = ["@aztec/kv-store", "@aztec/bb.js"];
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    extraResource: ["./resources"],
+  },
+  hooks: {
+    async packageAfterCopy(_forgeConfig, buildPath) {
+      const depsToCopy = new Set<string>(externalDependencies);
+
+      const sourceNodeModulesPath = path.resolve(__dirname, "node_modules");
+      const destNodeModulesPath = path.resolve(buildPath, "node_modules");
+
+      console.log(`Copying external dependencies and their transitive deps...`);
+      console.log(`External dependencies: ${externalDependencies.join(", ")}`);
+
+      for (const dep of externalDependencies) {
+        const walker = new Walker(path.join(sourceNodeModulesPath, dep)) as unknown as CustomWalker;
+
+        await walker.walkDependenciesForModule(path.join(sourceNodeModulesPath, dep), DepType.PROD);
+
+        walker.modules.forEach((treeDep) => {
+          depsToCopy.add(treeDep.name);
+        });
+      }
+
+      console.log(`Total packages to copy (including transitive): ${depsToCopy.size}`);
+
+      await Promise.all(
+        Array.from(depsToCopy.values()).map(async (packageName) => {
+          const sourcePath = path.join(sourceNodeModulesPath, packageName);
+          const destPath = path.join(destNodeModulesPath, packageName);
+
+          await fsp.mkdir(path.dirname(destPath), { recursive: true });
+          await fsp.cp(sourcePath, destPath, { recursive: true, preserveTimestamps: true });
+        })
+      );
+
+      console.log("✓ External dependencies copied successfully");
+    },
   },
   rebuildConfig: {},
   makers: [
@@ -19,6 +71,7 @@ const config: ForgeConfig = {
     new MakerDeb({}),
   ],
   plugins: [
+    new AutoUnpackNativesPlugin({}),
     new VitePlugin({
       // `build` can specify multiple entry builds, which can be Main process, Preload scripts, Worker process, etc.
       // If you are familiar with Vite configuration, it will look really familiar.

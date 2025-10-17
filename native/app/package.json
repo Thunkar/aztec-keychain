@@ -5,10 +5,11 @@
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "scripts": {
-    "start": "BB_WASM_PATH='/Users/gregoriojulianaquiros/Repos/aztec-packages/barretenberg/ts/barretenberg-threads.wasm.gz' BB_BINARY_PATH=~/Repos/aztec-packages/barretenberg/cpp/build/bin/bb BB_WORKING_DIRECTORY=/tmp/bb electron-forge start",
-    "postbuild": "node scripts/copyNative.js",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
+    "start": "BB_BINARY_PATH=~/Repos/aztec-packages/barretenberg/cpp/build/bin/bb BB_WORKING_DIRECTORY=/tmp/bb electron-forge start",
+    "prebuild": "node scripts/copyNative.js",
+    "package": "npm run prebuild && NODE_ENV=production electron-forge package",
+    "package:test": "npm run package && ./out/app-darwin-arm64/app.app/Contents/MacOS/app",
+    "make": "npm run prebuild && NODE_ENV=production electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx ."
   },

@@ -11,9 +11,11 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import ContactsIcon from "@mui/icons-material/Contacts";
+import AppsIcon from "@mui/icons-material/Apps";
 import { InteractionsList } from "./components/InteractionsList.tsx";
 import { AccountsManager } from "./components/AccountsManager.tsx";
 import { ContactsManager } from "./components/ContactsManager.tsx";
+import { AuthorizedApps } from "./components/AuthorizedApps.tsx";
 import { AuthorizationDialog } from "./components/AuthorizationDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
@@ -31,7 +33,7 @@ const INTERACTIONS_PANEL_MAX_WIDTH = 800;
 const MENU_DRAWER_WIDTH = 240;
 const SIDEBAR_WIDTH = 64;
 
-type MenuSection = "accounts" | "contacts";
+type MenuSection = "accounts" | "contacts" | "apps";
 
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -158,6 +160,8 @@ export function App() {
         return <AccountsManager />;
       case "contacts":
         return <ContactsManager />;
+      case "apps":
+        return <AuthorizedApps />;
       default:
         return null;
     }
@@ -243,6 +247,19 @@ export function App() {
                 <ContactsIcon />
               </ListItemButton>
             </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton
+                selected={currentSection === "apps"}
+                onClick={() => handleMenuItemClick("apps")}
+                sx={{
+                  flexDirection: "column",
+                  py: 2,
+                  minHeight: SIDEBAR_WIDTH,
+                }}
+              >
+                <AppsIcon />
+              </ListItemButton>
+            </ListItem>
           </List>
         </Box>
 
@@ -286,6 +303,15 @@ export function App() {
                   onClick={() => handleMenuItemClick("contacts")}
                 >
                   <ListItemText primary="Contacts" />
+                </ListItemButton>
+              </ListItem>
+              <ListItem disablePadding>
+                <ListItemButton
+                  sx={{ height: 64 }}
+                  selected={currentSection === "apps"}
+                  onClick={() => handleMenuItemClick("apps")}
+                >
+                  <ListItemText primary="Apps" />
                 </ListItemButton>
               </ListItem>
             </List>

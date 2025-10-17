@@ -4,6 +4,37 @@ import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
 import { WalletInternalProxy } from "./wallet-internal-proxy";
 import { inspect } from "node:util";
+import fs from "node:fs";
+
+// Replace placeholder paths with actual runtime paths for packaged app
+if (app.isPackaged) {
+  const resourcesPath = process.resourcesPath;
+  const appPath = app.getPath("userData");
+
+  // Replace placeholders in environment variables
+  if (process.env.BB_WASM_PATH?.includes("__RESOURCES_PATH__")) {
+    process.env.BB_WASM_PATH = process.env.BB_WASM_PATH.replace(
+      "__RESOURCES_PATH__",
+      resourcesPath
+    );
+  }
+  if (process.env.BB_BINARY_PATH?.includes("__RESOURCES_PATH__")) {
+    process.env.BB_BINARY_PATH = process.env.BB_BINARY_PATH.replace(
+      "__RESOURCES_PATH__",
+      resourcesPath
+    );
+  }
+  if (process.env.BB_WORKING_DIRECTORY?.includes("__APP_PATH__")) {
+    process.env.BB_WORKING_DIRECTORY = process.env.BB_WORKING_DIRECTORY.replace(
+      "__APP_PATH__",
+      appPath
+    );
+    // Create the working directory if it doesn't exist
+    if (!fs.existsSync(process.env.BB_WORKING_DIRECTORY)) {
+      fs.mkdirSync(process.env.BB_WORKING_DIRECTORY, { recursive: true });
+    }
+  }
+}
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -31,7 +62,9 @@ const createWindow = () => {
   }
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
   return mainWindow;
 };
 
@@ -94,6 +127,10 @@ app.on("ready", async () => {
     "getInteractions",
     "getExecutionTrace",
     "resolveAuthorization",
+    "listAuthorizedApps",
+    "getAppAuthorizations",
+    "updateAccountAuthorization",
+    "revokeAppAuthorizations",
   ];
   for (const method of internalMethods) {
     ipcMain.handle(method, async (_event, args) => {

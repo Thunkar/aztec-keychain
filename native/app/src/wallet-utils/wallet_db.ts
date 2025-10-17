@@ -257,7 +257,8 @@ export class WalletDB {
     for await (const [_, item] of this.interactions.entriesAsync()) {
       result.push(WalletInteraction.fromBuffer(item));
     }
-    return result;
+    // Sort by timestamp descending (newest first)
+    return result.sort((a, b) => b.timestamp - a.timestamp);
   }
 
   async storePersistentAuthorization(
@@ -302,6 +303,77 @@ export class WalletDB {
         }
       }
     }
+  }
+
+  /**
+   * List all apps that have persistent authorizations
+   */
+  async listAuthorizedApps(): Promise<string[]> {
+    const appIds = new Set<string>();
+    for await (const [key, _] of this.authorizations.entriesAsync()) {
+      // Keys are formatted as "${appId}:${method}"
+      const appId = key.split(":")[0];
+      if (appId) {
+        appIds.add(appId);
+      }
+    }
+    return Array.from(appIds);
+  }
+
+  /**
+   * Get all persistent authorizations for a specific app
+   * Returns a map of method -> authorization data
+   */
+  async getAppAuthorizations(
+    appId: string
+  ): Promise<Record<string, any>> {
+    const authorizations: Record<string, any> = {};
+    for await (const [key, value] of this.authorizations.entriesAsync()) {
+      // Keys are formatted as "${appId}:${method}"
+      const [authAppId, method] = key.split(":");
+      if (authAppId === appId && method) {
+        authorizations[method] = JSON.parse(value.toString());
+      }
+    }
+    return authorizations;
+  }
+
+  /**
+   * Update the getAccounts authorization for an app
+   */
+  async updateAccountAuthorization(
+    appId: string,
+    accounts: Aliased<AztecAddress>[],
+    log: LogFn = this.userLog
+  ) {
+    await this.storePersistentAuthorization(
+      appId,
+      "getAccounts",
+      { accounts, persistent: true },
+      log
+    );
+  }
+
+  /**
+   * Revoke all persistent authorizations for an app
+   */
+  async revokeAppAuthorizations(
+    appId: string,
+    log: LogFn = this.userLog
+  ) {
+    const keysToDelete: string[] = [];
+    for await (const [key, _] of this.authorizations.entriesAsync()) {
+      const [authAppId] = key.split(":");
+      if (authAppId === appId) {
+        keysToDelete.push(key);
+      }
+    }
+
+    for (const key of keysToDelete) {
+      await this.authorizations.delete(key);
+    }
+
+    log(`Revoked all authorizations for appId ${appId} (${keysToDelete.length} keys deleted)`);
   }
 
   async storeSimulationResult(

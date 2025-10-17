@@ -30,6 +30,19 @@ contextBridge.exposeInMainWorld("walletAPI", {
   getExecutionTrace(stringifiedArgs: string): Promise<any> {
     return ipcRenderer.invoke("getExecutionTrace", stringifiedArgs);
   },
+  // App authorization management
+  listAuthorizedApps(stringifiedArgs: string): Promise<string[]> {
+    return ipcRenderer.invoke("listAuthorizedApps", stringifiedArgs);
+  },
+  getAppAuthorizations(stringifiedArgs: string): Promise<Record<string, any>> {
+    return ipcRenderer.invoke("getAppAuthorizations", stringifiedArgs);
+  },
+  updateAccountAuthorization(stringifiedArgs: string): Promise<void> {
+    return ipcRenderer.invoke("updateAccountAuthorization", stringifiedArgs);
+  },
+  revokeAppAuthorizations(stringifiedArgs: string): Promise<void> {
+    return ipcRenderer.invoke("revokeAppAuthorizations", stringifiedArgs);
+  },
   onWalletUpdate(callback) {
     return ipcRenderer.on("wallet-update", (_event, stringifiedEvent) =>
       callback(stringifiedEvent)
