@@ -1,5 +1,7 @@
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
+import Link from "@mui/material/Link";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import type { AuthorizationItem } from "../../wallet-utils/authorization";
 
 interface AuthorizeContractContentProps {
@@ -13,6 +15,8 @@ export function AuthorizeContractContent({
   showAppId = true,
 }: AuthorizeContractContentProps) {
   const contractAddress = request.params.contractAddress || request.params.address || "Unknown";
+  const contractName = request.params.contractName;
+  const verificationUrl = `https://verify.aztec.network/contracts/${contractAddress}`;
 
   return (
     <>
@@ -30,6 +34,23 @@ export function AuthorizeContractContent({
           borderRadius: 1,
         }}
       >
+        {contractName && (
+          <>
+            <Typography variant="caption" color="text.secondary">
+              Contract Name:
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: "medium",
+                mt: 0.5,
+                mb: 2,
+              }}
+            >
+              {contractName}
+            </Typography>
+          </>
+        )}
         <Typography variant="caption" color="text.secondary">
           Contract Address:
         </Typography>
@@ -43,6 +64,38 @@ export function AuthorizeContractContent({
         >
           {contractAddress.toString()}
         </Typography>
+
+        {/* Verification status placeholder */}
+        <Box
+          sx={{
+            mt: 2,
+            pt: 2,
+            borderTop: "1px solid",
+            borderColor: "divider",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <CheckCircleIcon
+            sx={{ fontSize: 18, color: "success.main" }}
+          />
+          <Typography variant="caption" color="success.main">
+            Contract Verified
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            •
+          </Typography>
+          <Link
+            href={verificationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="caption"
+            sx={{ textDecoration: "none" }}
+          >
+            View on Aztec Verify
+          </Link>
+        </Box>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         This will allow the app to interact with this contract. The contract

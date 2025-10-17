@@ -14,6 +14,7 @@ import Checkbox from "@mui/material/Checkbox";
 import type {
   AuthorizationRequest,
   AuthorizationItemResponse,
+  AuthorizationItem,
 } from "../../wallet-utils/authorization";
 import { AuthorizeProveTxContent } from "./AuthorizeProveTxContent";
 import { AuthorizeContractContent } from "./AuthorizeContractContent";
@@ -48,6 +49,27 @@ function formatMethodName(method: string): string {
   }
 }
 
+function getMethodSubtitle(item: AuthorizationItem): string | null {
+  switch (item.method) {
+    case "registerContract": {
+      const address = item.params.address || item.params.contractAddress;
+      const contractName = item.params.contractName;
+      if (contractName && contractName !== "Unknown Contract") {
+        return `${contractName} (${address ? address.substring(0, 10) + "..." : "unknown"})`;
+      }
+      return address ? address.substring(0, 16) + "..." : "Unknown contract";
+    }
+    case "registerSender":
+      return item.params.alias || item.params.address?.substring(0, 16) + "...";
+    case "getAccounts":
+      return "Access your wallet addresses";
+    case "proveTx":
+      return "Execute contract interaction";
+    default:
+      return null;
+  }
+}
+
 export function AuthorizationDialog({
   request,
   onApprove,
@@ -58,7 +80,13 @@ export function AuthorizationDialog({
 
   const [itemStates, setItemStates] = useState<Map<string, ItemState>>(
     new Map(
-      items.map((item) => [item.id, { approved: true, persistent: false }])
+      items.map((item) => [
+        item.id,
+        {
+          approved: true,
+          persistent: item.method === "getAccounts",
+        },
+      ])
     )
   );
 
@@ -66,33 +94,32 @@ export function AuthorizationDialog({
   useEffect(() => {
     setItemStates(
       new Map(
-        items.map((item) => [item.id, { approved: true, persistent: false }])
+        items.map((item) => [
+          item.id,
+          {
+            approved: true,
+            persistent: item.method === "getAccounts",
+          },
+        ])
       )
     );
   }, [request.id, items]); // Reset when request ID or items change
 
   const handleToggleApproval = (itemId: string) => {
     setItemStates((prev) => {
-      const newMap = new Map(prev);
-      const current = newMap.get(itemId)!;
+      const newMap = new Map<string, ItemState>(prev);
+      const current = newMap.get(itemId);
+      if (!current) return prev;
       newMap.set(itemId, { ...current, approved: !current.approved });
-      return newMap;
-    });
-  };
-
-  const handleTogglePersistent = (itemId: string) => {
-    setItemStates((prev) => {
-      const newMap = new Map(prev);
-      const current = newMap.get(itemId)!;
-      newMap.set(itemId, { ...current, persistent: !current.persistent });
       return newMap;
     });
   };
 
   const handleItemDataChange = (itemId: string, data: any) => {
     setItemStates((prev) => {
-      const newMap = new Map(prev);
-      const current = newMap.get(itemId)!;
+      const newMap = new Map<string, ItemState>(prev);
+      const current = newMap.get(itemId);
+      if (!current) return prev;
       newMap.set(itemId, { ...current, data });
       return newMap;
     });
@@ -113,13 +140,14 @@ export function AuthorizationDialog({
         id: item.id,
         approved: state.approved,
         appId: item.appId,
-        data:
-          state.data ||
-          (state.persistent
-            ? ({
-                persistent: true,
-              } as any)
-            : undefined),
+        data: state.data
+          ? {
+              ...state.data,
+              ...(state.persistent ? { persistent: true } : {}),
+            }
+          : state.persistent
+            ? ({ persistent: true } as any)
+            : undefined,
       };
     }
 
@@ -127,7 +155,7 @@ export function AuthorizationDialog({
   };
 
   const approvedCount = Array.from(itemStates.values()).filter(
-    (s) => s.approved
+    (s: ItemState) => s.approved
   ).length;
 
   return (
@@ -199,9 +227,11 @@ export function AuthorizationDialog({
                       <Typography variant="subtitle1">
                         {index + 1}. {formatMethodName(item.method)}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {item.method}
-                      </Typography>
+                      {getMethodSubtitle(item) && (
+                        <Typography variant="caption" color="text.secondary">
+                          {getMethodSubtitle(item)}
+                        </Typography>
+                      )}
                     </Box>
                   </Box>
                 </AccordionSummary>
@@ -232,10 +262,6 @@ export function AuthorizationDialog({
                     {item.method === "getAccounts" && (
                       <AuthorizeAccountsContent
                         request={item}
-                        persistent={state.persistent}
-                        onTogglePersistent={() =>
-                          handleTogglePersistent(item.id)
-                        }
                         onAccountsChange={(accounts) => {
                           handleItemDataChange(item.id, { accounts });
                         }}

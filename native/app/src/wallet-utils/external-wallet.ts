@@ -31,6 +31,7 @@ import {
 import {
   type TxProvingResult,
   type TxSimulationResult,
+  type TxExecutionRequest,
 } from "@aztec/stdlib/tx";
 import {
   EcdsaKAccountContract,
@@ -367,6 +368,44 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
   }
 
+  /**
+   * Helper method to resolve contract name from various sources.
+   */
+  private async resolveContractName(
+    instanceData:
+      | AztecAddress
+      | ContractInstanceWithAddress
+      | ContractInstantiationData
+      | ContractInstanceAndArtifact,
+    artifact: ContractArtifact | undefined,
+    address: AztecAddress
+  ): Promise<string> {
+    // Try to get name from artifact parameter
+    let contractName = artifact?.name;
+
+    // Check if instanceData contains an artifact
+    if (!contractName && typeof instanceData === 'object' && 'artifact' in instanceData) {
+      contractName = (instanceData as any).artifact?.name;
+    }
+
+    // If we still don't have a name, try to fetch the artifact from PXE
+    if (!contractName) {
+      try {
+        const instance = await this.pxe.getContractInstance(address);
+        if (instance?.contractClassId) {
+          const fetchedArtifact = await this.pxe.getContractArtifact(instance.contractClassId);
+          if (fetchedArtifact) {
+            contractName = fetchedArtifact.name;
+          }
+        }
+      } catch (error) {
+        // Ignore errors - we'll fall back to "Unknown Contract"
+      }
+    }
+
+    return contractName || "Unknown Contract";
+  }
+
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
@@ -407,10 +446,18 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       return metadata.contractInstance;
     }
 
+    // Resolve contract name from various sources
+    const contractName = await this.resolveContractName(
+      instanceData,
+      artifact,
+      addressToCheck
+    );
+
     // Request authorization with persistent storage (unless skipped for batch)
     if (!skipAuth) {
       await this.requestSingleAuthorization("registerContract", {
         address: addressToCheck.toString(),
+        contractName,
       });
     }
 
@@ -503,8 +550,13 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
         );
 
-        ({ callAuthorizations, executionTrace } =
-          await this.extractTxInformation(exec, opts, interaction));
+        const { decoded } = await this.simulateTxInternal(
+          exec,
+          opts,
+          interaction,
+          true // withDecoding
+        );
+        ({ callAuthorizations, executionTrace } = decoded!);
 
         await this.storeAndEmitInteraction(
           interaction.update({ status: "REQUESTING AUTHORIZATION" })
@@ -561,32 +613,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
   }
 
-  private async extractTxInformation(
-    exec: ExecutionPayload,
-    opts: SendOptions,
-    existingInteraction?: WalletInteraction<WalletInteractionType>
-  ) {
-    const simulationResult = await this.simulateTx(
-      exec,
-      opts,
-      existingInteraction
-    );
-
-    // Use TxDecodingService to decode transaction information with caching
-    const decodingService = new TxDecodingService(this.pxe, this.db);
-    const decoded = await decodingService.decodeTransaction(simulationResult);
-
-    // Persist simulation result for later retrieval if we have an interaction
-    if (existingInteraction) {
-      await this.db.storeSimulationResult(
-        existingInteraction.id,
-        simulationResult
-      );
-    }
-
-    return decoded;
-  }
-
   // TODO: Fix types once @aztec/aztec.js exports BatchedMethod, BatchableMethods, and BatchResults from the main package
   override async batch(methods: any): Promise<any> {
     // 1. Convert methods to AuthorizationItems, checking persistent cache
@@ -615,12 +641,17 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       if (name === "proveTx") {
         try {
           const [exec, opts] = args as Parameters<typeof this.proveTx>;
-          const displayData = await this.extractTxInformation(exec, opts);
+          const { decoded: displayData } = await this.simulateTxInternal(
+            exec,
+            opts,
+            undefined,
+            true // withDecoding
+          );
           args.push(displayData);
           params = {
             originalArgs: args,
-            callAuthorizations: displayData.callAuthorizations,
-            executionTrace: displayData.executionTrace,
+            callAuthorizations: displayData!.callAuthorizations,
+            executionTrace: displayData!.executionTrace,
           };
         } catch (error) {
           // If simulation/extraction fails, don't add to batch
@@ -643,12 +674,20 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           continue;
         }
 
+        // Resolve contract name from various sources
+        const contractName = await this.resolveContractName(
+          instanceData,
+          artifact,
+          address
+        );
+
         // Contract not registered, need authorization
         // Add skipAuth flag to args so it bypasses auth in the execution phase
         args.push(true);
         params = {
           originalArgs: args,
           contractAddress: address,
+          contractName,
         };
       } else if (name === "registerSender") {
         // Add skipAuth flag to args
@@ -750,6 +789,25 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     opts: SimulateOptions,
     existingInteraction?: WalletInteraction<WalletInteractionType>
   ): Promise<TxSimulationResult> {
+    const { simulationResult } = await this.simulateTxInternal(
+      executionPayload,
+      opts,
+      existingInteraction,
+      false
+    );
+    return simulationResult;
+  }
+
+  private async simulateTxInternal(
+    executionPayload: ExecutionPayload,
+    opts: SimulateOptions,
+    existingInteraction?: WalletInteraction<WalletInteractionType>,
+    withDecoding: boolean = false
+  ): Promise<{
+    simulationResult: TxSimulationResult;
+    txRequest: TxExecutionRequest;
+    decoded?: ReadableTxInformation;
+  }> {
     // Check account authorization before proceeding
     await this.checkAccountAuthorization(opts.from);
 
@@ -792,7 +850,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       const contractOverrides = {
         [opts.from.toString()]: { instance, artifact },
       };
-      const result = await this.pxe.simulateTx(
+      const simulationResult = await this.pxe.simulateTx(
         txRequest,
         true /* simulatePublic */,
         true,
@@ -802,10 +860,17 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         }
       );
 
+      // Decode if requested
+      let decoded;
+      if (withDecoding) {
+        const decodingService = new TxDecodingService(this.pxe, this.db);
+        decoded = await decodingService.decodeTransaction(simulationResult, txRequest);
+      }
+
       // For standalone simulations (no existingInteraction), store the raw simulation result
       if (!existingInteraction) {
         try {
-          await this.db.storeSimulationResult(interaction.id, result);
+          await this.db.storeTxSimulation(interaction.id, simulationResult, txRequest);
         } catch (storageError) {
           // If storage fails, just log it - don't fail the simulation
           this.log.error(`Failed to store simulation result: ${storageError}`);
@@ -814,8 +879,16 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         await this.storeAndEmitInteraction(
           interaction.update({ complete: true, status: "SIMULATED" })
         );
+      } else if (existingInteraction) {
+        // Store for existing interactions too
+        await this.db.storeTxSimulation(
+          existingInteraction.id,
+          simulationResult,
+          txRequest
+        );
       }
-      return result;
+
+      return { simulationResult, txRequest, decoded };
     } catch (error) {
       // Update interaction to reflect error before rethrowing
       await this.storeAndEmitInteraction(

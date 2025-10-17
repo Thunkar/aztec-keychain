@@ -1,14 +1,16 @@
 import { app, BrowserWindow, MessageChannelMain } from "electron";
-import path from "node:path";
+import { join } from "node:path";
 import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
 import { WalletInternalProxy } from "./wallet-internal-proxy";
 import { inspect } from "node:util";
-import fs from "node:fs";
+import fs, { mkdir, mkdirSync } from "node:fs";
 import os from "node:os";
 
 // Setup logging to file for debugging
-const logFile = path.join(os.homedir(), "keychain", "aztec-keychain-debug.log");
+const wallet_dir = join(os.homedir(), "keychain");
+mkdirSync(wallet_dir, { recursive: true });
+const logFile = join(wallet_dir, "aztec-keychain-debug.log");
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
@@ -73,7 +75,7 @@ if (app.isPackaged) {
   }
 
   // Ensure BB_WORKING_DIRECTORY is set to a writable location
-  const bbWorkingDir = path.join(os.tmpdir(), "bb");
+  const bbWorkingDir = join(os.tmpdir(), "bb");
   process.env.BB_WORKING_DIRECTORY = bbWorkingDir;
   console.log("BB_WORKING_DIRECTORY (updated):", bbWorkingDir);
 
@@ -103,7 +105,7 @@ const createWindow = () => {
     width: 800,
     height: 600,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: join(__dirname, "preload.js"),
       sandbox: false,
     },
   });
@@ -113,7 +115,7 @@ const createWindow = () => {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
     mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
+      join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
     );
   }
 
@@ -136,7 +138,7 @@ app.on("ready", async () => {
   const { port1: walletLogPort1, port2: walletLogPort2 } =
     new MessageChannelMain();
 
-  const wsServer = utilityProcess.fork(path.join(__dirname, "ws-worker.js"));
+  const wsServer = utilityProcess.fork(join(__dirname, "ws-worker.js"));
 
   // Convert all process.env values to strings (Electron requirement)
   const filteredEnv: Record<string, string> = {};
@@ -147,13 +149,9 @@ app.on("ready", async () => {
     }
   }
 
-  const wallet = utilityProcess.fork(
-    path.join(__dirname, "wallet-worker.js"),
-    [],
-    {
-      env: filteredEnv,
-    }
-  );
+  const wallet = utilityProcess.fork(join(__dirname, "wallet-worker.js"), [], {
+    env: filteredEnv,
+  });
 
   wsServer.postMessage({ type: "ports" }, [externalPort1]);
   wallet.postMessage({ type: "ports" }, [

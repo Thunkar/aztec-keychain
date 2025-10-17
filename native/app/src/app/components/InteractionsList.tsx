@@ -7,8 +7,10 @@ import {
   Typography,
   List,
   ListItem,
+  CircularProgress,
+  keyframes,
 } from "@mui/material";
-import { CheckCircle, Pending, Error as ErrorIcon } from "@mui/icons-material";
+import { CheckCircle, Error as ErrorIcon } from "@mui/icons-material";
 import type {
   WalletInteraction,
   WalletInteractionType,
@@ -27,11 +29,29 @@ const getStatusColor = (status: string, complete: boolean) => {
   return "primary";
 };
 
+const pulse = keyframes`
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+`;
+
+const shimmer = keyframes`
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+`;
+
 const getStatusIcon = (status: string, complete: boolean) => {
   if (status.includes("ERROR") || status.includes("FAIL"))
     return <ErrorIcon fontSize="small" />;
   if (complete) return <CheckCircle fontSize="small" />;
-  return <Pending fontSize="small" />;
+  return <CircularProgress size={14} thickness={5} />;
 };
 
 const getInteractionTypeLabel = (type: WalletInteractionType) => {
@@ -97,6 +117,30 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
                     boxShadow: 3,
                     transform: "translateY(-2px)",
                   },
+                  // Add shimmer effect for in-progress interactions
+                  ...(!interaction.complete && {
+                    position: "relative",
+                    "&::before": {
+                      content: '""',
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: `linear-gradient(
+                        90deg,
+                        transparent 0%,
+                        rgba(33, 150, 243, 0.1) 50%,
+                        transparent 100%
+                      )`,
+                      backgroundSize: "1000px 100%",
+                      animation: `${shimmer} 2s infinite linear`,
+                      pointerEvents: "none",
+                    },
+                    borderLeft: "3px solid",
+                    borderColor: "primary.main",
+                    animation: `${pulse} 2s ease-in-out infinite`,
+                  }),
                 }}
                 onClick={() => handleInteractionClick(interaction)}
               >

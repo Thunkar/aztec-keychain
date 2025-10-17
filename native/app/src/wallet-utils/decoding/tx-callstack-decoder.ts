@@ -1,6 +1,7 @@
 import type {
   TxSimulationResult,
   PrivateCallExecutionResult,
+  TxExecutionRequest,
 } from "@aztec/stdlib/tx";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
@@ -44,6 +45,7 @@ export interface DecodedExecutionTrace {
 
 export class TxCallStackDecoder {
   private calldataMap: Map<string, any[]> = new Map();
+  private argsOfCallsMap: Map<string, any[]> = new Map();
 
   constructor(
     private cache: TxDecodingCache
@@ -110,10 +112,32 @@ export class TxCallStackDecoder {
         );
         functionName = functionAbi.name;
 
-        // Decode arguments using the witness data
-        // Note: The actual arguments aren't directly available in PrivateCallExecutionResult
-        // They would need to be extracted from the witness or passed separately
-        // For now, we'll leave args empty or indicate they're not available
+        // Decode arguments from argsHash
+        const argsHash = call.publicInputs.argsHash.toString();
+        const argsValues = this.argsOfCallsMap.get(argsHash);
+
+        if (argsValues && functionAbi.parameters.length > 0) {
+          try {
+            const decodedArgs = decodeFromAbi(
+              functionAbi.parameters.map(p => p.type),
+              argsValues
+            ) as AbiDecoded[];
+
+            args = await Promise.all(
+              decodedArgs.map(async (value, i) => ({
+                name: functionAbi.parameters[i]?.name || `arg_${i}`,
+                value: await this.formatAndResolveValue(value),
+              }))
+            );
+          } catch (error) {
+            console.warn(`Failed to decode arguments for ${functionName}:`, error);
+            // Fall back to showing raw values
+            args = argsValues.map((val, i) => ({
+              name: functionAbi.parameters[i]?.name || `arg_${i}`,
+              value: val.toString(),
+            }));
+          }
+        }
 
         // Decode return values
         if (functionAbi.returnTypes.length > 0) {
@@ -309,7 +333,8 @@ export class TxCallStackDecoder {
   }
 
   async decodeSimulationResult(
-    simulationResult: TxSimulationResult
+    simulationResult: TxSimulationResult,
+    txRequest?: TxExecutionRequest
   ): Promise<DecodedExecutionTrace> {
     // Build calldata map from publicFunctionCalldata
     this.calldataMap.clear();
@@ -319,6 +344,17 @@ export class TxCallStackDecoder {
         this.calldataMap.set(
           hashedCalldata.hash.toString(),
           hashedCalldata.values
+        );
+      }
+    }
+
+    // Build args map from TxExecutionRequest if provided
+    this.argsOfCallsMap.clear();
+    if (txRequest?.argsOfCalls) {
+      for (const hashedArgs of txRequest.argsOfCalls) {
+        this.argsOfCallsMap.set(
+          hashedArgs.hash.toString(),
+          hashedArgs.values
         );
       }
     }

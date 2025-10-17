@@ -1,6 +1,6 @@
 import type { PXE } from "@aztec/pxe/server";
 import type { WalletDB } from "../wallet_db";
-import type { TxSimulationResult } from "@aztec/stdlib/tx";
+import type { TxSimulationResult, TxExecutionRequest } from "@aztec/stdlib/tx";
 import { TxDecodingCache } from "./tx-decoding-cache";
 import {
   CallAuthorizationFormatter,
@@ -31,7 +31,8 @@ export class TxDecodingService {
    * Decode transaction information including call authorizations and execution trace.
    */
   async decodeTransaction(
-    simulationResult: TxSimulationResult
+    simulationResult: TxSimulationResult,
+    txRequest?: TxExecutionRequest
   ): Promise<{
     callAuthorizations: ReadableCallAuthorization[];
     executionTrace: DecodedExecutionTrace;
@@ -57,7 +58,7 @@ export class TxDecodingService {
 
     // Decode execution call stack
     const executionTrace =
-      await this.decoder.decodeSimulationResult(simulationResult);
+      await this.decoder.decodeSimulationResult(simulationResult, txRequest);
 
     return {
       callAuthorizations: readableCallAuthorizations,

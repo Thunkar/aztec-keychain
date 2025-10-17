@@ -49,6 +49,7 @@ function PrivateCallDisplay({
 }) {
   const hasNestedEvents = call.nestedEvents.length > 0;
   const hasReturnValues = call.returnValues.length > 0;
+  const hasArgs = call.args.length > 0;
   const needsAuth = requiresAuthorization(call, authorizations);
 
   return (
@@ -62,7 +63,7 @@ function PrivateCallDisplay({
       }}
     >
       <Accordion
-        defaultExpanded={false}
+        defaultExpanded={call.depth === 0}
         sx={{
           bgcolor: "background.default",
           boxShadow: 1,
@@ -85,7 +86,7 @@ function PrivateCallDisplay({
               variant="body2"
               sx={{ fontFamily: "monospace", fontWeight: "medium" }}
             >
-              {call.contract.name}.{call.function}()
+              {call.contract.name}.{call.function}({hasArgs ? "..." : ""})
             </Typography>
             {needsAuth && (
               <Chip
@@ -112,50 +113,58 @@ function PrivateCallDisplay({
         </AccordionSummary>
         <AccordionDetails>
           <Box>
-            {/* Call Details */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Contract:
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
-              >
-                {call.contract.name}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontFamily: "monospace",
-                  wordBreak: "break-all",
-                  color: "text.secondary",
-                  display: "block",
-                }}
-              >
-                {call.contract.address}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Caller:
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
-              >
-                {call.caller.name}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Counters:
-              </Typography>
-              <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-                {call.counter.start} → {call.counter.end}
-              </Typography>
-            </Box>
+            {/* Arguments (if available) - Show first as most important */}
+            {hasArgs && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="subtitle2"
+                  color="primary"
+                  gutterBottom
+                  sx={{ fontWeight: "bold" }}
+                >
+                  Arguments:
+                </Typography>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    bgcolor: "action.hover",
+                    borderRadius: 1,
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Table size="small">
+                    <TableBody>
+                      {call.args.map((arg, i) => (
+                        <TableRow key={i}>
+                          <TableCell
+                            sx={{
+                              fontFamily: "monospace",
+                              fontWeight: "medium",
+                              border: 0,
+                              py: 0.75,
+                              color: "primary.main",
+                            }}
+                          >
+                            {arg.name}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              fontFamily: "monospace",
+                              wordBreak: "break-all",
+                              border: 0,
+                              py: 0.75,
+                            }}
+                          >
+                            {arg.value}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </Box>
+            )}
 
             {/* Return Values */}
             {hasReturnValues && (
@@ -206,54 +215,50 @@ function PrivateCallDisplay({
               </Box>
             )}
 
-            {/* Arguments (if available) */}
-            {call.args.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  gutterBottom
-                >
-                  Arguments:
-                </Typography>
-                <Box
-                  sx={{
-                    p: 1,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                  }}
-                >
-                  <Table size="small">
-                    <TableBody>
-                      {call.args.map((arg, i) => (
-                        <TableRow key={i}>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              fontWeight: "medium",
-                              border: 0,
-                              py: 0.5,
-                            }}
-                          >
-                            {arg.name}
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              wordBreak: "break-all",
-                              border: 0,
-                              py: 0.5,
-                            }}
-                          >
-                            {arg.value}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Box>
-              </Box>
-            )}
+            {/* Call Details */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Contract:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
+              >
+                {call.contract.name}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontFamily: "monospace",
+                  wordBreak: "break-all",
+                  color: "text.secondary",
+                  display: "block",
+                }}
+              >
+                {call.contract.address}
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Caller:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
+              >
+                {call.caller.name}
+              </Typography>
+            </Box>
+
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Counters:
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                {call.counter.start} → {call.counter.end}
+              </Typography>
+            </Box>
           </Box>
         </AccordionDetails>
       </Accordion>

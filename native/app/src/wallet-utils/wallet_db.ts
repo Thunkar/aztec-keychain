@@ -6,7 +6,8 @@ import {
   type WalletInteractionType,
 } from "./wallet-interaction";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
-import { TxSimulationResult } from "@aztec/stdlib/tx";
+import { TxExecutionRequest, TxSimulationResult } from "@aztec/stdlib/tx";
+import { json } from "express";
 
 export const AccountTypes = [
   "schnorr",
@@ -22,7 +23,7 @@ export class WalletDB {
     private bridgedFeeJuice: AztecAsyncMap<string, Buffer>,
     private interactions: AztecAsyncMap<string, Buffer>,
     private authorizations: AztecAsyncMap<string, Buffer>,
-    private simulationResults: AztecAsyncMap<string, string>,
+    private txSimulations: AztecAsyncMap<string, string>,
     private userLog: LogFn
   ) {}
 
@@ -32,16 +33,14 @@ export class WalletDB {
     const bridgedFeeJuice = store.openMap<string, Buffer>("bridgedFeeJuice");
     const interactions = store.openMap<string, Buffer>("interactions");
     const authorizations = store.openMap<string, Buffer>("authorizations");
-    const simulationResults = store.openMap<string, string>(
-      "simulationResults"
-    );
+    const txSimulations = store.openMap<string, string>("txSimulations");
     return new WalletDB(
       accounts,
       aliases,
       bridgedFeeJuice,
       interactions,
       authorizations,
-      simulationResults,
+      txSimulations,
       userLog
     );
   }
@@ -324,9 +323,7 @@ export class WalletDB {
    * Get all persistent authorizations for a specific app
    * Returns a map of method -> authorization data
    */
-  async getAppAuthorizations(
-    appId: string
-  ): Promise<Record<string, any>> {
+  async getAppAuthorizations(appId: string): Promise<Record<string, any>> {
     const authorizations: Record<string, any> = {};
     for await (const [key, value] of this.authorizations.entriesAsync()) {
       // Keys are formatted as "${appId}:${method}"
@@ -357,10 +354,7 @@ export class WalletDB {
   /**
    * Revoke all persistent authorizations for an app
    */
-  async revokeAppAuthorizations(
-    appId: string,
-    log: LogFn = this.userLog
-  ) {
+  async revokeAppAuthorizations(appId: string, log: LogFn = this.userLog) {
     const keysToDelete: string[] = [];
     for await (const [key, _] of this.authorizations.entriesAsync()) {
       const [authAppId] = key.split(":");
@@ -373,23 +367,29 @@ export class WalletDB {
       await this.authorizations.delete(key);
     }
 
-    log(`Revoked all authorizations for appId ${appId} (${keysToDelete.length} keys deleted)`);
+    log(
+      `Revoked all authorizations for appId ${appId} (${keysToDelete.length} keys deleted)`
+    );
   }
 
-  async storeSimulationResult(
+  async storeTxSimulation(
     interactionId: string,
     simulationResult: TxSimulationResult,
+    txRequest: TxExecutionRequest,
     log: LogFn = this.userLog
   ) {
-    await this.simulationResults.set(
-      interactionId,
-      jsonStringify(simulationResult)
-    );
-    log(`Simulation result stored for interaction ${interactionId}`);
+    const data = jsonStringify({
+      simulationResult,
+      txRequest,
+    });
+    await this.txSimulations.set(interactionId, data);
+    log(`Transaction simulation stored for interaction ${interactionId}`);
   }
 
-  async getSimulationResult(interactionId: string): Promise<any | undefined> {
-    const result = await this.simulationResults.getAsync(interactionId);
+  async getTxSimulation(
+    interactionId: string
+  ): Promise<{ simulationResult: any; txRequest: any } | undefined> {
+    const result = await this.txSimulations.getAsync(interactionId);
     if (!result) {
       return undefined;
     }
