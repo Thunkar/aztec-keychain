@@ -1,7 +1,6 @@
 import type {
   TxSimulationResult,
   PrivateCallExecutionResult,
-  TxExecutionRequest,
 } from "@aztec/stdlib/tx";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
@@ -15,10 +14,7 @@ import { decodeFromAbi } from "@aztec/aztec.js";
 import { formatAbiValue } from "./utils";
 import type { TxDecodingCache } from "./tx-decoding-cache";
 import { Fr } from "@aztec/foundation/fields";
-import {
-  PRIVATE_CIRCUIT_PUBLIC_INPUTS_LENGTH,
-  PRIVATE_CONTEXT_INPUTS_LENGTH,
-} from "@aztec/constants";
+import { PRIVATE_CONTEXT_INPUTS_LENGTH } from "@aztec/constants";
 
 export type ExecutionEvent = PrivateCallEvent | PublicEnqueueEvent;
 
@@ -53,7 +49,6 @@ export interface DecodedExecutionTrace {
 
 export class TxCallStackDecoder {
   private calldataMap: Map<string, any[]> = new Map();
-  private argsOfCallsMap: Map<string, any[]> = new Map();
 
   constructor(private cache: TxDecodingCache) {}
 
@@ -84,47 +79,27 @@ export class TxCallStackDecoder {
   private extractArgsFromWitness(
     partialWitness: Map<number, string>,
     functionAbi: FunctionAbi
-  ): any[] {
-    console.log(
-      `[Decoder] Extracting args from witness for ${functionAbi.parameters.length} parameters`
-    );
-
-    try {
-      // Calculate the total size of parameters
-      let parametersSize = 0;
-      for (const param of functionAbi.parameters) {
-        parametersSize += this.getTypeSize(param.type);
-      }
-
-      console.log(
-        `[Decoder] Total parameters size: ${parametersSize} field elements`
-      );
-
-      // Extract the argument fields from witness (indices PRIVATE_CIRCUIT_PUBLIC_INPUTS_LENGTH to PRIVATE_CIRCUIT_PUBLIC_INPUTS_LENGTH+parametersSize-1)
-      const argsFields: Fr[] = [];
-      for (
-        let i = PRIVATE_CONTEXT_INPUTS_LENGTH;
-        i < parametersSize + PRIVATE_CONTEXT_INPUTS_LENGTH;
-        i++
-      ) {
-        const witnessValue = partialWitness.get(i);
-        if (witnessValue !== undefined) {
-          argsFields.push(Fr.fromString(witnessValue));
-        } else {
-          console.warn(`[Decoder] Missing witness value at index ${i}`);
-        }
-      }
-
-      console.log(
-        `[Decoder] Extracted ${argsFields.length} field elements from witness:`,
-        argsFields.map((f) => f.toString().slice(0, 20) + "...")
-      );
-
-      return argsFields;
-    } catch (error) {
-      console.error(`[Decoder] Failed to extract args from witness:`, error);
-      throw error;
+  ): Fr[] {
+    // Calculate the total size of parameters
+    let parametersSize = 0;
+    for (const param of functionAbi.parameters) {
+      parametersSize += this.getTypeSize(param.type);
     }
+
+    // Extract the argument fields from witness
+    const argsFields: Fr[] = [];
+    for (
+      let i = PRIVATE_CONTEXT_INPUTS_LENGTH;
+      i < parametersSize + PRIVATE_CONTEXT_INPUTS_LENGTH;
+      i++
+    ) {
+      const witnessValue = partialWitness.get(i);
+      if (witnessValue !== undefined) {
+        argsFields.push(Fr.fromString(witnessValue));
+      }
+    }
+
+    return argsFields;
   }
 
   /**
@@ -159,13 +134,6 @@ export class TxCallStackDecoder {
     const startCounter = call.publicInputs.startSideEffectCounter.toNumber();
     const endCounter = call.publicInputs.endSideEffectCounter.toNumber();
 
-    // Debug: Log nested execution info
-    console.log(
-      `[Decoder] Processing call at depth ${depth}, counter ${startCounter}-${endCounter}, ` +
-        `nestedExecutionResults: ${call.nestedExecutionResults?.length || 0}`
-    );
-
-    // Get contract and function names
     const contractName = await this.cache.getAddressAlias(
       callContext.contractAddress
     );
@@ -189,45 +157,12 @@ export class TxCallStackDecoder {
         );
         functionName = functionAbi.name;
 
-        // Decode arguments from argsHash (first try argsOfCalls map)
-        const argsHash = call.publicInputs.argsHash.toString();
-        let argsValues = this.argsOfCallsMap.get(argsHash);
-
-        console.log(
-          `[Decoder] Function: ${functionName}, depth: ${depth}, argsHash: ${argsHash.slice(0, 20)}..., ` +
-            `has args in map: ${!!argsValues}, params count: ${functionAbi.parameters.length}`
-        );
-
-        // If not in argsOfCalls map, try extracting from partialWitness
-        if (
-          !argsValues &&
-          functionAbi.parameters.length > 0 &&
-          call.partialWitness
-        ) {
-          console.log(
-            `[Decoder] Attempting to extract args from partialWitness for ${functionName}`
-          );
+        // Extract arguments from partialWitness
+        if (functionAbi.parameters.length > 0 && call.partialWitness) {
           try {
-            argsValues = this.extractArgsFromWitness(
+            const argsValues = this.extractArgsFromWitness(
               call.partialWitness,
               functionAbi
-            );
-            console.log(
-              `[Decoder] Successfully extracted ${argsValues.length} args from witness`
-            );
-          } catch (error) {
-            console.warn(
-              `[Decoder] Failed to extract args from witness for ${functionName}:`,
-              error
-            );
-          }
-        }
-
-        if (argsValues && functionAbi.parameters.length > 0) {
-          try {
-            console.log(
-              `[Decoder] Decoding ${argsValues.length} field values with types: ` +
-                `${functionAbi.parameters.map((p: any) => `${p.name}:${JSON.stringify(p.type)}`).join(", ")}`
             );
 
             const decoded = decodeFromAbi(
@@ -235,52 +170,18 @@ export class TxCallStackDecoder {
               argsValues
             );
 
-            console.log(
-              `[Decoder] decodeFromAbi returned:`,
-              typeof decoded,
-              Array.isArray(decoded)
-            );
-
             // decodeFromAbi returns a single value if there's one param, or an array for multiple
             const decodedArgs = Array.isArray(decoded) ? decoded : [decoded];
 
-            console.log(
-              `[Decoder] After array normalization: ${decodedArgs.length} values`
-            );
-
             args = await Promise.all(
-              decodedArgs.map(async (value, i) => {
-                const formatted = await this.formatAndResolveValue(value);
-                console.log(
-                  `[Decoder] Arg ${i} (${functionAbi.parameters[i]?.name}): ` +
-                    `decoded type=${typeof value}, formatted="${formatted.slice(0, 50)}${formatted.length > 50 ? "..." : ""}"`
-                );
-                return {
-                  name: functionAbi.parameters[i]?.name || `arg_${i}`,
-                  value: formatted,
-                };
-              })
+              decodedArgs.map(async (value, i) => ({
+                name: functionAbi.parameters[i]?.name || `arg_${i}`,
+                value: await this.formatAndResolveValue(value),
+              }))
             );
           } catch (error) {
-            console.warn(
-              `Failed to decode arguments for ${functionName}:`,
-              error
-            );
-            // Fall back to showing raw values
-            args = argsValues.map((val, i) => ({
-              name: functionAbi.parameters[i]?.name || `arg_${i}`,
-              value: val.toString(),
-            }));
+            // Silently fail - args will remain empty
           }
-        } else if (!argsValues && functionAbi.parameters.length > 0) {
-          console.warn(
-            `[Decoder] Could not retrieve args for ${functionName} at depth ${depth}. ` +
-              `argsHash: ${argsHash}, available hashes: ${Array.from(
-                this.argsOfCallsMap.keys()
-              )
-                .map((k) => k.slice(0, 20))
-                .join(", ")}`
-          );
         }
 
         // Decode return values
@@ -469,15 +370,7 @@ export class TxCallStackDecoder {
                     }))
                   );
                 } catch (error) {
-                  console.warn(
-                    `Failed to decode public function arguments for ${functionName}:`,
-                    error
-                  );
-                  // Fall back to showing raw values
-                  args = calldata.slice(1).map((val, i) => ({
-                    name: functionAbi.parameters[i]?.name || `arg_${i}`,
-                    value: val.toString(),
-                  }));
+                  // Silently fail - args will remain empty
                 }
               }
             }
@@ -487,10 +380,7 @@ export class TxCallStackDecoder {
           functionName = `0x${functionSelector.toString().slice(2, 10)}`;
         }
       } catch (error) {
-        console.warn(
-          `Failed to decode function selector for public call:`,
-          error
-        );
+        // Silently fail
       }
     }
 
@@ -513,8 +403,7 @@ export class TxCallStackDecoder {
   }
 
   async decodeSimulationResult(
-    simulationResult: TxSimulationResult,
-    txRequest?: TxExecutionRequest
+    simulationResult: TxSimulationResult
   ): Promise<DecodedExecutionTrace> {
     // Build calldata map from publicFunctionCalldata
     this.calldataMap.clear();
@@ -526,24 +415,6 @@ export class TxCallStackDecoder {
           hashedCalldata.values
         );
       }
-    }
-
-    // Build args map from TxExecutionRequest if provided
-    this.argsOfCallsMap.clear();
-    if (txRequest?.argsOfCalls) {
-      console.log(
-        `[Decoder] Building args map with ${txRequest.argsOfCalls.length} entries from TxExecutionRequest`
-      );
-      for (const hashedArgs of txRequest.argsOfCalls) {
-        const hashStr = hashedArgs.hash.toString();
-        this.argsOfCallsMap.set(hashStr, hashedArgs.values);
-        console.log(
-          `[Decoder] Added args entry: hash=${hashStr.slice(0, 20)}..., ` +
-            `values count=${hashedArgs.values.length}`
-        );
-      }
-    } else {
-      console.warn("[Decoder] No txRequest.argsOfCalls provided");
     }
 
     const entrypoint = simulationResult.privateExecutionResult.entrypoint;

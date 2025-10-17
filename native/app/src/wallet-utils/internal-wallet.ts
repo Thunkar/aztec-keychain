@@ -153,7 +153,7 @@ export class InternalWallet extends ExternalWallet {
   async getExecutionTrace(
     interactionId: string
   ): Promise<DecodedExecutionTrace | undefined> {
-    // Retrieve the stored simulation result and txRequest
+    // Retrieve the stored simulation result
     const data = await this.db.getTxSimulation(interactionId);
     if (!data) {
       return undefined;
@@ -163,12 +163,9 @@ export class InternalWallet extends ExternalWallet {
     const parsedSimulationResult = TxSimulationResult.schema.parse(
       data.simulationResult
     );
-    const { TxExecutionRequest } = await import("@aztec/stdlib/tx");
-    const parsedTxRequest = TxExecutionRequest.schema.parse(data.txRequest);
 
     const { executionTrace } = await decodingService.decodeTransaction(
-      parsedSimulationResult,
-      parsedTxRequest
+      parsedSimulationResult
     );
     return executionTrace;
   }

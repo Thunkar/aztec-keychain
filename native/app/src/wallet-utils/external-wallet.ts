@@ -864,7 +864,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       let decoded;
       if (withDecoding) {
         const decodingService = new TxDecodingService(this.pxe, this.db);
-        decoded = await decodingService.decodeTransaction(simulationResult, txRequest);
+        decoded = await decodingService.decodeTransaction(simulationResult);
       }
 
       // For standalone simulations (no existingInteraction), store the raw simulation result
