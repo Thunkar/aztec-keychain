@@ -26,6 +26,8 @@ import type {
 import type { Logger } from "pino";
 import { InternalWallet } from "./wallet-utils/internal-wallet.ts";
 
+console.log(process.env);
+
 const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
   version: schemas.Fr,

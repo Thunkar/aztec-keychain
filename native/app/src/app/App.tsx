@@ -23,9 +23,7 @@ import type {
   WalletInteraction,
   WalletInteractionType,
 } from "../wallet-utils/wallet-interaction.ts";
-import type {
-  AuthorizationRequest,
-} from "../wallet-utils/authorization.ts";
+import type { AuthorizationRequest } from "../wallet-utils/authorization.ts";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const INTERACTIONS_PANEL_MIN_WIDTH = 300;
@@ -38,7 +36,9 @@ type MenuSection = "accounts" | "contacts" | "apps";
 export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentSection, setCurrentSection] = useState<MenuSection>("accounts");
-  const [interactionsPanelWidth, setInteractionsPanelWidth] = useState(INTERACTIONS_PANEL_WIDTH);
+  const [interactionsPanelWidth, setInteractionsPanelWidth] = useState(
+    INTERACTIONS_PANEL_WIDTH
+  );
   const [isResizing, setIsResizing] = useState(false);
 
   const [interactions, setInteractions] = useState<
@@ -60,9 +60,14 @@ export function App() {
     walletAPI.onWalletUpdate((interaction) => {
       setInteractions((prevEvents) => {
         // Deduplicate by ID to prevent React strict mode duplicates
-        const eventsMap = new Map(prevEvents.map((e) => [e.id, e]));
+        const eventsMap = new Map<
+          string,
+          WalletInteraction<WalletInteractionType>
+        >(prevEvents.map((e) => [e.id, e]));
         eventsMap.set(interaction.id, interaction);
-        return Array.from(eventsMap.values());
+        return Array.from(eventsMap.values()).sort(
+          (a, b) => b.timestamp - a.timestamp
+        );
       });
     });
 
@@ -124,7 +129,7 @@ export function App() {
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
   };
@@ -134,7 +139,10 @@ export function App() {
       if (!isResizing) return;
 
       const newWidth = window.innerWidth - e.clientX;
-      if (newWidth >= INTERACTIONS_PANEL_MIN_WIDTH && newWidth <= INTERACTIONS_PANEL_MAX_WIDTH) {
+      if (
+        newWidth >= INTERACTIONS_PANEL_MIN_WIDTH &&
+        newWidth <= INTERACTIONS_PANEL_MAX_WIDTH
+      ) {
         setInteractionsPanelWidth(newWidth);
       }
     };
@@ -144,13 +152,13 @@ export function App() {
     };
 
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isResizing]);
 
@@ -383,12 +391,21 @@ export function App() {
             }),
           }}
         />
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider", borderLeft: 1 }}>
+        <Box
+          sx={{ p: 2, borderBottom: 1, borderColor: "divider", borderLeft: 1 }}
+        >
           <Typography variant="h6" component="h2">
             Interactions
           </Typography>
         </Box>
-        <Box sx={{ flexGrow: 1, overflow: "auto", borderLeft: 1, borderColor: "divider" }}>
+        <Box
+          sx={{
+            flexGrow: 1,
+            overflow: "auto",
+            borderLeft: 1,
+            borderColor: "divider",
+          }}
+        >
           <InteractionsList interactions={interactions} />
         </Box>
       </Box>

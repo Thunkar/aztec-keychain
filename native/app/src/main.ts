@@ -4,12 +4,10 @@ import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
 import { WalletInternalProxy } from "./wallet-internal-proxy";
 import { inspect } from "node:util";
-import fs from "node:fs";
 
 // Replace placeholder paths with actual runtime paths for packaged app
 if (app.isPackaged) {
   const resourcesPath = process.resourcesPath;
-  const appPath = app.getPath("userData");
 
   // Replace placeholders in environment variables
   if (process.env.BB_WASM_PATH?.includes("__RESOURCES_PATH__")) {
@@ -23,16 +21,6 @@ if (app.isPackaged) {
       "__RESOURCES_PATH__",
       resourcesPath
     );
-  }
-  if (process.env.BB_WORKING_DIRECTORY?.includes("__APP_PATH__")) {
-    process.env.BB_WORKING_DIRECTORY = process.env.BB_WORKING_DIRECTORY.replace(
-      "__APP_PATH__",
-      appPath
-    );
-    // Create the working directory if it doesn't exist
-    if (!fs.existsSync(process.env.BB_WORKING_DIRECTORY)) {
-      fs.mkdirSync(process.env.BB_WORKING_DIRECTORY, { recursive: true });
-    }
   }
 }
 
@@ -81,7 +69,23 @@ app.on("ready", async () => {
     new MessageChannelMain();
 
   const wsServer = utilityProcess.fork(path.join(__dirname, "ws-worker.js"));
-  const wallet = utilityProcess.fork(path.join(__dirname, "wallet-worker.js"));
+
+  // Convert all process.env values to strings (Electron requirement)
+  const filteredEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && value !== null) {
+      // Convert to string to handle cases where env vars are numbers
+      filteredEnv[key] = String(value);
+    }
+  }
+
+  const wallet = utilityProcess.fork(
+    path.join(__dirname, "wallet-worker.js"),
+    [],
+    {
+      env: filteredEnv,
+    }
+  );
 
   wsServer.postMessage({ type: "ports" }, [externalPort1]);
   wallet.postMessage({ type: "ports" }, [

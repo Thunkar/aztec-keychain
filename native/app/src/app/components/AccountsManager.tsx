@@ -1,5 +1,5 @@
 import { Fr } from "@aztec/aztec.js";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, type MouseEvent } from "react";
 import Box from "@mui/material/Box";
 import Fab from "@mui/material/Fab";
 import AddIcon from "@mui/icons-material/Add";
@@ -31,7 +31,7 @@ export function AccountsManager() {
     loadAccounts();
   }, []);
 
-  const handleFabMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleFabMouseDown = (e: MouseEvent<HTMLButtonElement>) => {
     setIsDragging(true);
     setDragOffset({
       x: e.clientX - (window.innerWidth - fabPosition.right),

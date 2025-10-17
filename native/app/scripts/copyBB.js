@@ -14,7 +14,7 @@ const BB_BINARY_SOURCE =
   );
 
 // Destination directory - will be packaged with the app
-const RESOURCES_DIR = path.join(__dirname, "..", "resources");
+const RESOURCES_DIR = path.join(__dirname, "..");
 const BB_DIR = path.join(RESOURCES_DIR, "bb");
 
 // Create directories if they don't exist
@@ -49,4 +49,4 @@ if (fs.existsSync(BB_BINARY_SOURCE)) {
   process.exit(1);
 }
 
-console.log("\n✓ All native files copied successfully to resources/bb/");
+console.log("\n✓ All files copied successfully to ./bb/");

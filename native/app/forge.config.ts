@@ -18,7 +18,10 @@ type CopyClass<T> = {
 
 type CustomWalker = CopyClass<Walker> & {
   modules: Module[];
-  walkDependenciesForModule: (moduleRoot: string, depType: DepType) => Promise<void>;
+  walkDependenciesForModule: (
+    moduleRoot: string,
+    depType: DepType
+  ) => Promise<void>;
 };
 
 const externalDependencies = ["@aztec/kv-store", "@aztec/bb.js"];
@@ -26,7 +29,7 @@ const externalDependencies = ["@aztec/kv-store", "@aztec/bb.js"];
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    extraResource: ["./resources"],
+    extraResource: ["./bb"],
   },
   hooks: {
     async packageAfterCopy(_forgeConfig, buildPath) {
@@ -39,16 +42,23 @@ const config: ForgeConfig = {
       console.log(`External dependencies: ${externalDependencies.join(", ")}`);
 
       for (const dep of externalDependencies) {
-        const walker = new Walker(path.join(sourceNodeModulesPath, dep)) as unknown as CustomWalker;
+        const walker = new Walker(
+          path.join(sourceNodeModulesPath, dep)
+        ) as unknown as CustomWalker;
 
-        await walker.walkDependenciesForModule(path.join(sourceNodeModulesPath, dep), DepType.PROD);
+        await walker.walkDependenciesForModule(
+          path.join(sourceNodeModulesPath, dep),
+          DepType.PROD
+        );
 
         walker.modules.forEach((treeDep) => {
           depsToCopy.add(treeDep.name);
         });
       }
 
-      console.log(`Total packages to copy (including transitive): ${depsToCopy.size}`);
+      console.log(
+        `Total packages to copy (including transitive): ${depsToCopy.size}`
+      );
 
       await Promise.all(
         Array.from(depsToCopy.values()).map(async (packageName) => {
@@ -56,7 +66,10 @@ const config: ForgeConfig = {
           const destPath = path.join(destNodeModulesPath, packageName);
 
           await fsp.mkdir(path.dirname(destPath), { recursive: true });
-          await fsp.cp(sourcePath, destPath, { recursive: true, preserveTimestamps: true });
+          await fsp.cp(sourcePath, destPath, {
+            recursive: true,
+            preserveTimestamps: true,
+          });
         })
       );
 
