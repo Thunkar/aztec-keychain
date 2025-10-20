@@ -19,7 +19,6 @@ interface AuthorizeProveTxContentProps {
   showAppId?: boolean;
 }
 
-
 // Reusable content component for displaying proveTx authorization details
 export function AuthorizeProveTxContent({
   request,
@@ -41,167 +40,15 @@ export function AuthorizeProveTxContent({
         </Typography>
       )}
 
-      {callAuthorizations.length === 0 ? (
-          <Box
-            sx={{
-              mt: 2,
-              p: 2,
-              bgcolor: "background.default",
-              borderRadius: 1,
-            }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              No authorizations required for this transaction.
-            </Typography>
-          </Box>
-        ) : (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Function Calls Requiring Authorization (
-              {callAuthorizations.length}):
-            </Typography>
-            {callAuthorizations.map((auth, index) => (
-              <Accordion
-                key={index}
-                defaultExpanded={callAuthorizations.length === 1}
-              >
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="subtitle1">
-                      {auth.contract.name}.{auth.function}()
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Called by: {auth.caller.alias}
-                    </Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Box>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Contract:
-                    </Typography>
-                    <Box
-                      sx={{
-                        p: 1.5,
-                        bgcolor: "background.default",
-                        borderRadius: 1,
-                        mb: 2,
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight="medium">
-                        {auth.contract.name}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontFamily: "monospace",
-                          wordBreak: "break-all",
-                          color: "text.secondary",
-                        }}
-                      >
-                        {auth.contract.address}
-                      </Typography>
-                    </Box>
-
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Caller:
-                    </Typography>
-                    <Box
-                      sx={{
-                        p: 1.5,
-                        bgcolor: "background.default",
-                        borderRadius: 1,
-                        mb: 2,
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight="medium">
-                        {auth.caller.alias}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontFamily: "monospace",
-                          wordBreak: "break-all",
-                          color: "text.secondary",
-                        }}
-                      >
-                        {auth.caller.address}
-                      </Typography>
-                    </Box>
-
-                    {auth.parameters.length > 0 && (
-                      <>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          gutterBottom
-                        >
-                          Parameters:
-                        </Typography>
-                        <Box
-                          sx={{
-                            p: 1,
-                            bgcolor: "background.default",
-                            borderRadius: 1,
-                          }}
-                        >
-                          <Table size="small">
-                            <TableBody>
-                              {auth.parameters.map((param, paramIndex) => (
-                                <TableRow key={paramIndex}>
-                                  <TableCell
-                                    sx={{
-                                      fontFamily: "monospace",
-                                      fontWeight: "medium",
-                                      width: "30%",
-                                      border: 0,
-                                      py: 1,
-                                    }}
-                                  >
-                                    {param.name}
-                                  </TableCell>
-                                  <TableCell
-                                    sx={{
-                                      fontFamily: "monospace",
-                                      wordBreak: "break-all",
-                                      border: 0,
-                                      py: 1,
-                                    }}
-                                  >
-                                    {param.value}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </Box>
-                      </>
-                    )}
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-          </Box>
-        )}
-
-        {/* Execution Trace */}
-        {executionTrace && (
-          <>
-            <Divider sx={{ my: 3 }} />
-            <ExecutionTraceDisplay
-              trace={executionTrace}
-              callAuthorizations={callAuthorizations}
-            />
-          </>
-        )}
+      {executionTrace && (
+        <>
+          <Divider sx={{ my: 3 }} />
+          <ExecutionTraceDisplay
+            trace={executionTrace}
+            callAuthorizations={callAuthorizations}
+          />
+        </>
+      )}
 
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
         By approving, you authorize the app to execute these function calls on

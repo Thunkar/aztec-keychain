@@ -44,6 +44,16 @@ export function App() {
   const [interactions, setInteractions] = useState<
     WalletInteraction<WalletInteractionType>[]
   >([]);
+  const [selectedInteractionTypes, setSelectedInteractionTypes] = useState<
+    WalletInteractionType[]
+  >([
+    "registerContract",
+    "createAccount",
+    "simulateTx",
+    "proveTx",
+    "sendTx",
+    "profileTx",
+  ]);
 
   const [authQueue, setAuthQueue] = useState<AuthorizationRequest[]>([]);
   const currentAuth = authQueue[0] || null;
@@ -406,7 +416,11 @@ export function App() {
             borderColor: "divider",
           }}
         >
-          <InteractionsList interactions={interactions} />
+          <InteractionsList
+            interactions={interactions}
+            selectedTypes={selectedInteractionTypes}
+            onTypeFilterChange={setSelectedInteractionTypes}
+          />
         </Box>
       </Box>
 

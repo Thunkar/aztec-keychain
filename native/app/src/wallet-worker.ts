@@ -35,7 +35,7 @@ const ChainInfoSchema = z.object({
 
 const chainInfoToNodeURL = {
   31337: {
-    1681471542: "http://localhost:8080",
+    862270261: "http://localhost:8080",
   },
   1115111: {
     1714840162: "https://rpc.testnet.aztec-labs.com/",

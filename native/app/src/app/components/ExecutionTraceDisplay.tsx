@@ -397,17 +397,11 @@ export function ExecutionTraceDisplay({
 }: ExecutionTraceDisplayProps) {
   return (
     <Box>
-      {/* Private Execution Section */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Execution trace
-        </Typography>
-        <Box sx={{ mt: 2 }}>
-          <PrivateCallDisplay
-            call={trace.privateExecution}
-            authorizations={callAuthorizations}
-          />
-        </Box>
+      <Box sx={{ mt: 2 }}>
+        <PrivateCallDisplay
+          call={trace.privateExecution}
+          authorizations={callAuthorizations}
+        />
       </Box>
     </Box>
   );

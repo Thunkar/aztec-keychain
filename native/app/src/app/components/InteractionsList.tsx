@@ -9,6 +9,13 @@ import {
   ListItem,
   CircularProgress,
   keyframes,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  OutlinedInput,
+  Checkbox,
+  ListItemText,
 } from "@mui/material";
 import { CheckCircle, Error as ErrorIcon } from "@mui/icons-material";
 import type {
@@ -21,6 +28,8 @@ import { WalletContext } from "../../renderer";
 
 interface InteractionsListProps {
   interactions: WalletInteraction<WalletInteractionType>[];
+  selectedTypes: WalletInteractionType[];
+  onTypeFilterChange: (types: WalletInteractionType[]) => void;
 }
 
 const getStatusColor = (status: string, complete: boolean) => {
@@ -66,7 +75,32 @@ const getInteractionTypeLabel = (type: WalletInteractionType) => {
   return labels[type] || type;
 };
 
-export function InteractionsList({ interactions }: InteractionsListProps) {
+const getInteractionTypeColor = (type: WalletInteractionType) => {
+  const colors: Record<WalletInteractionType, string> = {
+    registerContract: "#9c27b0", // purple
+    createAccount: "#2196f3", // blue
+    simulateTx: "#ff9800", // orange
+    proveTx: "#673ab7", // deep purple (instead of red to avoid error appearance)
+    sendTx: "#4caf50", // green
+    profileTx: "#00bcd4", // cyan
+  };
+  return colors[type];
+};
+
+const allInteractionTypes: WalletInteractionType[] = [
+  "registerContract",
+  "createAccount",
+  "simulateTx",
+  "proveTx",
+  "sendTx",
+  "profileTx",
+];
+
+export function InteractionsList({
+  interactions,
+  selectedTypes,
+  onTypeFilterChange,
+}: InteractionsListProps) {
   const { walletAPI } = useContext(WalletContext);
   const [selectedTrace, setSelectedTrace] =
     useState<DecodedExecutionTrace | null>(null);
@@ -89,18 +123,36 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
     }
   };
 
-  if (interactions.length === 0) {
-    return (
-      <Box sx={{ p: 2, textAlign: "center", color: "text.secondary" }}>
-        <Typography variant="body2">No interactions yet</Typography>
-      </Box>
-    );
-  }
+  const handleTypeFilterChange = (
+    event: any
+  ) => {
+    const value = event.target.value as WalletInteractionType[];
+    onTypeFilterChange(value);
+  };
+
+  // Filter interactions based on selected types
+  const filteredInteractions =
+    selectedTypes.length === 0 || selectedTypes.length === allInteractionTypes.length
+      ? interactions
+      : interactions.filter((interaction) =>
+          selectedTypes.includes(interaction.type)
+        );
 
   return (
-    <>
-      <List sx={{ width: "100%", height: "100%", overflowY: "auto" }}>
-        {interactions.map((interaction) => (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Interactions List */}
+      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+        {filteredInteractions.length === 0 ? (
+          <Box sx={{ p: 2, textAlign: "center", color: "text.secondary" }}>
+            <Typography variant="body2">
+              {interactions.length === 0
+                ? "No interactions yet"
+                : "No interactions match the selected filters"}
+            </Typography>
+          </Box>
+        ) : (
+          <List sx={{ width: "100%", p: 0 }}>
+        {filteredInteractions.map((interaction) => (
             <ListItem key={interaction.id} sx={{ px: 0, py: 0.5 }}>
               <Card
                 sx={{
@@ -113,6 +165,8 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
                     interaction.type === "proveTx"
                       ? "pointer"
                       : "default",
+                  borderLeft: "4px solid",
+                  borderColor: getInteractionTypeColor(interaction.type),
                   "&:hover": {
                     boxShadow: 3,
                     transform: "translateY(-2px)",
@@ -137,8 +191,6 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
                       animation: `${shimmer} 2s infinite linear`,
                       pointerEvents: "none",
                     },
-                    borderLeft: "3px solid",
-                    borderColor: "primary.main",
                     animation: `${pulse} 2s ease-in-out infinite`,
                   }),
                 }}
@@ -158,8 +210,16 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
                     <Chip
                       label={getInteractionTypeLabel(interaction.type)}
                       size="small"
-                      variant="outlined"
-                      sx={{ fontSize: "0.7rem", height: 20 }}
+                      sx={{
+                        fontSize: "0.7rem",
+                        height: 20,
+                        bgcolor: getInteractionTypeColor(interaction.type),
+                        color: "white",
+                        fontWeight: 600,
+                        "& .MuiChip-label": {
+                          px: 1,
+                        },
+                      }}
                     />
                     <Chip
                       icon={getStatusIcon(
@@ -216,13 +276,44 @@ export function InteractionsList({ interactions }: InteractionsListProps) {
               </Card>
             </ListItem>
           ))}
-      </List>
+          </List>
+        )}
+      </Box>
+
+      {/* Filter Controls at Bottom */}
+      <Box sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
+        <FormControl fullWidth size="small">
+          <InputLabel id="interaction-type-filter-label">
+            Filter by Type
+          </InputLabel>
+          <Select
+            labelId="interaction-type-filter-label"
+            id="interaction-type-filter"
+            multiple
+            value={selectedTypes}
+            onChange={handleTypeFilterChange}
+            input={<OutlinedInput label="Filter by Type" />}
+            renderValue={(selected) =>
+              selected.length === 0 || selected.length === allInteractionTypes.length
+                ? "All Types"
+                : `${selected.length} type${selected.length > 1 ? "s" : ""}`
+            }
+          >
+            {allInteractionTypes.map((type) => (
+              <MenuItem key={type} value={type}>
+                <Checkbox checked={selectedTypes.indexOf(type) > -1} />
+                <ListItemText primary={getInteractionTypeLabel(type)} />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
 
       <ExecutionTraceDialog
         open={traceDialogOpen}
         onClose={() => setTraceDialogOpen(false)}
         trace={selectedTrace}
       />
-    </>
+    </Box>
   );
 }
