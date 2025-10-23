@@ -1,8 +1,6 @@
 import { AztecAddress } from "@aztec/aztec.js";
-import { useContext, useEffect, useState, type MouseEvent } from "react";
+import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
-import Fab from "@mui/material/Fab";
-import AddIcon from "@mui/icons-material/Add";
 import Typography from "@mui/material/Typography";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -10,20 +8,13 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
-import { ContactBox } from "./ContactBox.tsx";
-import { WalletContext } from "../../renderer.tsx";
+import { ContactBox } from "./components/ContactBox.tsx";
+import { DraggableFab } from "../../shared/DraggableFab.tsx";
+import { WalletContext } from "../../../../renderer.tsx";
 import type { Aliased } from "@aztec/aztec.js";
-
-const INTERACTIONS_PANEL_WIDTH = 400;
 
 export function ContactsManager() {
   const [contacts, setContacts] = useState<Aliased<AztecAddress>[]>([]);
-  const [fabPosition, setFabPosition] = useState({
-    bottom: 16,
-    right: INTERACTIONS_PANEL_WIDTH + 16,
-  });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newContactAlias, setNewContactAlias] = useState("");
   const [newContactAddress, setNewContactAddress] = useState("");
@@ -38,41 +29,6 @@ export function ContactsManager() {
   useEffect(() => {
     loadContacts();
   }, []);
-
-  const handleFabMouseDown = (e: MouseEvent<HTMLButtonElement>) => {
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - (window.innerWidth - fabPosition.right),
-      y: e.clientY - (window.innerHeight - fabPosition.bottom),
-    });
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
-        const newRight = window.innerWidth - e.clientX + dragOffset.x;
-        const newBottom = window.innerHeight - e.clientY + dragOffset.y;
-        setFabPosition({
-          right: Math.max(16, newRight),
-          bottom: Math.max(16, newBottom),
-        });
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDragging, dragOffset]);
 
   const handleAddContact = async () => {
     if (!newContactAlias || !newContactAddress) {
@@ -89,14 +45,6 @@ export function ContactsManager() {
     } catch (error) {
       console.error("Failed to add contact:", error);
     }
-  };
-
-  const handleFabClick = (e: MouseEvent<HTMLButtonElement>) => {
-    if (isDragging) {
-      e.preventDefault();
-      return;
-    }
-    setAddDialogOpen(true);
   };
 
   return (
@@ -120,19 +68,7 @@ export function ContactsManager() {
       </Box>
 
       {/* Draggable FAB for adding contacts */}
-      <Fab
-        color="primary"
-        sx={{
-          position: "absolute",
-          bottom: fabPosition.bottom,
-          right: fabPosition.right,
-          cursor: isDragging ? "grabbing" : "grab",
-        }}
-        onMouseDown={handleFabMouseDown}
-        onClick={handleFabClick}
-      >
-        <AddIcon />
-      </Fab>
+      <DraggableFab onClick={() => setAddDialogOpen(true)} />
 
       {/* Add Contact Dialog */}
       <Dialog

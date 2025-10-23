@@ -6,29 +6,34 @@ import ArrowDropDown from "@mui/icons-material/ArrowDropDown";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 
-import { addressToShortStr, keyToShortStr } from "../utils/format";
+import { addressToShortStr, keyToShortStr } from "../../../../utils/format";
 import IconButton from "@mui/material/IconButton";
 import { useState } from "react";
 import QrCode from "@mui/icons-material/QrCode";
-import { QRDialog } from "./QRDialog";
+import { QRDialog } from "../../../dialogs/QRDialog";
 import type { Aliased, AztecAddress } from "@aztec/aztec.js";
 
-interface AccountBoxProps {
-  account: Aliased<AztecAddress> & { type: string };
+interface ContactBoxProps {
+  contact: Aliased<AztecAddress>;
   QRButton?: boolean;
 }
 
-export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
+export function ContactBox({ contact, QRButton = false }: ContactBoxProps) {
   const [openQR, setOpenQR] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    if (account.item) {
-      await navigator.clipboard.writeText(account.item.toString());
+    if (contact.item) {
+      await navigator.clipboard.writeText(contact.item.toString());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  // Remove "senders:" prefix from alias if present
+  const displayAlias = contact.alias.startsWith("senders:")
+    ? contact.alias.substring("senders:".length)
+    : contact.alias;
 
   return (
     <Card
@@ -58,7 +63,7 @@ export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
               mb: 0.5,
             }}
           >
-            {account.alias}
+            {displayAlias}
           </Typography>
           <Typography
             variant="body2"
@@ -70,19 +75,10 @@ export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
               textOverflow: "ellipsis",
             }}
           >
-            {account.item ? account.item.toString() : "Uninitialized"}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{
-              color: "text.secondary",
-              fontSize: "0.7rem",
-            }}
-          >
-            {account.type}
+            {contact.item ? contact.item.toString() : "Uninitialized"}
           </Typography>
         </Box>
-        {account.item && (
+        {contact.item && (
           <IconButton
             size="small"
             onClick={handleCopy}
@@ -93,17 +89,17 @@ export function AccountBox({ account, QRButton = false }: AccountBoxProps) {
             {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
           </IconButton>
         )}
-        {QRButton && account.item && (
+        {QRButton && contact.item && (
           <IconButton size="small" onClick={() => setOpenQR(true)}>
             <QrCode fontSize="small" />
           </IconButton>
         )}
       </Box>
-      {openQR && account.item && (
+      {openQR && contact.item && (
         <QRDialog
           open={openQR}
           onClose={() => setOpenQR(false)}
-          address={account.item!.toString()}
+          address={contact.item!.toString()}
         />
       )}
     </Card>

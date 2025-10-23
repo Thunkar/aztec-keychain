@@ -2,7 +2,7 @@ import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Link from "@mui/material/Link";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import type { AuthorizationItem } from "../../wallet-utils/authorization";
+import type { AuthorizationItem } from "../../../wallet-utils/authorization";
 
 interface AuthorizeContractContentProps {
   request: AuthorizationItem;

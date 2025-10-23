@@ -12,11 +12,11 @@ import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import ContactsIcon from "@mui/icons-material/Contacts";
 import AppsIcon from "@mui/icons-material/Apps";
-import { InteractionsList } from "./components/InteractionsList.tsx";
-import { AccountsManager } from "./components/AccountsManager.tsx";
-import { ContactsManager } from "./components/ContactsManager.tsx";
-import { AuthorizedApps } from "./components/AuthorizedApps.tsx";
-import { AuthorizationDialog } from "./components/AuthorizationDialog.tsx";
+import { InteractionsList } from "./components/sections/interactions/index.tsx";
+import { AccountsManager } from "./components/sections/accounts/index.tsx";
+import { ContactsManager } from "./components/sections/contacts/index.tsx";
+import { AuthorizedApps } from "./components/sections/authorized-apps/index.tsx";
+import { AuthorizationDialog } from "./components/authorization/AuthorizationDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {
@@ -50,6 +50,7 @@ export function App() {
     "registerContract",
     "createAccount",
     "simulateTx",
+    "simulateUtility",
     "sendTx",
     "profileTx",
   ]);

@@ -30,12 +30,26 @@ export type SendTxAuthData = {
   persistent?: boolean;
 };
 
+export type SimulateAuthData = {
+  persistent?: boolean;
+  payloadHash?: string;
+  // For display in authorization dialog
+  callAuthorizations?: any[];
+  executionTrace?: any;
+  // To distinguish between tx and utility simulations
+  isUtility?: boolean;
+};
+
+// Deprecated: use SimulateAuthData instead
+export type SimulateTxAuthData = SimulateAuthData;
+
 // Union of all possible authorization data types
 export type AuthorizationData =
   | GetAccountsAuthData
   | RegisterContractAuthData
   | RegisterSenderAuthData
   | SendTxAuthData
+  | SimulateAuthData
   | undefined;
 
 // Item response for a single authorization

@@ -16,8 +16,8 @@ import {
   Block as RevokeIcon,
   AccountCircle,
 } from "@mui/icons-material";
-import { WalletContext } from "../../renderer";
-import { EditAccountAuthorizationDialog } from "./EditAccountAuthorizationDialog";
+import { WalletContext } from "../../../../../renderer";
+import { EditAccountAuthorizationDialog } from "../../../authorization/EditAccountAuthorizationDialog";
 
 interface AppAuthorizationCardProps {
   appId: string;

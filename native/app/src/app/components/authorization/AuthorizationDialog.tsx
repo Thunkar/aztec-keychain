@@ -15,8 +15,9 @@ import type {
   AuthorizationRequest,
   AuthorizationItemResponse,
   AuthorizationItem,
-} from "../../wallet-utils/authorization";
+} from "../../../wallet-utils/authorization";
 import { AuthorizeSendTxContent } from "./AuthorizeSendTxContent";
+import { AuthorizeSimulateTxContent } from "./AuthorizeSimulateTxContent";
 import { AuthorizeContractContent } from "./AuthorizeContractContent";
 import { AuthorizeSenderContent } from "./AuthorizeSenderContent";
 import { AuthorizeAccountsContent } from "./AuthorizeAccountsContent";
@@ -38,6 +39,10 @@ function formatMethodName(method: string): string {
   switch (method) {
     case "sendTx":
       return "Send Transaction";
+    case "simulateTx":
+      return "Simulate Transaction";
+    case "simulateUtility":
+      return "Simulate Utility Function";
     case "registerContract":
       return "Register Contract";
     case "registerSender":
@@ -65,6 +70,10 @@ function getMethodSubtitle(item: AuthorizationItem): string | null {
       return "Access your wallet addresses";
     case "sendTx":
       return "Execute contract interaction";
+    case "simulateTx":
+      return "Simulate contract interaction (persistent)";
+    case "simulateUtility":
+      return "Simulate utility function (persistent)";
     default:
       return null;
   }
@@ -84,7 +93,7 @@ export function AuthorizationDialog({
         item.id,
         {
           approved: true,
-          persistent: item.method === "getAccounts",
+          persistent: item.method === "getAccounts" || item.method === "simulateTx" || item.method === "simulateUtility",
         },
       ])
     )
@@ -98,7 +107,7 @@ export function AuthorizationDialog({
           item.id,
           {
             approved: true,
-            persistent: item.method === "getAccounts",
+            persistent: item.method === "getAccounts" || item.method === "simulateTx" || item.method === "simulateUtility",
           },
         ])
       )
@@ -240,6 +249,13 @@ export function AuthorizationDialog({
                   <Box sx={{ pl: 5 }}>
                     {item.method === "sendTx" && (
                       <AuthorizeSendTxContent
+                        request={item}
+                        showAppId={false}
+                      />
+                    )}
+
+                    {(item.method === "simulateTx" || item.method === "simulateUtility") && (
+                      <AuthorizeSimulateTxContent
                         request={item}
                         showAppId={false}
                       />

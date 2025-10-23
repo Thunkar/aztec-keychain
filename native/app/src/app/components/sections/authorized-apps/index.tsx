@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { Box, Typography, Alert, CircularProgress } from "@mui/material";
-import { WalletContext } from "../../renderer";
-import { AppAuthorizationCard } from "./AppAuthorizationCard";
+import { WalletContext } from "../../../../renderer";
+import { AppAuthorizationCard } from "./components/AppAuthorizationCard";
 
 export function AuthorizedApps() {
   const { walletAPI } = useContext(WalletContext);

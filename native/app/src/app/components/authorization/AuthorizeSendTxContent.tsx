@@ -1,18 +1,8 @@
 import Typography from "@mui/material/Typography";
-import Box from "@mui/material/Box";
-import Accordion from "@mui/material/Accordion";
-import AccordionSummary from "@mui/material/AccordionSummary";
-import AccordionDetails from "@mui/material/AccordionDetails";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableRow from "@mui/material/TableRow";
-import Divider from "@mui/material/Divider";
-import type { AuthorizationItem } from "../../wallet-utils/authorization";
-import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
-import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
-import { ExecutionTraceDisplay } from "./ExecutionTraceDisplay";
+import type { AuthorizationItem } from "../../../wallet-utils/authorization";
+import type { ReadableCallAuthorization } from "../../../wallet-utils/decoding/call-authorization-formatter";
+import type { DecodedExecutionTrace } from "../../../wallet-utils/decoding/tx-callstack-decoder";
+import { ExecutionTraceDisplay } from "../shared/ExecutionTraceDisplay";
 
 interface AuthorizeSendTxContentProps {
   request: AuthorizationItem;

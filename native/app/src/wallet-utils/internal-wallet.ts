@@ -13,6 +13,7 @@ import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 import { TxHash, TxSimulationResult } from "@aztec/stdlib/tx";
 import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
 import { TxDecodingService } from "./decoding/tx-decoding-service";
+import { DecodingCache } from "./decoding/decoding-cache";
 
 import { inspect } from "node:util";
 
@@ -164,13 +165,20 @@ export class InternalWallet extends ExternalWallet {
   async getExecutionTrace(
     interactionId: string
   ): Promise<DecodedExecutionTrace | undefined> {
-    // Retrieve the stored simulation result
+    // First check if it's a utility trace (simple trace)
+    const utilityTrace = await this.db.getUtilityTrace(interactionId);
+    if (utilityTrace) {
+      return utilityTrace as DecodedExecutionTrace;
+    }
+
+    // Otherwise, retrieve the stored simulation result (full tx)
     const data = await this.db.getTxSimulation(interactionId);
     if (!data) {
       return undefined;
     }
 
-    const decodingService = new TxDecodingService(this.pxe, this.db);
+    const decodingCache = new DecodingCache(this.pxe, this.db);
+    const decodingService = new TxDecodingService(decodingCache);
     const parsedSimulationResult = TxSimulationResult.schema.parse(
       data.simulationResult
     );

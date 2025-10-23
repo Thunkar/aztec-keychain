@@ -18,8 +18,8 @@ import type {
   ExecutionEvent,
   PrivateCallEvent,
   PublicEnqueueEvent,
-} from "../../wallet-utils/decoding/tx-callstack-decoder";
-import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call-authorization-formatter";
+} from "../../../wallet-utils/decoding/tx-callstack-decoder";
+import type { ReadableCallAuthorization } from "../../../wallet-utils/decoding/call-authorization-formatter";
 
 interface ExecutionTraceDisplayProps {
   trace: DecodedExecutionTrace;
@@ -285,7 +285,7 @@ function PublicEnqueueDisplay({ enqueue }: { enqueue: PublicEnqueueEvent }) {
         ml: enqueue.depth * 3,
         mb: 1,
         p: 1.5,
-        bgcolor: "warning.light",
+        bgcolor: "rgba(255, 152, 0, 0.15)",
         borderRadius: 1,
         borderLeft: "4px solid",
         borderColor: "warning.main",
@@ -394,6 +394,182 @@ export function ExecutionTraceDisplay({
   trace,
   callAuthorizations,
 }: ExecutionTraceDisplayProps) {
+  // Check if this is a utility trace
+  if ("isUtility" in trace && trace.isUtility) {
+    console.log('[ExecutionTraceDisplay] Utility trace:', {
+      functionName: trace.functionName,
+      contractName: trace.contractName,
+      args: trace.args,
+      argsLength: trace.args?.length,
+      result: trace.result
+    });
+    const hasArgs = trace.args && trace.args.length > 0;
+    const hasResult = trace.result !== undefined;
+
+    return (
+      <Accordion
+        sx={{
+          bgcolor: "background.default",
+          boxShadow: 1,
+        }}
+        defaultExpanded
+      >
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flexWrap: "wrap",
+              width: "100%",
+            }}
+          >
+            <CallMadeIcon fontSize="small" color="primary" />
+            <Typography
+              variant="body2"
+              sx={{ fontFamily: "monospace", fontWeight: "medium" }}
+            >
+              {trace.contractName}.{trace.functionName}()
+            </Typography>
+            <Chip
+              label="Utility"
+              size="small"
+              color="primary"
+              variant="outlined"
+              sx={{ ml: 1 }}
+            />
+            {hasResult && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontFamily: "monospace", ml: "auto" }}
+              >
+                → {Array.isArray(trace.result) ? `[${trace.result.length}]` : String(trace.result).slice(0, 20)}
+              </Typography>
+            )}
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Box>
+            {/* Contract Info */}
+            <Box sx={{ mb: 2 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                gutterBottom
+              >
+                Contract:
+              </Typography>
+              <Box
+                sx={{
+                  p: 1,
+                  bgcolor: "background.paper",
+                  borderRadius: 1,
+                  fontFamily: "monospace",
+                  fontSize: "0.85rem",
+                }}
+              >
+                {trace.contractName}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ ml: 1 }}
+                >
+                  ({trace.contractAddress.slice(0, 10)}...
+                  {trace.contractAddress.slice(-8)})
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Arguments */}
+            {hasArgs && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  gutterBottom
+                >
+                  Arguments:
+                </Typography>
+                <Box
+                  sx={{
+                    p: 1,
+                    bgcolor: "background.paper",
+                    borderRadius: 1,
+                  }}
+                >
+                  <Table size="small">
+                    <TableBody>
+                      {trace.args.map((arg: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell
+                            sx={{
+                              fontFamily: "monospace",
+                              fontWeight: "medium",
+                              border: 0,
+                              py: 0.5,
+                            }}
+                          >
+                            {arg.name}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              fontFamily: "monospace",
+                              border: 0,
+                              py: 0.5,
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {arg.value}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </Box>
+            )}
+
+            {/* Return Values */}
+            {hasResult && (
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  gutterBottom
+                >
+                  Return Value:
+                </Typography>
+                <Box
+                  sx={{
+                    p: 1,
+                    bgcolor: "rgba(76, 175, 80, 0.05)",
+                    borderRadius: 1,
+                    borderLeft: "4px solid",
+                    borderColor: "success.main",
+                  }}
+                >
+                  <pre
+                    style={{
+                      margin: 0,
+                      fontFamily: "monospace",
+                      fontSize: "0.85rem",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {JSON.stringify(trace.result, null, 2)}
+                  </pre>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </AccordionDetails>
+      </Accordion>
+    );
+  }
+
+  // Full transaction trace
   return (
     <PrivateCallDisplay
       call={trace.privateExecution}

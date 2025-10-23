@@ -1,7 +1,5 @@
-import type { PXE } from "@aztec/pxe/server";
-import type { WalletDB } from "../wallet_db";
 import type { TxSimulationResult } from "@aztec/stdlib/tx";
-import { TxDecodingCache } from "./tx-decoding-cache";
+import type { DecodingCache } from "./decoding-cache";
 import {
   CallAuthorizationFormatter,
   type ReadableCallAuthorization,
@@ -17,14 +15,12 @@ import { collectOffchainEffects } from "@aztec/stdlib/tx";
  * Coordinates CallAuthorizationFormatter and TxCallStackDecoder with shared caching.
  */
 export class TxDecodingService {
-  private cache: TxDecodingCache;
   private formatter: CallAuthorizationFormatter;
   private decoder: TxCallStackDecoder;
 
-  constructor(pxe: PXE, db: WalletDB) {
-    this.cache = new TxDecodingCache(pxe, db);
-    this.formatter = new CallAuthorizationFormatter(this.cache);
-    this.decoder = new TxCallStackDecoder(this.cache);
+  constructor(cache: DecodingCache) {
+    this.formatter = new CallAuthorizationFormatter(cache);
+    this.decoder = new TxCallStackDecoder(cache);
   }
 
   /**
@@ -63,12 +59,5 @@ export class TxDecodingService {
       callAuthorizations: readableCallAuthorizations,
       executionTrace,
     };
-  }
-
-  /**
-   * Clear all cached contract metadata and artifacts.
-   */
-  clearCache(): void {
-    this.cache.clear();
   }
 }

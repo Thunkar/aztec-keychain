@@ -21,10 +21,10 @@ import { CheckCircle, Error as ErrorIcon } from "@mui/icons-material";
 import type {
   WalletInteraction,
   WalletInteractionType,
-} from "../../wallet-utils/wallet-interaction";
-import { ExecutionTraceDialog } from "./ExecutionTraceDialog";
-import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
-import { WalletContext } from "../../renderer";
+} from "../../../../wallet-utils/wallet-interaction";
+import { ExecutionTraceDialog } from "../../dialogs/ExecutionTraceDialog";
+import type { DecodedExecutionTrace } from "../../../../wallet-utils/decoding/tx-callstack-decoder";
+import { WalletContext } from "../../../../renderer";
 
 interface InteractionsListProps {
   interactions: WalletInteraction<WalletInteractionType>[];
@@ -68,6 +68,7 @@ const getInteractionTypeLabel = (type: WalletInteractionType) => {
     registerContract: "Register Contract",
     createAccount: "Create Account",
     simulateTx: "Simulate Transaction",
+    simulateUtility: "Simulate Utility",
     sendTx: "Send Transaction",
     profileTx: "Profile Transaction",
   };
@@ -79,7 +80,8 @@ const getInteractionTypeColor = (type: WalletInteractionType) => {
     registerContract: "#9c27b0", // purple
     createAccount: "#2196f3", // blue
     simulateTx: "#ff9800", // orange
-    sendTx: "#4caf50", // green
+    simulateUtility: "#ff9800", // orange (same as simulateTx)
+    sendTx: "#7c4dff", // purple/violet (proving action)
     profileTx: "#00bcd4", // cyan
   };
   return colors[type];
@@ -89,6 +91,7 @@ const allInteractionTypes: WalletInteractionType[] = [
   "registerContract",
   "createAccount",
   "simulateTx",
+  "simulateUtility",
   "sendTx",
   "profileTx",
 ];
@@ -106,8 +109,8 @@ export function InteractionsList({
   const handleInteractionClick = async (
     interaction: WalletInteraction<WalletInteractionType>
   ) => {
-    // Only show trace for simulateTx and sendTx interactions
-    if (interaction.type === "simulateTx" || interaction.type === "sendTx") {
+    // Only show trace for simulateTx, simulateUtility, and sendTx interactions
+    if (interaction.type === "simulateTx" || interaction.type === "sendTx" || interaction.type === "simulateUtility") {
       try {
         const trace = await walletAPI.getExecutionTrace(interaction.id);
         if (trace) {
@@ -159,6 +162,7 @@ export function InteractionsList({
                   overflow: "hidden",
                   cursor:
                     interaction.type === "simulateTx" ||
+                    interaction.type === "simulateUtility" ||
                     interaction.type === "sendTx"
                       ? "pointer"
                       : "default",

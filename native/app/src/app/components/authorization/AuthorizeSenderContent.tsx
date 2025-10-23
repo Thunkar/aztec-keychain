@@ -1,6 +1,6 @@
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
-import type { AuthorizationItem } from "../../wallet-utils/authorization";
+import type { AuthorizationItem } from "../../../wallet-utils/authorization";
 
 interface AuthorizeSenderContentProps {
   request: AuthorizationItem;

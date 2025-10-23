@@ -10,8 +10,7 @@ import {
   type AbiDecoded,
 } from "@aztec/stdlib/abi";
 import type { OffchainEffect } from "@aztec/stdlib/tx";
-import { formatAbiValue } from "./utils";
-import type { TxDecodingCache } from "./tx-decoding-cache";
+import type { DecodingCache } from "./decoding-cache";
 
 export interface ReadableCallAuthorization {
   contract: {
@@ -39,9 +38,7 @@ export interface ReadableCallAuthorization {
 }
 
 export class CallAuthorizationFormatter {
-  constructor(
-    private cache: TxDecodingCache
-  ) {}
+  constructor(private cache: DecodingCache) {}
 
   private formatAbiValue(value: AbiDecoded): string {
     if (value === null || value === undefined) {

@@ -93,7 +93,7 @@ async function init(
         ),
       };
 
-      const walletLogger = createProxyLogger("wallet:data:lmdb", logPort);
+      const walletDBLogger = createProxyLogger("wallet:data:lmdb", logPort);
       const walletDBStore = await createStore(
         `wallet-${rollupAddress}`,
         2,
@@ -101,9 +101,9 @@ async function init(
           dataDirectory: resolve(keychainHomeDir, `wallet-${rollupAddress}`),
           dataStoreMapSizeKB: 2e10,
         },
-        walletLogger
+        walletDBLogger
       );
-      const db = WalletDB.init(walletDBStore, walletLogger.info);
+      const db = WalletDB.init(walletDBStore, walletDBLogger);
       const pxe = await createPXE(
         node,
         { ...getPXEConfig(), ...configOverrides },
@@ -118,6 +118,15 @@ async function init(
         }
       >();
 
+      const externalWalletLogger = createProxyLogger(
+        "wallet:external",
+        logPort
+      );
+      const internalWalletLogger = createProxyLogger(
+        "wallet:external",
+        logPort
+      );
+
       // Create both wallet instances sharing the same db, pxe and authorization logic
       const externalWallet = new ExternalWallet(
         pxe,
@@ -125,7 +134,8 @@ async function init(
         db,
         pendingAuthorizations,
         appId,
-        chainInfo
+        chainInfo,
+        externalWalletLogger
       );
       const internalWallet = new InternalWallet(
         pxe,
@@ -133,7 +143,8 @@ async function init(
         db,
         pendingAuthorizations,
         appId,
-        chainInfo
+        chainInfo,
+        internalWalletLogger
       );
 
       // Wire up events from both wallets to internal port

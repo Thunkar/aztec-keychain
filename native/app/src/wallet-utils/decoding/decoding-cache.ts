@@ -1,7 +1,13 @@
 import type { PXE } from "@aztec/pxe/server";
-import type { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { ContractArtifact } from "@aztec/stdlib/abi";
 import type { WalletDB } from "../wallet_db";
+import type {
+  ContractInstanceWithAddress,
+  ContractInstantiationData,
+} from "@aztec/stdlib/contract";
+import type { ContractInstanceAndArtifact } from "@aztec/aztec.js";
+import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js";
 
 interface ContractMetadata {
   contractInstance?: {
@@ -13,7 +19,7 @@ interface ContractMetadata {
  * Cache for contract metadata, artifacts, and address aliases to reduce expensive PXE queries.
  * Shared across CallAuthorizationFormatter and TxCallStackDecoder.
  */
-export class TxDecodingCache {
+export class DecodingCache {
   private instanceCache = new Map<string, ContractMetadata>();
   private artifactCache = new Map<string, ContractArtifact>();
   private addressAliasCache = new Map<string, string>();
@@ -165,11 +171,72 @@ export class TxDecodingCache {
   }
 
   /**
-   * Clear all cached data.
+   * Resolve contract address from various instanceData formats.
+   * Handles AztecAddress, ContractInstanceWithAddress, ContractInstantiationData, etc.
    */
-  clear(): void {
-    this.instanceCache.clear();
-    this.artifactCache.clear();
-    this.addressAliasCache.clear();
+  async resolveContractAddress(
+    instanceData:
+      | AztecAddress
+      | ContractInstanceWithAddress
+      | ContractInstantiationData
+      | ContractInstanceAndArtifact,
+    artifact?: ContractArtifact
+  ): Promise<AztecAddress> {
+    if (instanceData instanceof AztecAddress) {
+      return instanceData;
+    } else if ("address" in instanceData) {
+      return instanceData.address;
+    } else if ("instance" in instanceData) {
+      return instanceData.instance.address;
+    } else {
+      // ContractInstantiationData - compute the address
+      const instance = await getContractInstanceFromInstantiationParams(
+        artifact!,
+        instanceData
+      );
+      return instance.address;
+    }
+  }
+
+  /**
+   * Resolve contract name from various sources.
+   * Uses caching internally via getAddressAlias and getContractArtifact.
+   */
+  async resolveContractName(
+    instanceData:
+      | AztecAddress
+      | ContractInstanceWithAddress
+      | ContractInstantiationData
+      | ContractInstanceAndArtifact,
+    artifact: ContractArtifact | undefined,
+    address: AztecAddress
+  ): Promise<string> {
+    // Try to get name from artifact parameter
+    let contractName = artifact?.name;
+
+    // Check if instanceData contains an artifact
+    if (
+      !contractName &&
+      typeof instanceData === "object" &&
+      "artifact" in instanceData
+    ) {
+      contractName = (instanceData as any).artifact?.name;
+    }
+
+    // If we still don't have a name, try to fetch using cached methods
+    if (!contractName) {
+      try {
+        const alias = await this.getAddressAlias(address);
+        // getAddressAlias returns shortened address if no name found
+        // Only use it if it's not a shortened address
+        if (!alias.includes("...")) {
+          contractName = alias;
+        }
+      } catch (error) {
+        // Ignore errors - we'll fall back to "Unknown Contract"
+      }
+    }
+
+    return contractName || "Unknown Contract";
   }
 }

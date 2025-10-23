@@ -12,7 +12,7 @@ import {
 } from "@aztec/stdlib/abi";
 import { decodeFromAbi } from "@aztec/aztec.js";
 import { formatAbiValue } from "./utils";
-import type { TxDecodingCache } from "./tx-decoding-cache";
+import type { DecodingCache } from "./decoding-cache";
 import { Fr } from "@aztec/foundation/fields";
 import { PRIVATE_CONTEXT_INPUTS_LENGTH } from "@aztec/constants";
 
@@ -50,7 +50,7 @@ export interface DecodedExecutionTrace {
 export class TxCallStackDecoder {
   private calldataMap: Map<string, any[]> = new Map();
 
-  constructor(private cache: TxDecodingCache) {}
+  constructor(private cache: DecodingCache) {}
 
   private async formatAndResolveValue(value: AbiDecoded): Promise<string> {
     let formatted = formatAbiValue(value);
@@ -442,5 +442,51 @@ export class TxCallStackDecoder {
       privateExecution,
       publicExecutionQueue: allPublicEnqueues,
     };
+  }
+
+  /**
+   * Format utility function arguments for display.
+   * Retrieves contract metadata and artifact, then formats args with address resolution.
+   */
+  async formatUtilityArguments(
+    contractAddress: AztecAddress,
+    functionName: string,
+    args: any[]
+  ): Promise<Array<{ name: string; value: string }>> {
+    if (args.length === 0) {
+      return [];
+    }
+
+    try {
+      // Retrieve contract metadata and artifact
+      const metadata = await this.cache.getContractMetadata(contractAddress);
+      if (!metadata.contractInstance) {
+        throw new Error('No contract instance metadata found');
+      }
+
+      const artifact = await this.cache.getContractArtifact(
+        metadata.contractInstance.currentContractClassId
+      );
+
+      // Find the function in the artifact
+      const functionAbi = artifact.functions.find((f) => f.name === functionName);
+      if (!functionAbi) {
+        throw new Error(`Function ${functionName} not found in artifact`);
+      }
+
+      // Args are already decoded values, just need to format and resolve addresses
+      return await Promise.all(
+        args.map(async (value, i) => ({
+          name: functionAbi.parameters[i]?.name || `arg_${i}`,
+          value: await this.formatAndResolveValue(value),
+        }))
+      );
+    } catch (error) {
+      // If formatting fails, return raw args
+      return args.map((arg, i) => ({
+        name: `arg_${i}`,
+        value: JSON.stringify(arg),
+      }));
+    }
   }
 }

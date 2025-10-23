@@ -1,5 +1,5 @@
 import { AztecAddress, Fr, Fq, type Aliased } from "@aztec/aztec.js";
-import { type LogFn } from "@aztec/foundation/log";
+import { type LogFn, type Logger } from "@aztec/foundation/log";
 import { type AztecAsyncMap, type AztecAsyncKVStore } from "@aztec/kv-store";
 import {
   WalletInteraction,
@@ -24,10 +24,10 @@ export class WalletDB {
     private interactions: AztecAsyncMap<string, Buffer>,
     private authorizations: AztecAsyncMap<string, Buffer>,
     private txSimulations: AztecAsyncMap<string, string>,
-    private userLog: LogFn
+    private logger: Logger
   ) {}
 
-  static init(store: AztecAsyncKVStore, userLog: LogFn) {
+  static init(store: AztecAsyncKVStore, logger: Logger) {
     const accounts = store.openMap<string, Buffer>("accounts");
     const aliases = store.openMap<string, Buffer>("aliases");
     const bridgedFeeJuice = store.openMap<string, Buffer>("bridgedFeeJuice");
@@ -41,7 +41,7 @@ export class WalletDB {
       interactions,
       authorizations,
       txSimulations,
-      userLog
+      logger
     );
   }
 
@@ -49,8 +49,7 @@ export class WalletDB {
     recipient: AztecAddress,
     secret: Fr,
     amount: bigint,
-    leafIndex: bigint,
-    log: LogFn = this.userLog
+    leafIndex: bigint
   ) {
     let stackPointer =
       (
@@ -69,12 +68,12 @@ export class WalletDB {
       `${recipient.toString()}:stackPointer`,
       Buffer.from([stackPointer])
     );
-    log(
+    this.logger.info(
       `Pushed ${amount} fee juice for recipient ${recipient.toString()}. Stack pointer ${stackPointer}`
     );
   }
 
-  async popBridgedFeeJuice(recipient: AztecAddress, log: LogFn = this.userLog) {
+  async popBridgedFeeJuice(recipient: AztecAddress) {
     let stackPointer =
       (
         await this.bridgedFeeJuice.getAsync(
@@ -94,7 +93,7 @@ export class WalletDB {
       `${recipient.toString()}:stackPointer`,
       Buffer.from([--stackPointer])
     );
-    log(
+    this.logger.info(
       `Retrieved ${amountStr} fee juice for recipient ${recipient.toString()}. Stack pointer ${stackPointer}`
     );
     return {
@@ -118,8 +117,7 @@ export class WalletDB {
       salt: Fr;
       signingKey: Fq | Buffer;
       alias: string | undefined;
-    },
-    log: LogFn = this.userLog
+    }
   ) {
     if (alias) {
       await this.aliases.set(
@@ -134,18 +132,14 @@ export class WalletDB {
       `${address.toString()}:signingKey`,
       "toBuffer" in signingKey ? signingKey.toBuffer() : signingKey
     );
-    log(
+    this.logger.info(
       `Account stored in database with alias${alias ? `es last & ${alias}` : " last"}`
     );
   }
 
-  async storeSender(
-    address: AztecAddress,
-    alias: string,
-    log: LogFn = this.userLog
-  ) {
+  async storeSender(address: AztecAddress, alias: string) {
     await this.aliases.set(`senders:${alias}`, Buffer.from(address.toString()));
-    log(`Sender stored in database with alias ${alias}`);
+    this.logger.info(`Sender stored in database with alias ${alias}`);
   }
 
   async storeAccountMetadata(
@@ -262,21 +256,20 @@ export class WalletDB {
 
   async storePersistentAuthorization(
     appId: string,
-    method: string,
-    data: any,
-    log: LogFn = this.userLog
+    key: string,
+    data: any
   ) {
-    const key = `${appId}:${method}`;
-    await this.authorizations.set(key, Buffer.from(jsonStringify(data)));
-    log(`Persistent authorization stored for appId ${appId}, method ${method}`);
+    const fullKey = `${appId}:${key}`;
+    await this.authorizations.set(fullKey, Buffer.from(jsonStringify(data)));
+    this.logger.info(`Persistent authorization stored for ${fullKey}`);
   }
 
   async retrievePersistentAuthorization(
     appId: string,
-    method: string
+    key: string
   ): Promise<any | undefined> {
-    const key = `${appId}:${method}`;
-    const result = await this.authorizations.getAsync(key);
+    const fullKey = `${appId}:${key}`;
+    const result = await this.authorizations.getAsync(fullKey);
     if (!result) {
       return undefined;
     }
@@ -287,18 +280,17 @@ export class WalletDB {
     appId: string,
     itemResponses: Record<string, any>,
     itemMethods: Map<string, string>,
-    log: LogFn = this.userLog
+    itemKeyModifiers?: Map<string, string>
   ) {
     for (const [itemId, response] of Object.entries(itemResponses)) {
       if (response.approved && response.data?.persistent) {
-        const method = itemMethods.get(itemId);
-        if (method) {
-          await this.storePersistentAuthorization(
-            appId,
-            method,
-            response.data,
-            log
-          );
+        const authorizationType = itemMethods.get(itemId);
+        if (authorizationType) {
+          const keyModifier = itemKeyModifiers?.get(itemId);
+          const key = keyModifier
+            ? `${authorizationType}:${keyModifier}`
+            : authorizationType;
+          await this.storePersistentAuthorization(appId, key, response.data);
         }
       }
     }
@@ -340,21 +332,15 @@ export class WalletDB {
    */
   async updateAccountAuthorization(
     appId: string,
-    accounts: Aliased<AztecAddress>[],
-    log: LogFn = this.userLog
+    accounts: Aliased<AztecAddress>[]
   ) {
-    await this.storePersistentAuthorization(
-      appId,
-      "getAccounts",
-      { accounts, persistent: true },
-      log
-    );
+    await this.storePersistentAuthorization(appId, "getAccounts", { accounts });
   }
 
   /**
    * Revoke all persistent authorizations for an app
    */
-  async revokeAppAuthorizations(appId: string, log: LogFn = this.userLog) {
+  async revokeAppAuthorizations(appId: string) {
     const keysToDelete: string[] = [];
     for await (const [key, _] of this.authorizations.entriesAsync()) {
       const [authAppId] = key.split(":");
@@ -367,7 +353,7 @@ export class WalletDB {
       await this.authorizations.delete(key);
     }
 
-    log(
+    this.logger.info(
       `Revoked all authorizations for appId ${appId} (${keysToDelete.length} keys deleted)`
     );
   }
@@ -375,15 +361,16 @@ export class WalletDB {
   async storeTxSimulation(
     interactionId: string,
     simulationResult: TxSimulationResult,
-    txRequest: TxExecutionRequest,
-    log: LogFn = this.userLog
+    txRequest: TxExecutionRequest
   ) {
     const data = jsonStringify({
       simulationResult,
       txRequest,
     });
     await this.txSimulations.set(interactionId, data);
-    log(`Transaction simulation stored for interaction ${interactionId}`);
+    this.logger.info(
+      `Transaction simulation stored for interaction ${interactionId}`
+    );
   }
 
   async getTxSimulation(
@@ -394,5 +381,22 @@ export class WalletDB {
       return undefined;
     }
     return JSON.parse(result);
+  }
+
+  async storeUtilityTrace(interactionId: string, trace: any) {
+    const data = jsonStringify({
+      utilityTrace: trace,
+    });
+    await this.txSimulations.set(interactionId, data);
+    this.logger.info(`Utility trace stored for interaction ${interactionId}`);
+  }
+
+  async getUtilityTrace(interactionId: string): Promise<any | undefined> {
+    const result = await this.txSimulations.getAsync(interactionId);
+    if (!result) {
+      return undefined;
+    }
+    const parsed = JSON.parse(result);
+    return parsed.utilityTrace;
   }
 }

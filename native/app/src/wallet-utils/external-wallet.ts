@@ -16,7 +16,9 @@ import {
   type BatchableMethods,
   type BatchResults,
   type ContractInstanceAndArtifact,
+  type Logger,
 } from "@aztec/aztec.js";
+import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 import { type ContractArtifact } from "@aztec/stdlib/abi";
 import type {
   ContractInstanceWithAddress,
@@ -36,6 +38,7 @@ import {
   type TxProvingResult,
   type TxSimulationResult,
   type TxExecutionRequest,
+  type UtilitySimulationResult,
   TxHash,
 } from "@aztec/stdlib/tx";
 import {
@@ -69,10 +72,19 @@ import {
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
 import { TxDecodingService } from "./decoding/tx-decoding-service";
+import { DecodingCache } from "./decoding/decoding-cache";
 import type { ReadableCallAuthorization } from "./decoding/call-authorization-formatter";
-import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
+import {
+  TxCallStackDecoder,
+  type DecodedExecutionTrace,
+} from "./decoding/tx-callstack-decoder";
 
 import { inspect } from "node:util";
+import {
+  hashExecutionPayload,
+  hashUtilityCall,
+  generateSimulationTitle,
+} from "./simulation-utils";
 
 type ReadableTxInformation = {
   callAuthorizations: ReadableCallAuthorization[];
@@ -81,6 +93,7 @@ type ReadableTxInformation = {
 
 export class ExternalWallet extends BaseWallet implements EventTarget {
   private eventEmitter = new EventTarget();
+  private decodingCache: DecodingCache;
 
   constructor(
     pxe: PXE,
@@ -94,9 +107,12 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       }
     >,
     protected appId: string,
-    protected chainInfo: ChainInfo
+    protected chainInfo: ChainInfo,
+    override log: Logger
   ) {
     super(pxe, node);
+    // Create a single decoding cache instance to reuse across wallet lifetime
+    this.decodingCache = new DecodingCache(pxe, db);
   }
 
   override async getDefaultFeeOptions(
@@ -343,78 +359,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
     return accountManager;
   }
-
-  /**
-   * Helper method to resolve contract address from various instanceData formats.
-   */
-  private async resolveContractAddress(
-    instanceData:
-      | AztecAddress
-      | ContractInstanceWithAddress
-      | ContractInstantiationData
-      | ContractInstanceAndArtifact,
-    artifact?: ContractArtifact
-  ): Promise<AztecAddress> {
-    if (instanceData instanceof AztecAddress) {
-      return instanceData;
-    } else if ("address" in instanceData) {
-      return instanceData.address;
-    } else if ("instance" in instanceData) {
-      return instanceData.instance.address;
-    } else {
-      // ContractInstantiationData - compute the address
-      const instance = await getContractInstanceFromInstantiationParams(
-        artifact!,
-        instanceData
-      );
-      return instance.address;
-    }
-  }
-
-  /**
-   * Helper method to resolve contract name from various sources.
-   */
-  private async resolveContractName(
-    instanceData:
-      | AztecAddress
-      | ContractInstanceWithAddress
-      | ContractInstantiationData
-      | ContractInstanceAndArtifact,
-    artifact: ContractArtifact | undefined,
-    address: AztecAddress
-  ): Promise<string> {
-    // Try to get name from artifact parameter
-    let contractName = artifact?.name;
-
-    // Check if instanceData contains an artifact
-    if (
-      !contractName &&
-      typeof instanceData === "object" &&
-      "artifact" in instanceData
-    ) {
-      contractName = (instanceData as any).artifact?.name;
-    }
-
-    // If we still don't have a name, try to fetch the artifact from PXE
-    if (!contractName) {
-      try {
-        const instance = await this.pxe.getContractInstance(address);
-        if (instance?.contractClassId) {
-          const fetchedArtifact = await this.pxe.getContractArtifact(
-            instance.contractClassId
-          );
-          if (fetchedArtifact) {
-            contractName = fetchedArtifact.name;
-          }
-        }
-      } catch (error) {
-        // Ignore errors - we'll fall back to "Unknown Contract"
-      }
-    }
-
-    return contractName || "Unknown Contract";
-  }
-
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
@@ -443,7 +387,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     skipAuth?: boolean
   ): Promise<ContractInstanceWithAddress> {
     // Determine the contract address to check
-    const addressToCheck = await this.resolveContractAddress(
+    const addressToCheck = await this.decodingCache.resolveContractAddress(
       instanceData,
       artifact
     );
@@ -456,22 +400,62 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
 
     // Resolve contract name from various sources
-    const contractName = await this.resolveContractName(
+    const contractName = await this.decodingCache.resolveContractName(
       instanceData,
       artifact,
       addressToCheck
     );
 
-    // Request authorization with persistent storage (unless skipped for batch)
-    if (!skipAuth) {
-      await this.requestSingleAuthorization("registerContract", {
-        address: addressToCheck.toString(),
-        contractName,
-      });
+    // Create interaction for tracking (unless skipped for batch)
+    const interaction = skipAuth
+      ? null
+      : WalletInteraction.from({
+          type: "registerContract",
+          status: "REGISTERING",
+          complete: false,
+          title: `Register ${contractName}`,
+        });
+
+    if (interaction) {
+      await this.storeAndEmitInteraction(interaction);
     }
 
-    // Register the contract with PXE
-    return await super.registerContract(instanceData, artifact, secretKey);
+    try {
+      // Request authorization with persistent storage (unless skipped for batch)
+      if (!skipAuth) {
+        await this.requestSingleAuthorization("registerContract", {
+          address: addressToCheck.toString(),
+          contractName,
+        });
+      }
+
+      // Register the contract with PXE
+      const result = await super.registerContract(
+        instanceData,
+        artifact,
+        secretKey
+      );
+
+      if (interaction) {
+        await this.storeAndEmitInteraction(
+          interaction.update({ status: "REGISTERED", complete: true })
+        );
+      }
+
+      return result;
+    } catch (error) {
+      // Update interaction to reflect error before rethrowing
+      if (interaction) {
+        await this.storeAndEmitInteraction(
+          interaction.update({
+            complete: true,
+            status: "REGISTRATION FAILED",
+            description: error instanceof Error ? error.message : String(error),
+          })
+        );
+      }
+      throw error;
+    }
   }
 
   override async registerSender(
@@ -540,11 +524,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     // Check account authorization before proceeding
     await this.checkAccountAuthorization(opts.from);
 
+    if (exec.calls.length === 0) {
+      return;
+    }
+
+    // Generate a meaningful title from the execution payload
+    const title = await generateSimulationTitle(
+      exec,
+      this.decodingCache,
+      opts.from,
+      opts.fee?.embeddedPaymentMethodFeePayer
+    );
+
     const interaction = WalletInteraction.from({
       type: "sendTx",
       status: "CREATING",
       complete: false,
-      title: `Proving transaction`,
+      title: title,
     });
     await this.storeAndEmitInteraction(interaction);
 
@@ -559,13 +555,31 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
         );
 
-        const { decoded } = await this.simulateTxInternal(
+        const {
+          simulationResult,
+          txRequest: simulationTxRequest,
+          decoded,
+        } = await this.simulateTxInternal(
           exec,
           opts,
           interaction,
           true // withDecoding
         );
         ({ callAuthorizations, executionTrace } = decoded!);
+
+        // Store the simulation result for the proving interaction
+        try {
+          await this.db.storeTxSimulation(
+            interaction.id,
+            simulationResult,
+            simulationTxRequest
+          );
+        } catch (storageError) {
+          // If storage fails, just log it - don't fail the tx
+          this.log.error(
+            `Failed to store simulation result for proving: ${storageError}`
+          );
+        }
 
         await this.storeAndEmitInteraction(
           interaction.update({ status: "REQUESTING AUTHORIZATION" })
@@ -648,7 +662,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     const itemMethodMap = new Map<string, string>();
     const modifiedMethods: Array<{
       name: string;
-      args: unknown[]
+      args: unknown[];
     }> = [];
 
     for (const methodCall of methods) {
@@ -698,7 +712,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         const [instanceData, artifact, secretKey] = args as Parameters<
           typeof this.registerContract
         >;
-        const address = await this.resolveContractAddress(
+        const address = await this.decodingCache.resolveContractAddress(
           instanceData,
           artifact
         );
@@ -712,7 +726,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         }
 
         // Resolve contract name from various sources
-        const contractName = await this.resolveContractName(
+        const contractName = await this.decodingCache.resolveContractName(
           instanceData,
           artifact,
           address
@@ -800,7 +814,10 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         // Use cached result (from persistent auth, PXE check, or error)
         // If it's a rejected promise (from simulation failure), await it to throw
         const cachedResult = cachedResults[i];
-        if (cachedResult && typeof (cachedResult as unknown as Promise<never>).then === "function") {
+        if (
+          cachedResult &&
+          typeof (cachedResult as unknown as Promise<never>).then === "function"
+        ) {
           result = await (cachedResult as Promise<never>);
         } else {
           result = cachedResult as MethodResult;
@@ -813,11 +830,53 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           throw new Error(`Authorization denied for ${item.method}`);
         }
 
-        // Use dynamic dispatch to call the method, just like BaseWallet.batch()
-        // The skipAuth flag (added during preprocessing) bypasses authorization
-        type BatchableMethodFn = (...args: unknown[]) => Promise<MethodResult>;
-        const fn = (this as unknown as Record<string, BatchableMethodFn>)[name];
-        result = await fn.apply(this, args);
+        // Create interaction for trackable operations before execution
+        let interaction: WalletInteraction<WalletInteractionType> | null = null;
+        if (name === "registerContract") {
+          const params = item.params as {
+            contractAddress: AztecAddress;
+            contractName: string;
+          };
+          interaction = WalletInteraction.from({
+            type: "registerContract",
+            status: "REGISTERING",
+            complete: false,
+            title: `Register ${params.contractName}`,
+          });
+          await this.storeAndEmitInteraction(interaction);
+        }
+
+        try {
+          // Use dynamic dispatch to call the method, just like BaseWallet.batch()
+          // The skipAuth flag (added during preprocessing) bypasses authorization
+          type BatchableMethodFn = (
+            ...args: unknown[]
+          ) => Promise<MethodResult>;
+          const fn = (this as unknown as Record<string, BatchableMethodFn>)[
+            name
+          ];
+          result = await fn.apply(this, args);
+
+          // Update interaction on success
+          if (interaction) {
+            await this.storeAndEmitInteraction(
+              interaction.update({ status: "REGISTERED", complete: true })
+            );
+          }
+        } catch (error) {
+          // Update interaction on failure
+          if (interaction) {
+            await this.storeAndEmitInteraction(
+              interaction.update({
+                complete: true,
+                status: "REGISTRATION FAILED",
+                description:
+                  error instanceof Error ? error.message : String(error),
+              })
+            );
+          }
+          throw error;
+        }
 
         itemIndex++;
       }
@@ -859,14 +918,29 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     // Check account authorization before proceeding
     await this.checkAccountAuthorization(opts.from);
 
+    if (executionPayload.calls.length === 0) {
+      return;
+    }
+
+    // Generate a meaningful title and use hash as ID for deduplication
+    const payloadHash = hashExecutionPayload(executionPayload);
+    const title = await generateSimulationTitle(
+      executionPayload,
+      this.decodingCache, // Use the shared decoding cache for better contract name resolution
+      opts.from, // Pass the account address to filter out entrypoint calls
+      opts.fee?.embeddedPaymentMethodFeePayer
+    );
+
     const interaction =
       existingInteraction ??
       WalletInteraction.from({
+        id: payloadHash, // Use hash as ID for deduplication
         type: "simulateTx",
-        title: `Simulating transaction`,
+        title,
         description: `App: ${this.appId}`,
         complete: false,
         status: "SIMULATING",
+        timestamp: Date.now(), // Always update timestamp
       });
     await this.storeAndEmitInteraction(interaction);
 
@@ -908,15 +982,58 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         }
       );
 
-      // Decode if requested
+      // For standalone simulations (no existingInteraction), decode and request authorization
       let decoded;
-      if (withDecoding) {
-        const decodingService = new TxDecodingService(this.pxe, this.db);
-        decoded = await decodingService.decodeTransaction(simulationResult);
-      }
-
-      // For standalone simulations (no existingInteraction), store the raw simulation result
       if (!existingInteraction) {
+        // Always decode for standalone simulations to show the user what data will be shared
+        try {
+          const decodingService = new TxDecodingService(this.decodingCache);
+          decoded = await decodingService.decodeTransaction(simulationResult);
+        } catch (error) {
+          this.log.error(`Failed to decode transaction:`, error);
+          // Continue without decoded data - the simulation itself succeeded
+          decoded = {
+            callAuthorizations: [],
+            executionTrace: {
+              privateCallStack: [],
+              publicExecutionQueue: [],
+            },
+          };
+        }
+
+        // Check for existing persistent authorization with matching hash
+        const existingAuth = await this.db.retrievePersistentAuthorization(
+          this.appId,
+          `simulateTx:${payloadHash}`
+        );
+
+        const needsAuthorization = !existingAuth;
+
+        if (needsAuthorization) {
+          await this.storeAndEmitInteraction(
+            interaction.update({ status: "REQUESTING AUTHORIZATION" })
+          );
+
+          // Request authorization with the decoded execution trace
+          await this.requestSingleAuthorization(
+            "simulateTx",
+            {
+              payloadHash,
+              callAuthorizations: decoded.callAuthorizations,
+              executionTrace: decoded.executionTrace,
+            },
+            false
+          );
+
+          // Store persistent authorization with the payload hash
+          await this.db.storePersistentAuthorization(
+            this.appId,
+            `simulateTx:${payloadHash}`,
+            {}
+          );
+        }
+
+        // Store the simulation result
         try {
           await this.db.storeTxSimulation(
             interaction.id,
@@ -931,7 +1048,25 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         await this.storeAndEmitInteraction(
           interaction.update({ complete: true, status: "SIMULATED" })
         );
-      } else if (existingInteraction) {
+      } else {
+        // For existing interactions (like sendTx flow), decode if requested
+        if (withDecoding) {
+          try {
+            const decodingService = new TxDecodingService(this.decodingCache);
+            decoded = await decodingService.decodeTransaction(simulationResult);
+          } catch (error) {
+            this.log.error(`Failed to decode transaction:`, error);
+            // Continue without decoded data - the simulation itself succeeded
+            decoded = {
+              callAuthorizations: [],
+              executionTrace: {
+                privateCallStack: [],
+                publicExecutionQueue: [],
+              },
+            };
+          }
+        }
+
         // Store for existing interactions too
         await this.db.storeTxSimulation(
           existingInteraction.id,
@@ -941,6 +1076,112 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       }
 
       return { simulationResult, txRequest, decoded };
+    } catch (error) {
+      // Update interaction to reflect error before rethrowing
+      await this.storeAndEmitInteraction(
+        interaction.update({
+          complete: true,
+          status: "SIMULATION FAILED",
+          description: error instanceof Error ? error.message : String(error),
+        })
+      );
+      throw error;
+    }
+  }
+
+  override async simulateUtility(
+    functionName: string,
+    args: any[],
+    to: AztecAddress,
+    authwits?: AuthWitness[],
+    from?: AztecAddress
+  ): Promise<UtilitySimulationResult> {
+    // Generate hash for deduplication and title
+    const payloadHash = hashUtilityCall(functionName, args, to, from);
+
+    // Try to get contract name for better title using the decoding cache
+    const contractName = await this.decodingCache.getAddressAlias(to);
+
+    const interaction = WalletInteraction.from({
+      id: payloadHash, // Use hash as ID for deduplication
+      type: "simulateUtility",
+      title: `${contractName}.${functionName}`,
+      description: `App: ${this.appId}`,
+      complete: false,
+      status: "SIMULATING",
+      timestamp: Date.now(), // Always update timestamp
+    });
+    await this.storeAndEmitInteraction(interaction);
+
+    try {
+      // Simulate the utility function
+      const simulationResult = await this.pxe.simulateUtility(
+        functionName,
+        args,
+        to,
+        authwits,
+        from
+      );
+
+      // Check for existing persistent authorization with matching hash
+      const existingAuth = await this.db.retrievePersistentAuthorization(
+        this.appId,
+        `simulateUtility:${payloadHash}`
+      );
+
+      const needsAuthorization = !existingAuth;
+
+      // For utility functions, create a simplified execution trace
+      // Format arguments using the TxCallStackDecoder
+      const decoder = new TxCallStackDecoder(this.decodingCache);
+      const decodedArgs = await decoder.formatUtilityArguments(to, functionName, args);
+
+      const simpleTrace = {
+        functionName,
+        args: decodedArgs,
+        contractAddress: to.toString(),
+        contractName,
+        result: simulationResult.result,
+        isUtility: true,
+      };
+
+      // Store the utility trace for later display
+      try {
+        await this.db.storeUtilityTrace(interaction.id, simpleTrace);
+      } catch (storageError) {
+        // If storage fails, just log it - don't fail the simulation
+        this.log.error(`Failed to store utility trace: ${storageError}`);
+      }
+
+      if (needsAuthorization) {
+        await this.storeAndEmitInteraction(
+          interaction.update({ status: "REQUESTING AUTHORIZATION" })
+        );
+
+        // Request authorization with the simulation data
+        await this.requestSingleAuthorization(
+          "simulateUtility",
+          {
+            payloadHash,
+            executionTrace: simpleTrace,
+            isUtility: true,
+          },
+          false
+        );
+
+        // Store persistent authorization with the payload hash
+        await this.db.storePersistentAuthorization(
+          this.appId,
+          `simulateUtility:${payloadHash}`,
+          {}
+        );
+      }
+
+      await this.storeAndEmitInteraction(
+        interaction.update({ complete: true, status: "SIMULATED" })
+      );
+
+      return simulationResult;
     } catch (error) {
       // Update interaction to reflect error before rethrowing
       await this.storeAndEmitInteraction(

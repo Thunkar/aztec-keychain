@@ -70,10 +70,22 @@ const PrivateCallEventSchema: z.ZodType<any> = z.lazy(() =>
   })
 );
 
-const DecodedExecutionTraceSchema = z.object({
-  privateExecution: PrivateCallEventSchema,
-  publicExecutionQueue: z.array(PublicEnqueueEventSchema),
-});
+const DecodedExecutionTraceSchema = z.union([
+  // Full transaction trace
+  z.object({
+    privateExecution: PrivateCallEventSchema,
+    publicExecutionQueue: z.array(PublicEnqueueEventSchema),
+  }),
+  // Simplified utility trace
+  z.object({
+    functionName: z.string(),
+    args: z.any(),
+    contractAddress: z.string(),
+    contractName: z.string(),
+    result: z.any(),
+    isUtility: z.literal(true),
+  }),
+]);
 
 // Internal wallet interface - extends external with internal-only methods
 export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
