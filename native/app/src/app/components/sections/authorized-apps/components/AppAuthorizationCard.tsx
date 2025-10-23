@@ -107,11 +107,14 @@ export function AppAuthorizationCard({
     }
 
     try {
+      console.log("Revoking authorization with key:", key);
       await walletAPI.revokeAuthorization(key);
+      console.log("Authorization revoked successfully");
       await loadAuthorizations();
       await onUpdate();
     } catch (err) {
       console.error("Failed to revoke simulation:", err);
+      alert(`Failed to revoke authorization: ${err}`);
     }
   };
 

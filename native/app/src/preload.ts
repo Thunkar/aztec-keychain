@@ -40,6 +40,9 @@ contextBridge.exposeInMainWorld("walletAPI", {
   updateAccountAuthorization(stringifiedArgs: string): Promise<void> {
     return ipcRenderer.invoke("updateAccountAuthorization", stringifiedArgs);
   },
+  revokeAuthorization(stringifiedArgs: string): Promise<void> {
+    return ipcRenderer.invoke("revokeAuthorization", stringifiedArgs);
+  },
   revokeAppAuthorizations(stringifiedArgs: string): Promise<void> {
     return ipcRenderer.invoke("revokeAppAuthorizations", stringifiedArgs);
   },

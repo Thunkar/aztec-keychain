@@ -524,8 +524,10 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     // Check account authorization before proceeding
     await this.checkAccountAuthorization(opts.from);
 
+    // TODO: Remove this workaround once the app bug is fixed
+    // The connected app sometimes sends transactions with empty execution payloads
     if (exec.calls.length === 0) {
-      return;
+      return TxHash.zero();
     }
 
     // Compute payload hash for deduplication and use as ID
@@ -552,9 +554,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
 
       let callAuthorizations: ReadableCallAuthorization[];
-      if (!txInformation) {
-        let executionTrace: DecodedExecutionTrace;
+      let executionTrace: DecodedExecutionTrace | undefined;
 
+      if (!txInformation) {
         await this.storeAndEmitInteraction(
           interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
         );
@@ -588,19 +590,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         await this.storeAndEmitInteraction(
           interaction.update({ status: "REQUESTING AUTHORIZATION" })
         );
-
-        await this.requestSingleAuthorization(
-          "sendTx",
-          {
-            callAuthorizations,
-            executionTrace,
-          },
-          false
-        );
       } else {
         callAuthorizations = txInformation.callAuthorizations;
       }
 
+      // Create auth witnesses
       const authWitnesses = await Promise.all(
         callAuthorizations.map((auth) =>
           this.createAuthWit(opts.from, {
@@ -609,19 +603,36 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           })
         )
       );
-
       exec.authWitnesses.push(...authWitnesses);
 
+      // Create transaction request
       const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
         exec,
         opts.from,
         fee
       );
+
+      // Start proving transaction
+      const provingPromise = this.pxe.proveTx(txRequest);
+
+      // If we need authorization, wait for user approval while proving happens in parallel
+      if (!txInformation) {
+        await this.requestSingleAuthorization(
+          "sendTx",
+          {
+            callAuthorizations,
+            executionTrace,
+          },
+          false
+        );
+      }
+
+      // Update status to proving and wait for proof to complete
       await this.storeAndEmitInteraction(
         interaction.update({ status: "PROVING" })
       );
 
-      const provenTx = await this.pxe.proveTx(txRequest);
+      const provenTx = await provingPromise;
 
       const tx = await provenTx.toTx();
       const txHash = tx.getTxHash();
@@ -922,9 +933,10 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     // Check account authorization before proceeding
     await this.checkAccountAuthorization(opts.from);
 
-    if (executionPayload.calls.length === 0) {
-      return;
-    }
+    // TODO: Remove this workaround once the app bug is fixed
+    // The connected app sometimes sends transactions with empty execution payloads
+    // Skip creating interactions for empty payloads to avoid cluttering the UI
+    const hasEmptyPayload = executionPayload.calls.length === 0;
 
     // Generate a meaningful title and use hash as ID for deduplication
     const payloadHash = hashExecutionPayload(executionPayload);
@@ -935,18 +947,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       opts.fee?.embeddedPaymentMethodFeePayer
     );
 
-    const interaction =
-      existingInteraction ??
-      WalletInteraction.from({
-        id: payloadHash, // Use hash as ID for deduplication
-        type: "simulateTx",
-        title,
-        description: `App: ${this.appId}`,
-        complete: false,
-        status: "SIMULATING",
-        timestamp: Date.now(), // Always update timestamp
-      });
-    await this.storeAndEmitInteraction(interaction);
+    let interaction: WalletInteraction<WalletInteractionType>;
+
+    // Only create/store interaction if payload is not empty or if one already exists
+    if (!hasEmptyPayload || existingInteraction) {
+      interaction =
+        existingInteraction ??
+        WalletInteraction.from({
+          id: payloadHash, // Use hash as ID for deduplication
+          type: "simulateTx",
+          title,
+          description: `App: ${this.appId}`,
+          complete: false,
+          status: "SIMULATING",
+          timestamp: Date.now(), // Always update timestamp
+        });
+      await this.storeAndEmitInteraction(interaction);
+    }
 
     try {
       const feeOptions = opts.fee?.estimateGas
@@ -1013,7 +1030,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
         const needsAuthorization = !existingAuth;
 
-        if (needsAuthorization) {
+        if (needsAuthorization && !hasEmptyPayload) {
           await this.storeAndEmitInteraction(
             interaction.update({ status: "REQUESTING AUTHORIZATION" })
           );
@@ -1034,7 +1051,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
             this.appId,
             `simulateTx:${payloadHash}`,
             {
-              interactionId: interaction.id,
               title: interaction.title,
             }
           );
@@ -1052,9 +1068,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           this.log.error(`Failed to store simulation result: ${storageError}`);
         }
 
-        await this.storeAndEmitInteraction(
-          interaction.update({ complete: true, status: "SIMULATED" })
-        );
+        if (interaction) {
+          await this.storeAndEmitInteraction(
+            interaction.update({ complete: true, status: "SIMULATED" })
+          );
+        }
       } else {
         // For existing interactions (like sendTx flow), decode if requested
         if (withDecoding) {
@@ -1085,13 +1103,15 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       return { simulationResult, txRequest, decoded };
     } catch (error) {
       // Update interaction to reflect error before rethrowing
-      await this.storeAndEmitInteraction(
-        interaction.update({
-          complete: true,
-          status: "SIMULATION FAILED",
-          description: error instanceof Error ? error.message : String(error),
-        })
-      );
+      if (interaction) {
+        await this.storeAndEmitInteraction(
+          interaction.update({
+            complete: true,
+            status: "SIMULATION FAILED",
+            description: error instanceof Error ? error.message : String(error),
+          })
+        );
+      }
       throw error;
     }
   }
@@ -1141,7 +1161,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       // For utility functions, create a simplified execution trace
       // Format arguments using the TxCallStackDecoder
       const decoder = new TxCallStackDecoder(this.decodingCache);
-      const decodedArgs = await decoder.formatUtilityArguments(to, functionName, args);
+      const decodedArgs = await decoder.formatUtilityArguments(
+        to,
+        functionName,
+        args
+      );
 
       const simpleTrace = {
         functionName,
@@ -1176,11 +1200,13 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           false
         );
 
-        // Store persistent authorization with the payload hash
+        // Store persistent authorization with the payload hash and title
         await this.db.storePersistentAuthorization(
           this.appId,
           `simulateUtility:${payloadHash}`,
-          {}
+          {
+            title: interaction.title,
+          }
         );
       }
 

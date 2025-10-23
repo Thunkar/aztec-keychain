@@ -200,6 +200,7 @@ app.on("ready", async () => {
     "listAuthorizedApps",
     "getAppAuthorizations",
     "updateAccountAuthorization",
+    "revokeAuthorization",
     "revokeAppAuthorizations",
   ];
   for (const method of internalMethods) {

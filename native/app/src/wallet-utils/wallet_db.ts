@@ -391,8 +391,12 @@ export class WalletDB {
    * Revoke a specific authorization by its full key
    */
   async revokeAuthorization(key: string) {
+    this.logger.info(`Attempting to revoke authorization with key: ${key}`);
+    const existsBefore = await this.authorizations.getAsync(key);
+    this.logger.info(`Authorization value before deletion: ${existsBefore ? 'exists' : 'not found'}`);
     await this.authorizations.delete(key);
-    this.logger.info(`Revoked authorization: ${key}`);
+    const existsAfter = await this.authorizations.getAsync(key);
+    this.logger.info(`Authorization value after deletion: ${existsAfter ? 'still exists (ERROR!)' : 'successfully deleted'}`);
   }
 
   /**
