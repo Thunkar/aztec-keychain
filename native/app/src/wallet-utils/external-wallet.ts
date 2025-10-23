@@ -528,6 +528,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       return;
     }
 
+    // Compute payload hash for deduplication and use as ID
+    const payloadHash = hashExecutionPayload(exec);
+
     // Generate a meaningful title from the execution payload
     const title = await generateSimulationTitle(
       exec,
@@ -537,6 +540,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     );
 
     const interaction = WalletInteraction.from({
+      id: payloadHash,
       type: "sendTx",
       status: "CREATING",
       complete: false,
@@ -567,10 +571,10 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         );
         ({ callAuthorizations, executionTrace } = decoded!);
 
-        // Store the simulation result for the proving interaction
+        // Store the simulation result using the payload hash
         try {
           await this.db.storeTxSimulation(
-            interaction.id,
+            payloadHash,
             simulationResult,
             simulationTxRequest
           );
@@ -1025,18 +1029,21 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
             false
           );
 
-          // Store persistent authorization with the payload hash
+          // Store persistent authorization with the payload hash and interaction metadata
           await this.db.storePersistentAuthorization(
             this.appId,
             `simulateTx:${payloadHash}`,
-            {}
+            {
+              interactionId: interaction.id,
+              title: interaction.title,
+            }
           );
         }
 
-        // Store the simulation result
+        // Store the simulation result using the payload hash
         try {
           await this.db.storeTxSimulation(
-            interaction.id,
+            payloadHash,
             simulationResult,
             txRequest
           );
@@ -1067,9 +1074,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           }
         }
 
-        // Store for existing interactions too
+        // Store for existing interactions too, using payload hash
         await this.db.storeTxSimulation(
-          existingInteraction.id,
+          payloadHash,
           simulationResult,
           txRequest
         );

@@ -194,7 +194,16 @@ export class InternalWallet extends ExternalWallet {
     return await this.db.listAuthorizedApps();
   }
 
-  async getAppAuthorizations(appId: string): Promise<Record<string, any>> {
+  async getAppAuthorizations(appId: string): Promise<{
+    accounts: { alias: string; item: string }[];
+    simulations: Array<{
+      type: "simulateTx" | "simulateUtility";
+      payloadHash: string;
+      title?: string;
+      key: string;
+    }>;
+    otherMethods: string[];
+  }> {
     return await this.db.getAppAuthorizations(appId);
   }
 
@@ -203,6 +212,10 @@ export class InternalWallet extends ExternalWallet {
     accounts: Aliased<AztecAddress>[]
   ): Promise<void> {
     await this.db.updateAccountAuthorization(appId, accounts);
+  }
+
+  async revokeAuthorization(key: string): Promise<void> {
+    await this.db.revokeAuthorization(key);
   }
 
   async revokeAppAuthorizations(appId: string): Promise<void> {

@@ -313,18 +313,68 @@ export class WalletDB {
 
   /**
    * Get all persistent authorizations for a specific app
-   * Returns a map of method -> authorization data
+   * Returns detailed authorization information including parsed simulation data
    */
-  async getAppAuthorizations(appId: string): Promise<Record<string, any>> {
-    const authorizations: Record<string, any> = {};
+  async getAppAuthorizations(appId: string): Promise<{
+    accounts: { alias: string; item: string }[];
+    simulations: Array<{
+      type: "simulateTx" | "simulateUtility";
+      payloadHash: string;
+      title?: string;
+      key: string;
+    }>;
+    otherMethods: string[];
+  }> {
+    const accounts: { alias: string; item: string }[] = [];
+    const simulations: Array<{
+      type: "simulateTx" | "simulateUtility";
+      payloadHash: string;
+      title?: string;
+      key: string;
+    }> = [];
+    const otherMethods: string[] = [];
+
     for await (const [key, value] of this.authorizations.entriesAsync()) {
-      // Keys are formatted as "${appId}:${method}"
-      const [authAppId, method] = key.split(":");
-      if (authAppId === appId && method) {
-        authorizations[method] = JSON.parse(value.toString());
+      const parts = key.split(":");
+      const authAppId = parts[0];
+
+      if (authAppId !== appId) {
+        continue;
+      }
+
+      const method = parts[1];
+      if (!method) {
+        continue;
+      }
+
+      // Parse the authorization type
+      if (method === "getAccounts") {
+        const data = JSON.parse(value.toString());
+        accounts.push(...(data.accounts || []));
+      } else if (method === "simulateTx" && parts.length === 3) {
+        const payloadHash = parts[2];
+        const data = JSON.parse(value.toString());
+        simulations.push({
+          type: "simulateTx",
+          payloadHash,
+          title: data.title,
+          key,
+        });
+      } else if (method === "simulateUtility" && parts.length === 3) {
+        const payloadHash = parts[2];
+        const data = JSON.parse(value.toString());
+        simulations.push({
+          type: "simulateUtility",
+          payloadHash,
+          title: data.title,
+          key,
+        });
+      } else {
+        otherMethods.push(method);
       }
     }
-    return authorizations;
+
+    return { accounts, simulations, otherMethods };
   }
 
   /**
@@ -335,6 +385,14 @@ export class WalletDB {
     accounts: Aliased<AztecAddress>[]
   ) {
     await this.storePersistentAuthorization(appId, "getAccounts", { accounts });
+  }
+
+  /**
+   * Revoke a specific authorization by its full key
+   */
+  async revokeAuthorization(key: string) {
+    await this.authorizations.delete(key);
+    this.logger.info(`Revoked authorization: ${key}`);
   }
 
   /**
@@ -359,7 +417,7 @@ export class WalletDB {
   }
 
   async storeTxSimulation(
-    interactionId: string,
+    payloadHash: string,
     simulationResult: TxSimulationResult,
     txRequest: TxExecutionRequest
   ) {
@@ -367,32 +425,32 @@ export class WalletDB {
       simulationResult,
       txRequest,
     });
-    await this.txSimulations.set(interactionId, data);
+    await this.txSimulations.set(payloadHash, data);
     this.logger.info(
-      `Transaction simulation stored for interaction ${interactionId}`
+      `Transaction simulation stored for payload hash ${payloadHash}`
     );
   }
 
   async getTxSimulation(
-    interactionId: string
+    payloadHash: string
   ): Promise<{ simulationResult: any; txRequest: any } | undefined> {
-    const result = await this.txSimulations.getAsync(interactionId);
+    const result = await this.txSimulations.getAsync(payloadHash);
     if (!result) {
       return undefined;
     }
     return JSON.parse(result);
   }
 
-  async storeUtilityTrace(interactionId: string, trace: any) {
+  async storeUtilityTrace(payloadHash: string, trace: any) {
     const data = jsonStringify({
       utilityTrace: trace,
     });
-    await this.txSimulations.set(interactionId, data);
-    this.logger.info(`Utility trace stored for interaction ${interactionId}`);
+    await this.txSimulations.set(payloadHash, data);
+    this.logger.info(`Utility trace stored for payload hash ${payloadHash}`);
   }
 
-  async getUtilityTrace(interactionId: string): Promise<any | undefined> {
-    const result = await this.txSimulations.getAsync(interactionId);
+  async getUtilityTrace(payloadHash: string): Promise<any | undefined> {
+    const result = await this.txSimulations.getAsync(payloadHash);
     if (!result) {
       return undefined;
     }

@@ -184,7 +184,14 @@ export function EditAccountAuthorizationDialog({
                   onChange={(e) =>
                     handleAliasChange(account.address, e.target.value)
                   }
-                  sx={{ mt: 1, ml: 4 }}
+                  sx={{
+                    mt: 1,
+                    ml: 4,
+                    '& .MuiInputBase-input': {
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }
+                  }}
                   helperText="The app will see this account under this alias"
                 />
               )}

@@ -9,20 +9,42 @@ import {
   IconButton,
   Tooltip,
   Alert,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
 } from "@mui/material";
 import {
   Apps as AppsIcon,
   Edit as EditIcon,
   Block as RevokeIcon,
   AccountCircle,
+  ExpandMore as ExpandMoreIcon,
+  Science as SimulationIcon,
+  Delete as DeleteIcon,
 } from "@mui/icons-material";
 import { WalletContext } from "../../../../../renderer";
 import { EditAccountAuthorizationDialog } from "../../../authorization/EditAccountAuthorizationDialog";
+import { ExecutionTraceDialog } from "../../../dialogs/ExecutionTraceDialog";
 
 interface AppAuthorizationCardProps {
   appId: string;
   onRevoke: (appId: string) => Promise<void>;
   onUpdate: () => Promise<void>;
+}
+
+interface Authorizations {
+  accounts: { alias: string; item: string }[];
+  simulations: Array<{
+    type: "simulateTx" | "simulateUtility";
+    payloadHash: string;
+    title?: string;
+    key: string;
+  }>;
+  otherMethods: string[];
 }
 
 export function AppAuthorizationCard({
@@ -31,7 +53,11 @@ export function AppAuthorizationCard({
   onUpdate,
 }: AppAuthorizationCardProps) {
   const { walletAPI } = useContext(WalletContext);
-  const [authorizations, setAuthorizations] = useState<Record<string, any>>({});
+  const [authorizations, setAuthorizations] = useState<Authorizations>({
+    accounts: [],
+    simulations: [],
+    otherMethods: [],
+  });
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -71,14 +97,61 @@ export function AppAuthorizationCard({
     }
   };
 
+  const handleRevokeSimulation = async (key: string) => {
+    if (
+      !confirm(
+        `Are you sure you want to revoke this specific simulation authorization?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await walletAPI.revokeAuthorization(key);
+      await loadAuthorizations();
+      await onUpdate();
+    } catch (err) {
+      console.error("Failed to revoke simulation:", err);
+    }
+  };
+
   const handleEditSave = async () => {
     setEditDialogOpen(false);
     await loadAuthorizations();
     await onUpdate();
   };
 
-  const accountsAuth = authorizations["getAccounts"];
-  const accounts = accountsAuth?.accounts || [];
+  const accounts = authorizations.accounts || [];
+  const simulations = authorizations.simulations || [];
+  const otherMethods = authorizations.otherMethods || [];
+
+  const [selectedSimulationHash, setSelectedSimulationHash] = useState<
+    string | null
+  >(null);
+  const [executionTrace, setExecutionTrace] = useState<any>(null);
+  const [traceDialogOpen, setTraceDialogOpen] = useState(false);
+  const [loadingTrace, setLoadingTrace] = useState(false);
+
+  const handleViewSimulation = async (payloadHash: string) => {
+    try {
+      setLoadingTrace(true);
+      setSelectedSimulationHash(payloadHash);
+
+      // Payload hash IS the interaction ID for simulations
+      const trace = await walletAPI.getExecutionTrace(payloadHash);
+      if (trace) {
+        setExecutionTrace(trace);
+        setTraceDialogOpen(true);
+      } else {
+        alert("Execution trace not found for this simulation");
+      }
+    } catch (err) {
+      console.error("Failed to load execution trace:", err);
+      alert("Failed to load execution trace");
+    } finally {
+      setLoadingTrace(false);
+    }
+  };
 
   return (
     <>
@@ -125,36 +198,164 @@ export function AppAuthorizationCard({
             </Typography>
           ) : (
             <>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Authorized Accounts ({accounts.length})
-                </Typography>
-                {accounts.length === 0 ? (
-                  <Alert severity="warning" sx={{ mt: 1 }}>
-                    No accounts authorized
-                  </Alert>
-                ) : (
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
-                    {accounts.map((acc: { alias: string; item: string }) => (
-                      <Chip
-                        key={acc.item}
-                        icon={<AccountCircle />}
-                        label={acc.alias}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
-                      />
-                    ))}
-                  </Box>
-                )}
-              </Box>
+              {accounts.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Accordion
+                    defaultExpanded
+                    sx={{
+                      bgcolor: "background.paper",
+                      boxShadow: 1,
+                    }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <AccountCircle fontSize="small" />
+                        <Typography variant="subtitle2">
+                          Authorized Accounts ({accounts.length})
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                        {accounts.map(
+                          (acc: { alias: string; item: string }) => (
+                            <Chip
+                              key={acc.item}
+                              icon={<AccountCircle />}
+                              label={acc.alias}
+                              size="small"
+                              variant="outlined"
+                              sx={{
+                                fontFamily: "monospace",
+                                fontSize: "0.75rem",
+                              }}
+                            />
+                          )
+                        )}
+                      </Box>
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
+              )}
 
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Authorized Methods:{" "}
-                  {Object.keys(authorizations).join(", ") || "None"}
-                </Typography>
-              </Box>
+              {simulations.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Accordion
+                    defaultExpanded
+                    sx={{
+                      bgcolor: "background.paper",
+                      boxShadow: 1,
+                    }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <SimulationIcon fontSize="small" />
+                        <Typography variant="subtitle2">
+                          Authorized Simulations ({simulations.length})
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <List dense>
+                        {simulations.map((sim) => (
+                          <ListItem
+                            key={sim.key}
+                            sx={{
+                              border: 1,
+                              borderColor: "divider",
+                              borderRadius: 1,
+                              mb: 1,
+                              cursor: "pointer",
+                              "&:hover": {
+                                bgcolor: "action.hover",
+                              },
+                            }}
+                            onClick={() =>
+                              handleViewSimulation(sim.payloadHash)
+                            }
+                          >
+                            <ListItemText
+                              primary={
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 1,
+                                  }}
+                                >
+                                  <Chip
+                                    label={
+                                      sim.type === "simulateTx"
+                                        ? "Tx"
+                                        : "Utility"
+                                    }
+                                    size="small"
+                                    color={
+                                      sim.type === "simulateTx"
+                                        ? "primary"
+                                        : "secondary"
+                                    }
+                                    sx={{
+                                      fontFamily: "monospace",
+                                      fontSize: "0.65rem",
+                                    }}
+                                  />
+                                  <Typography variant="body2">
+                                    {sim.title || "Simulation"}
+                                  </Typography>
+                                </Box>
+                              }
+                              secondary={
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ fontFamily: "monospace" }}
+                                >
+                                  Hash: {sim.payloadHash.slice(0, 10)}...
+                                  {sim.payloadHash.slice(-8)}
+                                </Typography>
+                              }
+                            />
+                            <ListItemSecondaryAction>
+                              <Tooltip title="Revoke this simulation">
+                                <IconButton
+                                  edge="end"
+                                  size="small"
+                                  color="error"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRevokeSimulation(sim.key);
+                                  }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </ListItemSecondaryAction>
+                          </ListItem>
+                        ))}
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
+              )}
+
+              {accounts.length === 0 && simulations.length === 0 && (
+                <Alert severity="warning">
+                  No authorizations found for this app
+                </Alert>
+              )}
+
+              {otherMethods.length > 0 && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Other Methods: {otherMethods.join(", ")}
+                  </Typography>
+                </Box>
+              )}
             </>
           )}
         </CardContent>
@@ -167,6 +368,18 @@ export function AppAuthorizationCard({
         onClose={() => setEditDialogOpen(false)}
         onSave={handleEditSave}
       />
+
+      {executionTrace && (
+        <ExecutionTraceDialog
+          open={traceDialogOpen}
+          trace={executionTrace}
+          onClose={() => {
+            setTraceDialogOpen(false);
+            setExecutionTrace(null);
+            setSelectedSimulationHash(null);
+          }}
+        />
+      )}
     </>
   );
 }

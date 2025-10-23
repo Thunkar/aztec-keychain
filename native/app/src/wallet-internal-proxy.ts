@@ -106,11 +106,21 @@ export type InternalWalletInterface = Omit<Wallet, "getAccounts"> & {
   onAuthorizationRequest(callback: OnAuthorizationRequestListener): void;
   // App authorization management
   listAuthorizedApps(): Promise<string[]>;
-  getAppAuthorizations(appId: string): Promise<Record<string, any>>;
+  getAppAuthorizations(appId: string): Promise<{
+    accounts: { alias: string; item: string }[];
+    simulations: Array<{
+      type: "simulateTx" | "simulateUtility";
+      payloadHash: string;
+      title?: string;
+      key: string;
+    }>;
+    otherMethods: string[];
+  }>;
   updateAccountAuthorization(
     appId: string,
     accounts: { alias: string; item: string }[]
   ): Promise<void>;
+  revokeAuthorization(key: string): Promise<void>;
   revokeAppAuthorizations(appId: string): Promise<void>;
 };
 
@@ -164,7 +174,20 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
     getAppAuthorizations: z
       .function()
       .args(z.string())
-      .returns(z.record(z.any())),
+      .returns(
+        z.object({
+          accounts: z.array(z.object({ alias: z.string(), item: z.string() })),
+          simulations: z.array(
+            z.object({
+              type: z.enum(["simulateTx", "simulateUtility"]),
+              payloadHash: z.string(),
+              title: z.string().optional(),
+              key: z.string(),
+            })
+          ),
+          otherMethods: z.array(z.string()),
+        })
+      ),
     // @ts-ignore
     updateAccountAuthorization: z
       .function()
@@ -172,6 +195,8 @@ export const InternalWalletInterfaceSchema: ApiSchemaFor<InternalWalletInterface
         z.string(),
         z.array(z.object({ alias: z.string(), item: z.string() }))
       ),
+    // @ts-ignore
+    revokeAuthorization: z.function().args(z.string()),
     // @ts-ignore
     revokeAppAuthorizations: z.function().args(z.string()),
   };
