@@ -5,14 +5,11 @@ import { tmpdir } from "os";
 const isDev = process.env.NODE_ENV !== "production";
 
 const BB_WASM_PATH = isDev
-  ? resolve(
-      __dirname,
-      "./node_modules/@aztec/bb.js/dest/node/barretenberg_wasm/barretenberg-threads.wasm.gz"
-    )
+  ? resolve(__dirname, "./bb/barretenberg-threads.wasm.gz")
   : "__RESOURCES_PATH__/bb/barretenberg-threads.wasm.gz";
 
 const BB_BINARY_PATH = isDev
-  ? process.env.BB_BINARY_PATH
+  ? resolve(__dirname, "./bb/bb")
   : "__RESOURCES_PATH__/bb/bb";
 
 const BB_WORKING_DIRECTORY = resolve(tmpdir(), "bb");

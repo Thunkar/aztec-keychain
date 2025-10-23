@@ -68,7 +68,6 @@ const getInteractionTypeLabel = (type: WalletInteractionType) => {
     registerContract: "Register Contract",
     createAccount: "Create Account",
     simulateTx: "Simulate Transaction",
-    proveTx: "Prove Transaction",
     sendTx: "Send Transaction",
     profileTx: "Profile Transaction",
   };
@@ -80,7 +79,6 @@ const getInteractionTypeColor = (type: WalletInteractionType) => {
     registerContract: "#9c27b0", // purple
     createAccount: "#2196f3", // blue
     simulateTx: "#ff9800", // orange
-    proveTx: "#673ab7", // deep purple (instead of red to avoid error appearance)
     sendTx: "#4caf50", // green
     profileTx: "#00bcd4", // cyan
   };
@@ -91,7 +89,6 @@ const allInteractionTypes: WalletInteractionType[] = [
   "registerContract",
   "createAccount",
   "simulateTx",
-  "proveTx",
   "sendTx",
   "profileTx",
 ];
@@ -109,8 +106,8 @@ export function InteractionsList({
   const handleInteractionClick = async (
     interaction: WalletInteraction<WalletInteractionType>
   ) => {
-    // Only show trace for simulateTx and proveTx interactions
-    if (interaction.type === "simulateTx" || interaction.type === "proveTx") {
+    // Only show trace for simulateTx and sendTx interactions
+    if (interaction.type === "simulateTx" || interaction.type === "sendTx") {
       try {
         const trace = await walletAPI.getExecutionTrace(interaction.id);
         if (trace) {
@@ -162,7 +159,7 @@ export function InteractionsList({
                   overflow: "hidden",
                   cursor:
                     interaction.type === "simulateTx" ||
-                    interaction.type === "proveTx"
+                    interaction.type === "sendTx"
                       ? "pointer"
                       : "default",
                   borderLeft: "4px solid",

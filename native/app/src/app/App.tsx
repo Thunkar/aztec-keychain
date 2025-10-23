@@ -50,7 +50,6 @@ export function App() {
     "registerContract",
     "createAccount",
     "simulateTx",
-    "proveTx",
     "sendTx",
     "profileTx",
   ]);

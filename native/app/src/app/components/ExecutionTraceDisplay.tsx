@@ -63,7 +63,6 @@ function PrivateCallDisplay({
       }}
     >
       <Accordion
-        defaultExpanded={call.depth === 0}
         sx={{
           bgcolor: "background.default",
           boxShadow: 1,
@@ -396,13 +395,9 @@ export function ExecutionTraceDisplay({
   callAuthorizations,
 }: ExecutionTraceDisplayProps) {
   return (
-    <Box>
-      <Box sx={{ mt: 2 }}>
-        <PrivateCallDisplay
-          call={trace.privateExecution}
-          authorizations={callAuthorizations}
-        />
-      </Box>
-    </Box>
+    <PrivateCallDisplay
+      call={trace.privateExecution}
+      authorizations={callAuthorizations}
+    />
   );
 }

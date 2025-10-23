@@ -13,8 +13,8 @@ contextBridge.exposeInMainWorld("walletAPI", {
   registerSender(stringifiedArgs: string): Promise<AztecAddress> {
     return ipcRenderer.invoke("registerSender", stringifiedArgs);
   },
-  getSenders(stringifiedArgs: string): Promise<Aliased<AztecAddress>[]> {
-    return ipcRenderer.invoke("getSenders", stringifiedArgs);
+  getAddressBook(stringifiedArgs: string): Promise<Aliased<AztecAddress>[]> {
+    return ipcRenderer.invoke("getAddressBook", stringifiedArgs);
   },
   getAccounts(stringifiedArgs: string): Promise<Aliased<AztecAddress>[]> {
     return ipcRenderer.invoke("getAccounts", stringifiedArgs);

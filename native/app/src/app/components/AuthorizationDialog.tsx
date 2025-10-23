@@ -16,7 +16,7 @@ import type {
   AuthorizationItemResponse,
   AuthorizationItem,
 } from "../../wallet-utils/authorization";
-import { AuthorizeProveTxContent } from "./AuthorizeProveTxContent";
+import { AuthorizeSendTxContent } from "./AuthorizeSendTxContent";
 import { AuthorizeContractContent } from "./AuthorizeContractContent";
 import { AuthorizeSenderContent } from "./AuthorizeSenderContent";
 import { AuthorizeAccountsContent } from "./AuthorizeAccountsContent";
@@ -36,8 +36,8 @@ interface ItemState {
 
 function formatMethodName(method: string): string {
   switch (method) {
-    case "proveTx":
-      return "Prove Transaction";
+    case "sendTx":
+      return "Send Transaction";
     case "registerContract":
       return "Register Contract";
     case "registerSender":
@@ -63,7 +63,7 @@ function getMethodSubtitle(item: AuthorizationItem): string | null {
       return item.params.alias || item.params.address?.substring(0, 16) + "...";
     case "getAccounts":
       return "Access your wallet addresses";
-    case "proveTx":
+    case "sendTx":
       return "Execute contract interaction";
     default:
       return null;
@@ -238,8 +238,8 @@ export function AuthorizationDialog({
 
                 <AccordionDetails>
                   <Box sx={{ pl: 5 }}>
-                    {item.method === "proveTx" && (
-                      <AuthorizeProveTxContent
+                    {item.method === "sendTx" && (
+                      <AuthorizeSendTxContent
                         request={item}
                         showAppId={false}
                       />

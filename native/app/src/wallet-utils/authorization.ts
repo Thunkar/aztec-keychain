@@ -26,7 +26,7 @@ export type RegisterSenderAuthData = {
   alias: string;
 };
 
-export type ProveTxAuthData = {
+export type SendTxAuthData = {
   persistent?: boolean;
 };
 
@@ -35,7 +35,7 @@ export type AuthorizationData =
   | GetAccountsAuthData
   | RegisterContractAuthData
   | RegisterSenderAuthData
-  | ProveTxAuthData
+  | SendTxAuthData
   | undefined;
 
 // Item response for a single authorization

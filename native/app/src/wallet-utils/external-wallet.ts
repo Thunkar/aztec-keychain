@@ -12,6 +12,10 @@ import {
   type SendOptions,
   type UserFeeOptions,
   type FeeOptions,
+  type BatchedMethod,
+  type BatchableMethods,
+  type BatchResults,
+  type ContractInstanceAndArtifact,
 } from "@aztec/aztec.js";
 import { type ContractArtifact } from "@aztec/stdlib/abi";
 import type {
@@ -32,6 +36,7 @@ import {
   type TxProvingResult,
   type TxSimulationResult,
   type TxExecutionRequest,
+  TxHash,
 } from "@aztec/stdlib/tx";
 import {
   EcdsaKAccountContract,
@@ -67,11 +72,7 @@ import { TxDecodingService } from "./decoding/tx-decoding-service";
 import type { ReadableCallAuthorization } from "./decoding/call-authorization-formatter";
 import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
 
-// TODO: remove this once aztec.js exports it
-export type ContractInstanceAndArtifact = Pick<
-  Contract,
-  "artifact" | "instance"
->;
+import { inspect } from "node:util";
 
 type ReadableTxInformation = {
   callAuthorizations: ReadableCallAuthorization[];
@@ -243,7 +244,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   /**
    * Check if the app has authorization to use a specific account
    */
-  protected async checkAccountAuthorization(address: AztecAddress): Promise<void> {
+  protected async checkAccountAuthorization(
+    address: AztecAddress
+  ): Promise<void> {
     // Check if there's a persistent getAccounts authorization
     const authData = await this.db.retrievePersistentAuthorization(
       this.appId,
@@ -384,7 +387,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     let contractName = artifact?.name;
 
     // Check if instanceData contains an artifact
-    if (!contractName && typeof instanceData === 'object' && 'artifact' in instanceData) {
+    if (
+      !contractName &&
+      typeof instanceData === "object" &&
+      "artifact" in instanceData
+    ) {
       contractName = (instanceData as any).artifact?.name;
     }
 
@@ -393,7 +400,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       try {
         const instance = await this.pxe.getContractInstance(address);
         if (instance?.contractClassId) {
-          const fetchedArtifact = await this.pxe.getContractArtifact(instance.contractClassId);
+          const fetchedArtifact = await this.pxe.getContractArtifact(
+            instance.contractClassId
+          );
           if (fetchedArtifact) {
             contractName = fetchedArtifact.name;
           }
@@ -482,8 +491,8 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return this.pxe.registerSender(address);
   }
 
-  override async getSenders(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestSingleAuthorization("getSenders", {});
+  override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
+    await this.requestSingleAuthorization("getAddressBook", {});
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -523,16 +532,16 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     };
   }
 
-  override async proveTx(
+  override async sendTx(
     exec: ExecutionPayload,
     opts: SendOptions,
     txInformation?: ReadableTxInformation
-  ): Promise<TxProvingResult> {
+  ): Promise<TxHash> {
     // Check account authorization before proceeding
     await this.checkAccountAuthorization(opts.from);
 
     const interaction = WalletInteraction.from({
-      type: "proveTx",
+      type: "sendTx",
       status: "CREATING",
       complete: false,
       title: `Proving transaction`,
@@ -563,7 +572,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         );
 
         await this.requestSingleAuthorization(
-          "proveTx",
+          "sendTx",
           {
             callAuthorizations,
             executionTrace,
@@ -596,10 +605,20 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
       const provenTx = await this.pxe.proveTx(txRequest);
 
+      const tx = await provenTx.toTx();
+      const txHash = tx.getTxHash();
+      if (await this.aztecNode.getTxEffect(txHash)) {
+        throw new Error(
+          `A settled tx with equal hash ${txHash.toString()} exists.`
+        );
+      }
+      await this.aztecNode.sendTx(tx).catch((err) => {
+        throw this.contextualizeError(err, inspect(tx));
+      });
       await this.storeAndEmitInteraction(
-        interaction.update({ status: "PROVEN", complete: true })
+        interaction.update({ status: "SENT", complete: true })
       );
-      return provenTx;
+      return txHash;
     } catch (error) {
       // Update interaction to reflect error before rethrowing
       await this.storeAndEmitInteraction(
@@ -613,15 +632,28 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
   }
 
-  // TODO: Fix types once @aztec/aztec.js exports BatchedMethod, BatchableMethods, and BatchResults from the main package
-  override async batch(methods: any): Promise<any> {
+  override async batch<
+    const T extends readonly BatchedMethod<keyof BatchableMethods>[],
+  >(methods: T): Promise<BatchResults<T>> {
+    type CachedResult =
+      | ContractInstanceWithAddress
+      | TxHash
+      | AztecAddress
+      | Promise<never>
+      | null;
+
     // 1. Convert methods to AuthorizationItems, checking persistent cache
     const items: AuthorizationItem[] = [];
-    const cachedResults: (any | null)[] = [];
+    const cachedResults: CachedResult[] = [];
     const itemMethodMap = new Map<string, string>();
+    const modifiedMethods: Array<{
+      name: string;
+      args: unknown[]
+    }> = [];
 
     for (const methodCall of methods) {
       const { name, args } = methodCall;
+      let modifiedArgs: unknown[] = [...args]; // Create a mutable copy
 
       // Check persistent cache
       const persistentAuth = await this.db.retrievePersistentAuthorization(
@@ -631,25 +663,26 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
       if (persistentAuth) {
         cachedResults.push(persistentAuth);
+        modifiedMethods.push({ name, args: modifiedArgs });
         continue;
       }
 
       // Create AuthorizationItem for this item
-      let params: any = args;
+      let params: unknown = modifiedArgs;
 
-      // Pre-process proveTx to include display data
-      if (name === "proveTx") {
+      // Pre-process sendTx to include display data
+      if (name === "sendTx") {
         try {
-          const [exec, opts] = args as Parameters<typeof this.proveTx>;
+          const [exec, opts] = args as Parameters<typeof this.sendTx>;
           const { decoded: displayData } = await this.simulateTxInternal(
             exec,
             opts,
             undefined,
             true // withDecoding
           );
-          args.push(displayData);
+          modifiedArgs = [exec, opts, displayData];
           params = {
-            originalArgs: args,
+            originalArgs: modifiedArgs,
             callAuthorizations: displayData!.callAuthorizations,
             executionTrace: displayData!.executionTrace,
           };
@@ -657,11 +690,14 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           // If simulation/extraction fails, don't add to batch
           // Push error as cached result so it gets thrown later
           cachedResults.push(Promise.reject(error));
+          modifiedMethods.push({ name, args: modifiedArgs });
           continue;
         }
       } else if (name === "registerContract") {
         // Check if contract already exists in PXE
-        const [instanceData, artifact] = args;
+        const [instanceData, artifact, secretKey] = args as Parameters<
+          typeof this.registerContract
+        >;
         const address = await this.resolveContractAddress(
           instanceData,
           artifact
@@ -671,6 +707,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         if (metadata.contractInstance) {
           // Contract already registered, skip authorization
           cachedResults.push(metadata.contractInstance);
+          modifiedMethods.push({ name, args: modifiedArgs });
           continue;
         }
 
@@ -683,18 +720,19 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
         // Contract not registered, need authorization
         // Add skipAuth flag to args so it bypasses auth in the execution phase
-        args.push(true);
+        modifiedArgs = [instanceData, artifact, secretKey, true];
         params = {
-          originalArgs: args,
+          originalArgs: modifiedArgs,
           contractAddress: address,
           contractName,
         };
       } else if (name === "registerSender") {
         // Add skipAuth flag to args
-        const [address, alias] = args;
-        args.push(true);
+        const registerSenderArgs = args as unknown as [AztecAddress, string?];
+        const [address, alias] = registerSenderArgs;
+        modifiedArgs = [address, alias ?? "", true];
         params = {
-          originalArgs: args,
+          originalArgs: modifiedArgs,
           address,
           alias,
         };
@@ -711,6 +749,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       itemMethodMap.set(itemId, name);
 
       cachedResults.push(null);
+      modifiedMethods.push({ name, args: modifiedArgs });
     }
 
     // 2. If all cached, execute without authorization
@@ -748,18 +787,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     );
 
     // 5. Execute approved items using dynamic dispatch (like BaseWallet)
-    const results: any[] = [];
+    type MethodResult = ContractInstanceWithAddress | TxHash | AztecAddress;
+    type ResultWrapper = { name: string; result: MethodResult };
+    const results: ResultWrapper[] = [];
     let itemIndex = 0;
 
-    for (let i = 0; i < methods.length; i++) {
+    for (let i = 0; i < modifiedMethods.length; i++) {
+      const { name, args } = modifiedMethods[i];
+      let result: MethodResult;
+
       if (cachedResults[i] !== null) {
         // Use cached result (from persistent auth, PXE check, or error)
         // If it's a rejected promise (from simulation failure), await it to throw
-        const result = cachedResults[i];
-        if (result && typeof result.then === "function") {
-          results.push(await result);
+        const cachedResult = cachedResults[i];
+        if (cachedResult && typeof (cachedResult as unknown as Promise<never>).then === "function") {
+          result = await (cachedResult as Promise<never>);
         } else {
-          results.push(result);
+          result = cachedResult as MethodResult;
         }
       } else {
         const item = items[itemIndex];
@@ -769,19 +813,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           throw new Error(`Authorization denied for ${item.method}`);
         }
 
-        const { name, args } = methods[i];
-
         // Use dynamic dispatch to call the method, just like BaseWallet.batch()
         // The skipAuth flag (added during preprocessing) bypasses authorization
-        const fn = (this as any)[name] as (...args: any[]) => Promise<any>;
-        const result = await fn.apply(this, args);
-        results.push(result);
+        type BatchableMethodFn = (...args: unknown[]) => Promise<MethodResult>;
+        const fn = (this as unknown as Record<string, BatchableMethodFn>)[name];
+        result = await fn.apply(this, args);
 
         itemIndex++;
       }
+
+      // Wrap result with method name for discriminated union deserialization
+      results.push({
+        name,
+        result,
+      });
     }
 
-    return results as any;
+    return results as BatchResults<T>;
   }
 
   override async simulateTx(
@@ -870,7 +918,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       // For standalone simulations (no existingInteraction), store the raw simulation result
       if (!existingInteraction) {
         try {
-          await this.db.storeTxSimulation(interaction.id, simulationResult, txRequest);
+          await this.db.storeTxSimulation(
+            interaction.id,
+            simulationResult,
+            txRequest
+          );
         } catch (storageError) {
           // If storage fails, just log it - don't fail the simulation
           this.log.error(`Failed to store simulation result: ${storageError}`);

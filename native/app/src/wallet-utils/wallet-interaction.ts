@@ -11,7 +11,6 @@ export type WalletInteractionType =
   | "registerContract"
   | "createAccount"
   | "simulateTx"
-  | "proveTx"
   | "sendTx"
   | "profileTx";
 
@@ -22,7 +21,6 @@ export const WalletInteractionSchema = z
       "registerContract",
       "createAccount",
       "simulateTx",
-      "proveTx",
       "sendTx",
       "profileTx",
     ]),

@@ -31,7 +31,7 @@ export function ContactsManager() {
   const { walletAPI } = useContext(WalletContext);
 
   const loadContacts = async () => {
-    const senders = await walletAPI.getSenders();
+    const senders = await walletAPI.getAddressBook();
     setContacts(senders);
   };
 

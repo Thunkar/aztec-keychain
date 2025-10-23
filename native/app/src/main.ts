@@ -190,7 +190,7 @@ app.on("ready", async () => {
   });
   const internalMethods = [
     "getAccounts",
-    "getSenders",
+    "getAddressBook",
     "registerSender",
     "getTxReceipt",
     "createAccount",

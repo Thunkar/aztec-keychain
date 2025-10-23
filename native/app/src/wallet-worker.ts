@@ -2,6 +2,7 @@ import {
   createAztecNodeClient,
   WalletSchema,
   type ChainInfo,
+  Fr,
 } from "@aztec/aztec.js";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
@@ -34,9 +35,7 @@ const ChainInfoSchema = z.object({
 });
 
 const chainInfoToNodeURL = {
-  31337: {
-    862270261: "http://localhost:8080",
-  },
+  31337: "http://localhost:8080",
   1115111: {
     1714840162: "https://rpc.testnet.aztec-labs.com/",
   },
@@ -59,11 +58,14 @@ async function init(
       : chainInfoToNodeURL[chainInfo.chainId.toNumber()][
           chainInfo.version.toNumber()
         ];
+  const node = createAztecNodeClient(nodeURL);
+  if (chainInfo.version.equals(new Fr(0))) {
+    const { rollupVersion } = await node.getNodeInfo();
+    chainInfo.version = new Fr(rollupVersion);
+  }
   const sessionId = `${chainInfo.chainId.toNumber()}-${chainInfo.version.toNumber()}`;
   if (!RUNNING_SESSIONS.get(appId)?.has(sessionId)) {
     const internalInit = async () => {
-      const node = createAztecNodeClient(nodeURL);
-
       const l1Contracts = await node.getL1ContractAddresses();
 
       const rollupAddress = l1Contracts.rollupAddress;

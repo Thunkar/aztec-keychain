@@ -37,7 +37,7 @@ export class WalletApi {
               );
             };
           } else {
-            throw new Error("Invalid method");
+            throw new Error(`Invalid method ${prop.toString()}`);
           }
         },
       }

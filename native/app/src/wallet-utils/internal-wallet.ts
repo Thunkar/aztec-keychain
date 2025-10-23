@@ -10,9 +10,11 @@ import type { AuthorizationData, GetAccountsAuthData } from "./authorization";
 import { WalletInteraction } from "./wallet-interaction";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 
-import { TxSimulationResult, type TxProvingResult } from "@aztec/stdlib/tx";
+import { TxHash, TxSimulationResult } from "@aztec/stdlib/tx";
 import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
 import { TxDecodingService } from "./decoding/tx-decoding-service";
+
+import { inspect } from "node:util";
 
 // Enriched account type for internal use
 export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
@@ -88,7 +90,7 @@ export class InternalWallet extends ExternalWallet {
       });
       await this.storeAndEmitInteraction(
         interaction.update({
-          status: "PROVING DEPLOYMENT",
+          status: "SENDING DEPLOYMENT",
           description: `Address ${accountManager.address.toString()}`,
         })
       );
@@ -105,11 +107,7 @@ export class InternalWallet extends ExternalWallet {
         skipInstancePublication: true,
       };
 
-      const provenTx = await deployMethod.prove(opts);
-      await this.storeAndEmitInteraction(
-        interaction.update({ status: "SENDING DEPLOYMENT TX" })
-      );
-      await provenTx.send().wait();
+      await deployMethod.send(opts).wait();
       await this.storeAndEmitInteraction(
         interaction.update({ status: "DEPLOYED", complete: true })
       );
@@ -127,17 +125,30 @@ export class InternalWallet extends ExternalWallet {
     }
   }
 
-  override async proveTx(
-    exec: ExecutionPayload,
+  override async sendTx(
+    executionPayload: ExecutionPayload,
     opts: SendOptions
-  ): Promise<TxProvingResult> {
+  ): Promise<TxHash> {
     const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
     const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-      exec,
+      executionPayload,
       opts.from,
       fee
     );
-    return this.pxe.proveTx(txRequest);
+    const provenTx = await this.pxe.proveTx(txRequest);
+    const tx = await provenTx.toTx();
+    const txHash = tx.getTxHash();
+    if (await this.aztecNode.getTxEffect(txHash)) {
+      throw new Error(
+        `A settled tx with equal hash ${txHash.toString()} exists.`
+      );
+    }
+    this.log.debug(`Sending transaction ${txHash}`);
+    await this.aztecNode.sendTx(tx).catch((err) => {
+      throw this.contextualizeError(err, inspect(tx));
+    });
+    this.log.info(`Sent transaction ${txHash}`);
+    return txHash;
   }
 
   // Internal-only method: Delete account

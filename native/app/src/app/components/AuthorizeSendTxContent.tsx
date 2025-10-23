@@ -14,16 +14,16 @@ import type { ReadableCallAuthorization } from "../../wallet-utils/decoding/call
 import type { DecodedExecutionTrace } from "../../wallet-utils/decoding/tx-callstack-decoder";
 import { ExecutionTraceDisplay } from "./ExecutionTraceDisplay";
 
-interface AuthorizeProveTxContentProps {
+interface AuthorizeSendTxContentProps {
   request: AuthorizationItem;
   showAppId?: boolean;
 }
 
-// Reusable content component for displaying proveTx authorization details
-export function AuthorizeProveTxContent({
+// Reusable content component for displaying sendTx authorization details
+export function AuthorizeSendTxContent({
   request,
   showAppId = true,
-}: AuthorizeProveTxContentProps) {
+}: AuthorizeSendTxContentProps) {
   const params = request.params as {
     callAuthorizations?: ReadableCallAuthorization[];
     executionTrace?: DecodedExecutionTrace;
@@ -41,13 +41,10 @@ export function AuthorizeProveTxContent({
       )}
 
       {executionTrace && (
-        <>
-          <Divider sx={{ my: 3 }} />
-          <ExecutionTraceDisplay
-            trace={executionTrace}
-            callAuthorizations={callAuthorizations}
-          />
-        </>
+        <ExecutionTraceDisplay
+          trace={executionTrace}
+          callAuthorizations={callAuthorizations}
+        />
       )}
 
       <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
