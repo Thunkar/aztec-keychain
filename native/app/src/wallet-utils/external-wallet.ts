@@ -68,6 +68,7 @@ import {
   type AuthorizationItem,
   type GetAccountsAuthData,
   type AuthorizationData,
+  type AuthorizationPersistence,
 } from "./authorization";
 import { GasSettings } from "@aztec/stdlib/gas";
 import { prepareForFeePayment } from "./sponsoredFPC";
@@ -181,16 +182,30 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return interaction;
   }
 
-  protected async requestSingleAuthorization(
+  /**
+   * Unified authorization method with flexible persistence options.
+   *
+   * @param method - The method being authorized
+   * @param params - Parameters to display in authorization UI
+   * @param persistence - Persistence configuration
+   * @returns Authorization data from user response or stored data
+   */
+  protected async requestAuthorization(
     method: string,
     params: any,
-    persistent = false
+    persistence: AuthorizationPersistence = { persist: false }
   ): Promise<AuthorizationData> {
+    // Determine the storage key (use custom or default to method)
+    const storageKey =
+      persistence.persist && persistence.storageKey
+        ? persistence.storageKey
+        : method;
+
     // Check for existing persistent authorization
-    if (persistent) {
+    if (persistence.persist) {
       const existingAuth = await this.db.retrievePersistentAuthorization(
         this.appId,
-        method
+        storageKey
       );
       if (existingAuth) {
         // Return stored authorization data directly
@@ -237,13 +252,17 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
       throw new Error(`User denied ${method} request`);
     }
 
-    if (persistent && itemResponse.data) {
-      // Store the authorization for future use
-      await this.db.storePersistentAuthorization(
-        this.appId,
-        method,
-        itemResponse.data
-      );
+    // Store persistent authorization if configured
+    if (persistence.persist) {
+      // Use custom persistData if provided, otherwise use response data
+      const dataToStore = persistence.persistData ?? itemResponse.data;
+      if (dataToStore) {
+        await this.db.storePersistentAuthorization(
+          this.appId,
+          storageKey,
+          dataToStore
+        );
+      }
     }
 
     return itemResponse.data;
@@ -362,7 +381,13 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    const data = await this.requestSingleAuthorization("getAccounts", {}, true);
+    const data = await this.requestAuthorization(
+      "getAccounts",
+      {},
+      {
+        persist: true,
+      }
+    );
     // Return the authorized accounts with their (potentially overridden) aliases
     const authData = data as GetAccountsAuthData;
     if (!authData || !authData.accounts) {
@@ -421,12 +446,16 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     }
 
     try {
-      // Request authorization with persistent storage (unless skipped for batch)
+      // Request authorization (unless skipped for batch) - no persistence needed
       if (!skipAuth) {
-        await this.requestSingleAuthorization("registerContract", {
-          address: addressToCheck.toString(),
-          contractName,
-        });
+        await this.requestAuthorization(
+          "registerContract",
+          {
+            address: addressToCheck.toString(),
+            contractName,
+          },
+          { persist: false }
+        );
       }
 
       // Register the contract with PXE
@@ -463,12 +492,16 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     alias: string,
     skipAuth?: boolean
   ): Promise<AztecAddress> {
-    // Request authorization (unless skipped for batch)
+    // Request authorization (unless skipped for batch) - no persistence needed
     if (!skipAuth) {
-      await this.requestSingleAuthorization("registerSender", {
-        address: address.toString(),
-        alias,
-      });
+      await this.requestAuthorization(
+        "registerSender",
+        {
+          address: address.toString(),
+          alias,
+        },
+        { persist: false }
+      );
     }
 
     await this.db.storeSender(address, alias);
@@ -476,7 +509,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
   }
 
   override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestSingleAuthorization("getAddressBook", {});
+    await this.requestAuthorization("getAddressBook", {}, { persist: false });
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -617,13 +650,13 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
 
       // If we need authorization, wait for user approval while proving happens in parallel
       if (!txInformation) {
-        await this.requestSingleAuthorization(
+        await this.requestAuthorization(
           "sendTx",
           {
             callAuthorizations,
             executionTrace,
           },
-          false
+          { persist: false }
         );
       }
 
@@ -1022,36 +1055,23 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
           };
         }
 
-        // Check for existing persistent authorization with matching hash
-        const existingAuth = await this.db.retrievePersistentAuthorization(
-          this.appId,
-          `simulateTx:${payloadHash}`
-        );
-
-        const needsAuthorization = !existingAuth;
-
-        if (needsAuthorization && !hasEmptyPayload) {
+        // Request authorization with composite key and custom persistence data
+        if (!hasEmptyPayload) {
           await this.storeAndEmitInteraction(
             interaction.update({ status: "REQUESTING AUTHORIZATION" })
           );
 
-          // Request authorization with the decoded execution trace
-          await this.requestSingleAuthorization(
+          await this.requestAuthorization(
             "simulateTx",
             {
               payloadHash,
               callAuthorizations: decoded.callAuthorizations,
               executionTrace: decoded.executionTrace,
             },
-            false
-          );
-
-          // Store persistent authorization with the payload hash and interaction metadata
-          await this.db.storePersistentAuthorization(
-            this.appId,
-            `simulateTx:${payloadHash}`,
             {
-              title: interaction.title,
+              persist: true,
+              storageKey: `simulateTx:${payloadHash}`,
+              persistData: { title: interaction.title },
             }
           );
         }
@@ -1150,14 +1170,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         from
       );
 
-      // Check for existing persistent authorization with matching hash
-      const existingAuth = await this.db.retrievePersistentAuthorization(
-        this.appId,
-        `simulateUtility:${payloadHash}`
-      );
-
-      const needsAuthorization = !existingAuth;
-
       // For utility functions, create a simplified execution trace
       // Format arguments using the TxCallStackDecoder
       const decoder = new TxCallStackDecoder(this.decodingCache);
@@ -1184,31 +1196,24 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         this.log.error(`Failed to store utility trace: ${storageError}`);
       }
 
-      if (needsAuthorization) {
-        await this.storeAndEmitInteraction(
-          interaction.update({ status: "REQUESTING AUTHORIZATION" })
-        );
+      // Request authorization with composite key and custom persistence data
+      await this.storeAndEmitInteraction(
+        interaction.update({ status: "REQUESTING AUTHORIZATION" })
+      );
 
-        // Request authorization with the simulation data
-        await this.requestSingleAuthorization(
-          "simulateUtility",
-          {
-            payloadHash,
-            executionTrace: simpleTrace,
-            isUtility: true,
-          },
-          false
-        );
-
-        // Store persistent authorization with the payload hash and title
-        await this.db.storePersistentAuthorization(
-          this.appId,
-          `simulateUtility:${payloadHash}`,
-          {
-            title: interaction.title,
-          }
-        );
-      }
+      await this.requestAuthorization(
+        "simulateUtility",
+        {
+          payloadHash,
+          executionTrace: simpleTrace,
+          isUtility: true,
+        },
+        {
+          persist: true,
+          storageKey: `simulateUtility:${payloadHash}`,
+          persistData: { title: interaction.title },
+        }
+      );
 
       await this.storeAndEmitInteraction(
         interaction.update({ complete: true, status: "SIMULATED" })

@@ -52,6 +52,15 @@ export type AuthorizationData =
   | SimulateAuthData
   | undefined;
 
+// Persistence configuration for authorization requests
+export type AuthorizationPersistence =
+  | { persist: false }
+  | {
+      persist: true;
+      storageKey?: string; // Custom key (default: method)
+      persistData?: any; // Data to store (default: response.data)
+    };
+
 // Item response for a single authorization
 export type AuthorizationItemResponse = {
   id: string;

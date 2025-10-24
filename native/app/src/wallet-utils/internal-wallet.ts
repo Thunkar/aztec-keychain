@@ -6,7 +6,11 @@ import {
 } from "@aztec/aztec.js";
 import { ExternalWallet } from "./external-wallet";
 import type { AccountType } from "./wallet_db";
-import type { AuthorizationData, GetAccountsAuthData } from "./authorization";
+import type {
+  AuthorizationData,
+  GetAccountsAuthData,
+  AuthorizationPersistence,
+} from "./authorization";
 import { WalletInteraction } from "./wallet-interaction";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 
@@ -27,22 +31,13 @@ export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
  * 3. Provides additional internal-only methods
  */
 export class InternalWallet extends ExternalWallet {
-  // Override authorization to always approve instantly
-  protected override async requestSingleAuthorization(
-    method: string,
+  // Override authorization method to always approve instantly
+  protected override async requestAuthorization(
+    _method: string,
     _params: any,
-    _persistent = false
+    _persistence: AuthorizationPersistence = { persist: false }
   ): Promise<AuthorizationData> {
     // Internal requests are always pre-approved
-    // Return the appropriate data structure based on the method
-
-    if (method === "getAccounts") {
-      // For getAccounts, return all accounts
-      const accounts = await super.getAccounts();
-      return { accounts } as GetAccountsAuthData;
-    }
-
-    // For other methods, return undefined (no special data needed)
     return undefined;
   }
 
