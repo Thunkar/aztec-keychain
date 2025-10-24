@@ -8,7 +8,6 @@ import { ExternalWallet } from "./external-wallet";
 import type { AccountType } from "./wallet_db";
 import type {
   AuthorizationData,
-  GetAccountsAuthData,
   AuthorizationPersistence,
 } from "./authorization";
 import { WalletInteraction } from "./wallet-interaction";
@@ -71,7 +70,7 @@ export class InternalWallet extends ExternalWallet {
     await this.storeAndEmitInteraction(interaction);
 
     try {
-      const accountManager = await this.createAccountInternal(
+      const accountManager = await this.getAccountManager(
         type,
         secret,
         salt,

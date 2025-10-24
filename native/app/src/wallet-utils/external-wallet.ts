@@ -70,10 +70,7 @@ import {
   type AuthorizationData,
   type AuthorizationPersistence,
 } from "./authorization";
-import { GasSettings } from "@aztec/stdlib/gas";
-import { prepareForFeePayment } from "./sponsoredFPC";
 import { TxDecodingService } from "./decoding/tx-decoding-service";
-import { DecodingCache } from "./decoding/decoding-cache";
 import type { ReadableCallAuthorization } from "./decoding/call-authorization-formatter";
 import {
   TxCallStackDecoder,
@@ -86,100 +83,30 @@ import {
   hashUtilityCall,
   generateSimulationTitle,
 } from "./simulation-utils";
+import { BaseNativeWallet } from "./base-native-wallet";
 
 type ReadableTxInformation = {
   callAuthorizations: ReadableCallAuthorization[];
   executionTrace: DecodedExecutionTrace;
 };
 
-export class ExternalWallet extends BaseWallet implements EventTarget {
-  private eventEmitter = new EventTarget();
-  private decodingCache: DecodingCache;
-
+export class ExternalWallet extends BaseNativeWallet {
   constructor(
     pxe: PXE,
     node: AztecNode,
-    protected db: WalletDB,
-    protected pendingAuthorizations: Map<
+    db: WalletDB,
+    pendingAuthorizations: Map<
       string,
       {
         promise: PromiseWithResolvers<AuthorizationResponse>;
         request: AuthorizationRequest;
       }
     >,
-    protected appId: string,
-    protected chainInfo: ChainInfo,
-    override log: Logger
+    appId: string,
+    chainInfo: ChainInfo,
+    log: Logger
   ) {
-    super(pxe, node);
-    // Create a single decoding cache instance to reuse across wallet lifetime
-    this.decodingCache = new DecodingCache(pxe, db);
-  }
-
-  override async getDefaultFeeOptions(
-    from: AztecAddress,
-    userFeeOptions: UserFeeOptions | undefined
-  ): Promise<FeeOptions> {
-    const maxFeesPerGas =
-      userFeeOptions?.gasSettings?.maxFeesPerGas ??
-      (await this.aztecNode.getCurrentBaseFees()).mul(1 + this.baseFeePadding);
-    let walletFeePaymentMethod;
-    let accountFeePaymentMethodOptions;
-    // The transaction does not include a fee payment method, so we set a default
-    if (!userFeeOptions?.embeddedPaymentMethodFeePayer) {
-      walletFeePaymentMethod = await prepareForFeePayment(this);
-      accountFeePaymentMethodOptions = AccountFeePaymentMethodOptions.EXTERNAL;
-    } else {
-      // The transaction includes fee payment method, so we check if we are the fee payer for it
-      // (this can only happen if the embedded payment method is FeeJuiceWithClaim)
-      accountFeePaymentMethodOptions = from.equals(
-        userFeeOptions.embeddedPaymentMethodFeePayer
-      )
-        ? AccountFeePaymentMethodOptions.FEE_JUICE_WITH_CLAIM
-        : AccountFeePaymentMethodOptions.EXTERNAL;
-    }
-    const gasSettings: GasSettings = GasSettings.default({
-      ...userFeeOptions?.gasSettings,
-      maxFeesPerGas,
-    });
-    this.log.debug(`Using L2 gas settings`, gasSettings);
-    return {
-      gasSettings,
-      walletFeePaymentMethod,
-      accountFeePaymentMethodOptions,
-    };
-  }
-
-  override getChainInfo(): Promise<ChainInfo> {
-    return Promise.resolve(this.chainInfo);
-  }
-
-  dispatchEvent(event: Event): boolean {
-    return this.eventEmitter.dispatchEvent(event);
-  }
-
-  addEventListener(
-    type: string,
-    callback: EventListenerOrEventListenerObject,
-    options?: boolean | AddEventListenerOptions
-  ): void {
-    return this.eventEmitter.addEventListener(type, callback, options);
-  }
-
-  removeEventListener(
-    type: string,
-    callback: EventListenerOrEventListenerObject,
-    options?: boolean | EventListenerOptions
-  ): void {
-    return this.eventEmitter.removeEventListener(type, callback, options);
-  }
-
-  async storeAndEmitInteraction(
-    interaction: WalletInteraction<WalletInteractionType>
-  ) {
-    await this.db.createOrUpdateInteraction(interaction);
-    this.dispatchEvent(new WalletUpdateEvent(interaction));
-    return interaction;
+    super(pxe, node, db, pendingAuthorizations, appId, chainInfo, log);
   }
 
   /**
@@ -268,20 +195,9 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return itemResponse.data;
   }
 
-  resolveAuthorization(response: AuthorizationResponse) {
-    const pending = this.pendingAuthorizations.get(response.id);
-    if (pending) {
-      pending.promise.resolve(response);
-      this.pendingAuthorizations.delete(response.id);
-    }
-  }
-
-  /**
-   * Check if the app has authorization to use a specific account
-   */
-  protected async checkAccountAuthorization(
+  protected async getAccountFromAddress(
     address: AztecAddress
-  ): Promise<void> {
+  ): Promise<Account> {
     // Check if there's a persistent getAccounts authorization
     const authData = await this.db.retrievePersistentAuthorization(
       this.appId,
@@ -305,11 +221,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
         `App ${this.appId} does not have authorization to use account ${requestedAddress}. Authorized accounts: ${authorizedAddresses.join(", ")}`
       );
     }
-  }
-
-  protected async getAccountFromAddress(
-    address: AztecAddress
-  ): Promise<Account> {
     let account: Account | undefined;
     if (address.equals(AztecAddress.ZERO)) {
       const chainInfo = await this.getChainInfo();
@@ -317,7 +228,7 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     } else {
       const { secretKey, salt, signingKey, type } =
         await this.db.retrieveAccount(address);
-      const accountManager = await this.createAccountInternal(
+      const accountManager = await this.getAccountManager(
         type,
         secretKey,
         salt,
@@ -333,51 +244,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return account;
   }
 
-  protected async createAccountInternal(
-    type: AccountType,
-    secret: Fr,
-    salt: Fr,
-    signingKey: Buffer
-  ): Promise<AccountManager> {
-    let contract;
-    switch (type) {
-      case "schnorr": {
-        contract = new SchnorrAccountContract(Fq.fromBuffer(signingKey));
-        break;
-      }
-      case "ecdsasecp256k1": {
-        contract = new EcdsaKAccountContract(signingKey);
-        break;
-      }
-      case "ecdsasecp256r1": {
-        contract = new EcdsaRAccountContract(signingKey);
-        break;
-      }
-      default: {
-        throw new Error(`Unknown account type ${type}`);
-      }
-    }
-
-    const accountManager = await AccountManager.create(
-      this,
-      secret,
-      contract,
-      salt
-    );
-
-    const instance = await accountManager.getInstance();
-    const artifact = await accountManager
-      .getAccountContract()
-      .getContractArtifact();
-
-    await this.registerContract(
-      instance,
-      artifact,
-      accountManager.getSecretKey()
-    );
-
-    return accountManager;
-  }
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
@@ -523,40 +389,11 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     return storedSenders;
   }
 
-  async getFakeAccountDataFor(address: AztecAddress) {
-    const chainInfo = await this.getChainInfo();
-    const originalAccount = await this.getAccountFromAddress(address);
-    const originalAddress = originalAccount.getCompleteAddress();
-    const { contractInstance } = await this.pxe.getContractMetadata(
-      originalAddress.address
-    );
-    if (!contractInstance) {
-      throw new Error(
-        `No contract instance found for address: ${originalAddress.address}`
-      );
-    }
-    const stubAccount = createStubAccount(originalAddress, chainInfo);
-    const instance = await getContractInstanceFromInstantiationParams(
-      StubAccountContractArtifact,
-      {
-        salt: Fr.random(),
-      }
-    );
-    return {
-      account: stubAccount,
-      instance,
-      artifact: StubAccountContractArtifact,
-    };
-  }
-
   override async sendTx(
     exec: ExecutionPayload,
     opts: SendOptions,
     txInformation?: ReadableTxInformation
   ): Promise<TxHash> {
-    // Check account authorization before proceeding
-    await this.checkAccountAuthorization(opts.from);
-
     // TODO: Remove this workaround once the app bug is fixed
     // The connected app sometimes sends transactions with empty execution payloads
     if (exec.calls.length === 0) {
@@ -963,9 +800,6 @@ export class ExternalWallet extends BaseWallet implements EventTarget {
     txRequest: TxExecutionRequest;
     decoded?: ReadableTxInformation;
   }> {
-    // Check account authorization before proceeding
-    await this.checkAccountAuthorization(opts.from);
-
     // TODO: Remove this workaround once the app bug is fixed
     // The connected app sometimes sends transactions with empty execution payloads
     // Skip creating interactions for empty payloads to avoid cluttering the UI
