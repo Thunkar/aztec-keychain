@@ -2,7 +2,6 @@ import {
   type Account,
   AccountManager,
   BaseWallet,
-  SignerlessAccount,
   type SimulateOptions,
   getContractInstanceFromInstantiationParams,
   type AztecNode,
@@ -195,6 +194,17 @@ export class ExternalWallet extends BaseNativeWallet {
     return itemResponse.data;
   }
 
+  /**
+   * Retrieves an account by address, with authorization check.
+   *
+   * This method ensures the app has permission to access the requested account
+   * by checking the persistent getAccounts authorization. Only accounts that
+   * the user explicitly authorized can be accessed.
+   *
+   * @param address - The account address to retrieve
+   * @returns Account instance for the given address
+   * @throws Error if app doesn't have authorization for this account
+   */
   protected async getAccountFromAddress(
     address: AztecAddress
   ): Promise<Account> {
@@ -221,27 +231,9 @@ export class ExternalWallet extends BaseNativeWallet {
         `App ${this.appId} does not have authorization to use account ${requestedAddress}. Authorized accounts: ${authorizedAddresses.join(", ")}`
       );
     }
-    let account: Account | undefined;
-    if (address.equals(AztecAddress.ZERO)) {
-      const chainInfo = await this.getChainInfo();
-      account = new SignerlessAccount(chainInfo);
-    } else {
-      const { secretKey, salt, signingKey, type } =
-        await this.db.retrieveAccount(address);
-      const accountManager = await this.getAccountManager(
-        type,
-        secretKey,
-        salt,
-        signingKey
-      );
-      account = await accountManager.getAccount();
-    }
 
-    if (!account) {
-      throw new Error(`Account not found in wallet for address: ${address}`);
-    }
-
-    return account;
+    // Authorization passed, delegate to base implementation
+    return this.getAccountFromAddressInternal(address);
   }
 
   // External API methods - all require authorization
@@ -394,11 +386,15 @@ export class ExternalWallet extends BaseNativeWallet {
     opts: SendOptions,
     txInformation?: ReadableTxInformation
   ): Promise<TxHash> {
-    // TODO: Remove this workaround once the app bug is fixed
-    // The connected app sometimes sends transactions with empty execution payloads
+    // ============================================================================
+    // TODO: TEMPORARY WORKAROUND - Remove once app bug is fixed
+    // ============================================================================
+    // The connected app sometimes sends transactions with empty execution payloads.
+    // We skip processing these to avoid cluttering the UI with meaningless interactions.
     if (exec.calls.length === 0) {
       return TxHash.zero();
     }
+    // ============================================================================
 
     // Compute payload hash for deduplication and use as ID
     const payloadHash = hashExecutionPayload(exec);
@@ -464,7 +460,7 @@ export class ExternalWallet extends BaseNativeWallet {
         callAuthorizations = txInformation.callAuthorizations;
       }
 
-      // Create auth witnesses
+      // Create auth witnesses for call authorizations
       const authWitnesses = await Promise.all(
         callAuthorizations.map((auth) =>
           this.createAuthWit(opts.from, {
@@ -482,10 +478,16 @@ export class ExternalWallet extends BaseNativeWallet {
         fee
       );
 
-      // Start proving transaction
+      // ========================================================================
+      // Parallel Proving Optimization
+      // ========================================================================
+      // Start proving transaction immediately, before waiting for user authorization.
+      // This significantly reduces perceived wait time - proving can take 10-30s,
+      // so we begin proving in the background while the user reviews the tx.
+      // Only after user approves do we await the proof completion.
       const provingPromise = this.pxe.proveTx(txRequest);
 
-      // If we need authorization, wait for user approval while proving happens in parallel
+      // Wait for user authorization while proving happens in parallel
       if (!txInformation) {
         await this.requestAuthorization(
           "sendTx",
@@ -497,7 +499,7 @@ export class ExternalWallet extends BaseNativeWallet {
         );
       }
 
-      // Update status to proving and wait for proof to complete
+      // User approved - now wait for proof to complete
       await this.storeAndEmitInteraction(
         interaction.update({ status: "PROVING" })
       );
@@ -541,7 +543,12 @@ export class ExternalWallet extends BaseNativeWallet {
       | Promise<never>
       | null;
 
-    // 1. Convert methods to AuthorizationItems, checking persistent cache
+    // ========================================================================
+    // PHASE 1: Convert methods to AuthorizationItems
+    // ========================================================================
+    // Check persistent cache and preprocess methods that need special handling:
+    // - sendTx: needs simulation data for display
+    // - registerContract: needs existence check to skip if already registered
     const items: AuthorizationItem[] = [];
     const cachedResults: CachedResult[] = [];
     const itemMethodMap = new Map<string, string>();
@@ -651,12 +658,15 @@ export class ExternalWallet extends BaseNativeWallet {
       modifiedMethods.push({ name, args: modifiedArgs });
     }
 
-    // 2. If all cached, execute without authorization
+    // ========================================================================
+    // PHASE 2: Request batch authorization
+    // ========================================================================
+    // If all operations are cached, skip authorization entirely and just execute
     if (items.length === 0) {
       return super.batch(methods);
     }
 
-    // 3. Request batch authorization using unified flow
+    // Request batch authorization using unified flow
     const authRequest: AuthorizationRequest = {
       id: Fr.random().toString(),
       appId: this.appId,
@@ -678,22 +688,28 @@ export class ExternalWallet extends BaseNativeWallet {
       throw new Error("User denied batch request");
     }
 
-    // 4. Store persistent authorizations
+    // ========================================================================
+    // PHASE 3: Store persistent authorizations
+    // ========================================================================
     await this.db.storeBatchPersistentAuthorizations(
       this.appId,
       response.itemResponses,
       itemMethodMap
     );
 
-    // 5. Execute approved items using dynamic dispatch (like BaseWallet)
-    type MethodResult = ContractInstanceWithAddress | TxHash | AztecAddress;
-    type ResultWrapper = { name: string; result: MethodResult };
+    // ========================================================================
+    // PHASE 4: Execute approved items
+    // ========================================================================
+    // Use dynamic dispatch (like BaseWallet.batch) with skipAuth flags
+    // Build results array that matches Aztec.js BatchResults type structure
+    type BatchMethodResult = ContractInstanceWithAddress | TxHash | AztecAddress;
+    type ResultWrapper = { name: string; result: BatchMethodResult };
     const results: ResultWrapper[] = [];
     let itemIndex = 0;
 
     for (let i = 0; i < modifiedMethods.length; i++) {
       const { name, args } = modifiedMethods[i];
-      let result: MethodResult;
+      let result: BatchMethodResult;
 
       if (cachedResults[i] !== null) {
         // Use cached result (from persistent auth, PXE check, or error)
@@ -705,7 +721,7 @@ export class ExternalWallet extends BaseNativeWallet {
         ) {
           result = await (cachedResult as Promise<never>);
         } else {
-          result = cachedResult as MethodResult;
+          result = cachedResult as BatchMethodResult;
         }
       } else {
         const item = items[itemIndex];
@@ -733,13 +749,8 @@ export class ExternalWallet extends BaseNativeWallet {
 
         try {
           // Use dynamic dispatch to call the method, just like BaseWallet.batch()
-          // The skipAuth flag (added during preprocessing) bypasses authorization
-          type BatchableMethodFn = (
-            ...args: unknown[]
-          ) => Promise<MethodResult>;
-          const fn = (this as unknown as Record<string, BatchableMethodFn>)[
-            name
-          ];
+          // The skipAuth flag (added during preprocessing in Phase 1) bypasses authorization
+          const fn = (this as unknown as Record<string, (...args: unknown[]) => Promise<BatchMethodResult>>)[name];
           result = await fn.apply(this, args);
 
           // Update interaction on success
@@ -767,6 +778,7 @@ export class ExternalWallet extends BaseNativeWallet {
       }
 
       // Wrap result with method name for discriminated union deserialization
+      // This matches the BatchResults type structure from Aztec.js
       results.push({
         name,
         result,
@@ -790,6 +802,15 @@ export class ExternalWallet extends BaseNativeWallet {
     return simulationResult;
   }
 
+  /**
+   * Internal transaction simulation with optional decoding.
+   *
+   * @param executionPayload - The transaction execution payload
+   * @param opts - Simulation options
+   * @param existingInteraction - Existing interaction to update (e.g., from sendTx flow)
+   * @param withDecoding - Whether to decode the simulation result for display
+   * @returns Simulation result, tx request, and optionally decoded data
+   */
   private async simulateTxInternal(
     executionPayload: ExecutionPayload,
     opts: SimulateOptions,
@@ -800,9 +821,11 @@ export class ExternalWallet extends BaseNativeWallet {
     txRequest: TxExecutionRequest;
     decoded?: ReadableTxInformation;
   }> {
-    // TODO: Remove this workaround once the app bug is fixed
-    // The connected app sometimes sends transactions with empty execution payloads
-    // Skip creating interactions for empty payloads to avoid cluttering the UI
+    // ============================================================================
+    // TODO: TEMPORARY WORKAROUND - Remove once app bug is fixed
+    // ============================================================================
+    // The connected app sometimes sends transactions with empty execution payloads.
+    // Skip creating interactions for empty payloads to avoid cluttering the UI.
     const hasEmptyPayload = executionPayload.calls.length === 0;
 
     // Generate a meaningful title and use hash as ID for deduplication

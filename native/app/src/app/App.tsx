@@ -16,7 +16,7 @@ import { InteractionsList } from "./components/sections/interactions/index.tsx";
 import { AccountsManager } from "./components/sections/accounts/index.tsx";
 import { ContactsManager } from "./components/sections/contacts/index.tsx";
 import { AuthorizedApps } from "./components/sections/authorized-apps/index.tsx";
-import { AuthorizationDialog } from "./components/authorization/AuthorizationDialog.tsx";
+import { AuthorizationDialog } from "./components/dialogs/AuthorizationDialog.tsx";
 
 import { WalletContext } from "../renderer.tsx";
 import type {

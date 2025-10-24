@@ -27,7 +27,7 @@ import {
   Delete as DeleteIcon,
 } from "@mui/icons-material";
 import { WalletContext } from "../../../../../renderer";
-import { EditAccountAuthorizationDialog } from "../../../authorization/EditAccountAuthorizationDialog";
+import { EditAccountAuthorizationDialog } from "../../../dialogs/EditAccountAuthorizationDialog";
 import { ExecutionTraceDialog } from "../../../dialogs/ExecutionTraceDialog";
 
 interface AppAuthorizationCardProps {

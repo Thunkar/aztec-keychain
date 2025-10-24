@@ -1,4 +1,5 @@
 import {
+  type Account,
   AztecAddress,
   type Aliased,
   type Fr,
@@ -38,6 +39,14 @@ export class InternalWallet extends ExternalWallet {
   ): Promise<AuthorizationData> {
     // Internal requests are always pre-approved
     return undefined;
+  }
+
+  // Override getAccountFromAddress to skip authorization check
+  protected override async getAccountFromAddress(
+    address: AztecAddress
+  ): Promise<Account> {
+    // Internal wallet is trusted, skip authorization and use base implementation
+    return this.getAccountFromAddressInternal(address);
   }
 
   // Override getAccounts to return enriched data with account types

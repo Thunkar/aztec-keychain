@@ -16,11 +16,11 @@ import type {
   AuthorizationItemResponse,
   AuthorizationItem,
 } from "../../../wallet-utils/authorization";
-import { AuthorizeSendTxContent } from "./AuthorizeSendTxContent";
-import { AuthorizeSimulateTxContent } from "./AuthorizeSimulateTxContent";
-import { AuthorizeContractContent } from "./AuthorizeContractContent";
-import { AuthorizeSenderContent } from "./AuthorizeSenderContent";
-import { AuthorizeAccountsContent } from "./AuthorizeAccountsContent";
+import { AuthorizeSendTxContent } from "../authorization/AuthorizeSendTxContent";
+import { AuthorizeSimulateTxContent } from "../authorization/AuthorizeSimulateTxContent";
+import { AuthorizeContractContent } from "../authorization/AuthorizeContractContent";
+import { AuthorizeSenderContent } from "../authorization/AuthorizeSenderContent";
+import { AuthorizeAccountsContent } from "../authorization/AuthorizeAccountsContent";
 
 interface AuthorizationDialogProps {
   request: AuthorizationRequest;
@@ -93,7 +93,10 @@ export function AuthorizationDialog({
         item.id,
         {
           approved: true,
-          persistent: item.method === "getAccounts" || item.method === "simulateTx" || item.method === "simulateUtility",
+          persistent:
+            item.method === "getAccounts" ||
+            item.method === "simulateTx" ||
+            item.method === "simulateUtility",
         },
       ])
     )
@@ -107,7 +110,10 @@ export function AuthorizationDialog({
           item.id,
           {
             approved: true,
-            persistent: item.method === "getAccounts" || item.method === "simulateTx" || item.method === "simulateUtility",
+            persistent:
+              item.method === "getAccounts" ||
+              item.method === "simulateTx" ||
+              item.method === "simulateUtility",
           },
         ])
       )
@@ -254,7 +260,8 @@ export function AuthorizationDialog({
                       />
                     )}
 
-                    {(item.method === "simulateTx" || item.method === "simulateUtility") && (
+                    {(item.method === "simulateTx" ||
+                      item.method === "simulateUtility") && (
                       <AuthorizeSimulateTxContent
                         request={item}
                         showAppId={false}
