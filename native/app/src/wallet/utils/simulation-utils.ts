@@ -4,7 +4,7 @@ import { sha256 } from "@aztec/foundation/crypto";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import { serializeToBuffer } from "@aztec/foundation/serialize";
 import { FunctionType } from "@aztec/stdlib/abi";
-import type { DecodingCache } from "./decoding/decoding-cache";
+import type { DecodingCache } from "../decoding/decoding-cache";
 
 /**
  * Creates a deterministic hash of an execution payload for comparison.
@@ -43,7 +43,7 @@ export function hashExecutionPayload(payload: ExecutionPayload): string {
 
   const concatenated = Buffer.concat(buffers);
   const hash = sha256(concatenated);
-  return hash.toString('hex');
+  return hash.toString("hex");
 }
 
 /**
@@ -64,7 +64,7 @@ export function hashUtilityCall(
   };
 
   const serialized = jsonStringify(callData);
-  return sha256(Buffer.from(serialized)).toString('hex');
+  return sha256(Buffer.from(serialized)).toString("hex");
 }
 
 /**

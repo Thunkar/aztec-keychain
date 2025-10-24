@@ -96,16 +96,16 @@ const config: ForgeConfig = {
           target: "main",
         },
         {
-          entry: "src/preload.ts",
+          entry: "src/ipc/preload.ts",
           config: "vite.preload.config.ts",
           target: "preload",
         },
         {
-          entry: "src/ws-worker.ts",
+          entry: "src/workers/ws-worker.ts",
           config: "vite.preload.config.ts",
         },
         {
-          entry: "src/wallet-worker.ts",
+          entry: "src/workers/wallet-worker.ts",
           config: "vite.preload.config.ts",
         },
       ],

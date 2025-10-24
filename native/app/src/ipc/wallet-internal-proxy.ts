@@ -9,18 +9,18 @@ import { schemas } from "@aztec/stdlib/schemas";
 import type { MessagePortMain } from "electron/main";
 import { z } from "zod";
 import { type ApiSchemaFor } from "@aztec/stdlib/schemas";
-import { AccountTypes, type AccountType } from "./wallet-utils/wallet_db";
+import { AccountTypes, type AccountType } from "../wallet/database/wallet-db";
 import type {
   WalletInteraction,
   WalletInteractionType,
-} from "./wallet-utils/wallet-interaction";
-import { WalletInteractionSchema } from "./wallet-utils/wallet-interaction";
+} from "../wallet/types/wallet-interaction";
+import { WalletInteractionSchema } from "../wallet/types/wallet-interaction";
 import type {
   AuthorizationRequest,
   AuthorizationResponse,
-} from "./wallet-utils/authorization";
-import type { InternalAccount } from "./wallet-utils/internal-wallet";
-import type { DecodedExecutionTrace } from "./wallet-utils/decoding/tx-callstack-decoder";
+} from "../wallet/types/authorization";
+import type { InternalAccount } from "../wallet/core/internal-wallet";
+import type { DecodedExecutionTrace } from "../wallet/decoding/tx-callstack-decoder";
 
 type FunctionsOf<T> = {
   [K in keyof T as T[K] extends Function ? K : never]: T[K];

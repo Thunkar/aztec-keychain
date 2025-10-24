@@ -7,15 +7,15 @@ import {
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
-import { ExternalWallet } from "./wallet-utils/external-wallet.ts";
-import { InternalWalletInterfaceSchema } from "./wallet-internal-proxy.ts";
+import { ExternalWallet } from "../wallet/core/external-wallet.ts";
+import { InternalWalletInterfaceSchema } from "../ipc/wallet-internal-proxy.ts";
 import { createPXE, getPXEConfig } from "@aztec/pxe/server";
 import { schemas } from "@aztec/stdlib/schemas";
 
 import { createStore } from "@aztec/kv-store/lmdb-v2";
 import { resolve, join } from "node:path";
-import { createProxyLogger } from "./wallet-utils/logger";
-import { WalletDB } from "./wallet-utils/wallet_db.ts";
+import { createProxyLogger } from "../wallet/utils/logger.ts";
+import { WalletDB } from "../wallet/database/wallet-db.ts";
 import { z } from "zod";
 import { homedir } from "node:os";
 import { inspect } from "node:util";
@@ -23,9 +23,9 @@ import type { PromiseWithResolvers } from "@aztec/foundation/promise";
 import type {
   AuthorizationRequest,
   AuthorizationResponse,
-} from "./wallet-utils/authorization.ts";
+} from "../wallet/types/authorization.ts";
 import type { Logger } from "pino";
-import { InternalWallet } from "./wallet-utils/internal-wallet.ts";
+import { InternalWallet } from "../wallet/core/internal-wallet.ts";
 
 console.log(process.env);
 

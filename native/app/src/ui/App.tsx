@@ -18,12 +18,12 @@ import { ContactsManager } from "./components/sections/contacts/index.tsx";
 import { AuthorizedApps } from "./components/sections/authorized-apps/index.tsx";
 import { AuthorizationDialog } from "./components/dialogs/AuthorizationDialog.tsx";
 
-import { WalletContext } from "../renderer.tsx";
 import type {
   WalletInteraction,
   WalletInteractionType,
-} from "../wallet-utils/wallet-interaction.ts";
-import type { AuthorizationRequest } from "../wallet-utils/authorization.ts";
+} from "../wallet/types/wallet-interaction.ts";
+import type { AuthorizationRequest } from "../wallet/types/authorization.ts";
+import { WalletContext } from "./renderer.tsx";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const INTERACTIONS_PANEL_MIN_WIDTH = 300;

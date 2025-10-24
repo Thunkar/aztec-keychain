@@ -46,16 +46,15 @@ import {
 } from "@aztec/accounts/ecdsa";
 import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { type PXE } from "@aztec/pxe/server";
-import { WalletDB, type AccountType } from "./wallet_db";
+import { WalletDB, type AccountType } from "../database/wallet-db";
 import {
   AccountFeePaymentMethodOptions,
   type DefaultAccountEntrypointOptions,
 } from "@aztec/entrypoints/account";
 import {
   WalletInteraction,
-  WalletUpdateEvent,
   type WalletInteractionType,
-} from "./wallet-interaction";
+} from "../types/wallet-interaction";
 import {
   promiseWithResolvers,
   type PromiseWithResolvers,
@@ -68,20 +67,20 @@ import {
   type GetAccountsAuthData,
   type AuthorizationData,
   type AuthorizationPersistence,
-} from "./authorization";
-import { TxDecodingService } from "./decoding/tx-decoding-service";
-import type { ReadableCallAuthorization } from "./decoding/call-authorization-formatter";
+} from "../types/authorization";
+import { TxDecodingService } from "../decoding/tx-decoding-service";
+import type { ReadableCallAuthorization } from "../decoding/call-authorization-formatter";
 import {
   TxCallStackDecoder,
   type DecodedExecutionTrace,
-} from "./decoding/tx-callstack-decoder";
+} from "../decoding/tx-callstack-decoder";
 
 import { inspect } from "node:util";
 import {
   hashExecutionPayload,
   hashUtilityCall,
   generateSimulationTitle,
-} from "./simulation-utils";
+} from "../utils/simulation-utils";
 import { BaseNativeWallet } from "./base-native-wallet";
 
 type ReadableTxInformation = {

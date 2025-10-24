@@ -13,20 +13,20 @@ import {
   type Logger,
   type UserFeeOptions,
 } from "@aztec/aztec.js";
-import { DecodingCache } from "./decoding/decoding-cache";
+import { DecodingCache } from "../decoding/decoding-cache";
 import type { PXE } from "@aztec/pxe/server";
-import type { AccountType, WalletDB } from "./wallet_db";
+import type { AccountType, WalletDB } from "../database/wallet-db";
 import type { PromiseWithResolvers } from "@aztec/foundation/promise";
 import type {
   AuthorizationRequest,
   AuthorizationResponse,
-} from "./authorization";
+} from "../types/authorization";
 import {
   WalletUpdateEvent,
   type WalletInteraction,
   type WalletInteractionType,
-} from "./wallet-interaction";
-import { prepareForFeePayment } from "./sponsoredFPC";
+} from "../types/wallet-interaction";
+import { prepareForFeePayment } from "../utils/sponsored-fpc";
 import { AccountFeePaymentMethodOptions } from "@aztec/entrypoints/account";
 import { GasSettings } from "@aztec/stdlib/gas";
 import {

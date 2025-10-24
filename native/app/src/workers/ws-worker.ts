@@ -3,7 +3,6 @@ import express, { json } from "express";
 import cors from "cors";
 import { WebSocketServer } from "ws";
 import type { MessagePortMain } from "electron";
-import e from "express";
 
 async function main() {
   const app = express();

@@ -6,18 +6,18 @@ import {
   type SendOptions,
 } from "@aztec/aztec.js";
 import { ExternalWallet } from "./external-wallet";
-import type { AccountType } from "./wallet_db";
+import type { AccountType } from "../database/wallet-db";
 import type {
   AuthorizationData,
   AuthorizationPersistence,
-} from "./authorization";
-import { WalletInteraction } from "./wallet-interaction";
+} from "../types/authorization.ts";
+import { WalletInteraction } from "../types/wallet-interaction";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 
 import { TxHash, TxSimulationResult } from "@aztec/stdlib/tx";
-import type { DecodedExecutionTrace } from "./decoding/tx-callstack-decoder";
-import { TxDecodingService } from "./decoding/tx-decoding-service";
-import { DecodingCache } from "./decoding/decoding-cache";
+import type { DecodedExecutionTrace } from "../decoding/tx-callstack-decoder";
+import { TxDecodingService } from "../decoding/tx-decoding-service";
+import { DecodingCache } from "../decoding/decoding-cache";
 
 import { inspect } from "node:util";
 
@@ -100,7 +100,9 @@ export class InternalWallet extends ExternalWallet {
       );
 
       const deployMethod = await accountManager.getDeployMethod();
-      const { prepareForFeePayment } = await import("./sponsoredFPC");
+      const { prepareForFeePayment } = await import(
+        "../utils/sponsored-fpc.ts"
+      );
       const paymentMethod = await prepareForFeePayment(this);
       const opts = {
         from: AztecAddress.ZERO,

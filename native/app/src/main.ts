@@ -2,7 +2,7 @@ import { app, BrowserWindow, MessageChannelMain } from "electron";
 import { join } from "node:path";
 import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
-import { WalletInternalProxy } from "./wallet-internal-proxy";
+import { WalletInternalProxy } from "./ipc/wallet-internal-proxy";
 import { inspect } from "node:util";
 import fs, { mkdir, mkdirSync } from "node:fs";
 import os from "node:os";

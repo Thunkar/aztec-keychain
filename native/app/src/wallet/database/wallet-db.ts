@@ -4,7 +4,7 @@ import { type AztecAsyncMap, type AztecAsyncKVStore } from "@aztec/kv-store";
 import {
   WalletInteraction,
   type WalletInteractionType,
-} from "./wallet-interaction";
+} from "../types/wallet-interaction";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import { TxExecutionRequest, TxSimulationResult } from "@aztec/stdlib/tx";
 import { json } from "express";
@@ -254,11 +254,7 @@ export class WalletDB {
     return result.sort((a, b) => b.timestamp - a.timestamp);
   }
 
-  async storePersistentAuthorization(
-    appId: string,
-    key: string,
-    data: any
-  ) {
+  async storePersistentAuthorization(appId: string, key: string, data: any) {
     const fullKey = `${appId}:${key}`;
     await this.authorizations.set(fullKey, Buffer.from(jsonStringify(data)));
     this.logger.info(`Persistent authorization stored for ${fullKey}`);
@@ -393,10 +389,14 @@ export class WalletDB {
   async revokeAuthorization(key: string) {
     this.logger.info(`Attempting to revoke authorization with key: ${key}`);
     const existsBefore = await this.authorizations.getAsync(key);
-    this.logger.info(`Authorization value before deletion: ${existsBefore ? 'exists' : 'not found'}`);
+    this.logger.info(
+      `Authorization value before deletion: ${existsBefore ? "exists" : "not found"}`
+    );
     await this.authorizations.delete(key);
     const existsAfter = await this.authorizations.getAsync(key);
-    this.logger.info(`Authorization value after deletion: ${existsAfter ? 'still exists (ERROR!)' : 'successfully deleted'}`);
+    this.logger.info(
+      `Authorization value after deletion: ${existsAfter ? "still exists (ERROR!)" : "successfully deleted"}`
+    );
   }
 
   /**

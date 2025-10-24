@@ -2,7 +2,7 @@ import { schemaHasMethod, type Fr } from "@aztec/foundation/schemas";
 import {
   InternalWalletInterfaceSchema,
   type InternalWalletInterface,
-} from "../../wallet-internal-proxy";
+} from "../../ipc/wallet-internal-proxy";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 
 export class WalletApi {
