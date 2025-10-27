@@ -63,7 +63,6 @@ interface SimulateTxExecutionData {
   txRequest: TxExecutionRequest;
   payloadHash: string;
   decoded?: ReadableTxInformation;
-  hasEmptyPayload: boolean;
 }
 
 // Display data for authorization UI
@@ -71,7 +70,6 @@ type SimulateTxDisplayData = {
   payloadHash: string;
   title: string;
   decoded: ReadableTxInformation;
-  hasEmptyPayload: boolean;
 } & Record<string, unknown>;
 
 /**
@@ -120,16 +118,13 @@ export class SimulateTxOperation extends ExternalOperation<
 
   async prepare(
     executionPayload: ExecutionPayload,
-    opts: SimulateOptions,
-    existingInteraction?: WalletInteraction<WalletInteractionType>
+    opts: SimulateOptions
   ): Promise<{
     earlyReturn?: SimulateTxResult;
     displayData?: SimulateTxDisplayData;
     executionData?: SimulateTxExecutionData;
+    persistence?: { storageKey: string; persistData: any };
   }> {
-    // Check for empty payload (temporary workaround for app bug)
-    const hasEmptyPayload = executionPayload.calls.length === 0;
-
     // Generate payload hash and title
     const payloadHash = hashExecutionPayload(executionPayload);
     const title = await generateSimulationTitle(
@@ -185,13 +180,16 @@ export class SimulateTxOperation extends ExternalOperation<
     const decoded = await decodingService.decodeTransaction(simulationResult);
 
     return {
-      displayData: { payloadHash, title, decoded, hasEmptyPayload },
+      displayData: { payloadHash, title, decoded },
       executionData: {
         simulationResult,
         txRequest,
         payloadHash,
         decoded,
-        hasEmptyPayload,
+      },
+      persistence: {
+        storageKey: `simulateTx:${payloadHash}`,
+        persistData: { title },
       },
     };
   }
@@ -217,44 +215,44 @@ export class SimulateTxOperation extends ExternalOperation<
 
   async requestAuthorization(
     displayData: SimulateTxDisplayData,
-    interaction: WalletInteraction<WalletInteractionType>
+    interaction: WalletInteraction<WalletInteractionType>,
+    persistence?: { storageKey: string; persistData: any }
   ): Promise<void> {
     // Update status to requesting authorization
     await this.interactionManager.storeAndEmit(
       interaction.update({ status: "REQUESTING AUTHORIZATION" })
     );
 
-    // Request authorization with persistent caching
-    await this.authorizationManager.requestAuthorization(
-      "simulateTx",
+    // Request authorization with optional persistent caching
+    await this.authorizationManager.requestAuthorization([
       {
-        payloadHash: displayData.payloadHash,
-        callAuthorizations: displayData.decoded.callAuthorizations,
-        executionTrace: displayData.decoded.executionTrace,
+        id: crypto.randomUUID(),
+        appId: this.authorizationManager.appId,
+        method: "simulateTx",
+        params: {
+          payloadHash: displayData.payloadHash,
+          callAuthorizations: displayData.decoded.callAuthorizations,
+          executionTrace: displayData.decoded.executionTrace,
+        },
+        timestamp: Date.now(),
+        persistence,
       },
-      {
-        persist: true,
-        storageKey: `simulateTx:${displayData.payloadHash}`,
-        persistData: { title: displayData.title },
-      }
-    );
+    ]);
   }
 
   async execute(
     executionData: SimulateTxExecutionData
   ): Promise<SimulateTxResult> {
     // Store the simulation result using the payload hash
-    if (!executionData.hasEmptyPayload) {
-      try {
-        await this.db.storeTxSimulation(
-          executionData.payloadHash,
-          executionData.simulationResult,
-          executionData.txRequest
-        );
-      } catch (storageError) {
-        // If storage fails, just log it - don't fail the simulation
-        this.log.error(`Failed to store simulation result: ${storageError}`);
-      }
+    try {
+      await this.db.storeTxSimulation(
+        executionData.payloadHash,
+        executionData.simulationResult,
+        executionData.txRequest
+      );
+    } catch (storageError) {
+      // If storage fails, just log it - don't fail the simulation
+      this.log.error(`Failed to store simulation result: ${storageError}`);
     }
 
     return executionData.simulationResult;

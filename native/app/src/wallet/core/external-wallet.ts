@@ -29,12 +29,8 @@ import {
 } from "@aztec/stdlib/tx";
 import { type PXE } from "@aztec/pxe/server";
 import { WalletDB } from "../database/wallet-db";
+import { type PromiseWithResolvers } from "@aztec/foundation/promise";
 import {
-  promiseWithResolvers,
-  type PromiseWithResolvers,
-} from "@aztec/foundation/promise";
-import {
-  AuthorizationRequestEvent,
   type AuthorizationRequest,
   type AuthorizationResponse,
   type AuthorizationItem,
@@ -173,15 +169,25 @@ export class ExternalWallet extends BaseNativeWallet {
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    const data = await this.authorizationManager.requestAuthorization(
-      "getAccounts",
-      {},
+    const itemId = crypto.randomUUID();
+    const response = await this.authorizationManager.requestAuthorization([
       {
-        persist: true,
-      }
-    );
-    // Return the authorized accounts with their (potentially overridden) aliases
-    const authData = data as GetAccountsAuthData;
+        id: itemId,
+        appId: this.appId,
+        method: "getAccounts",
+        params: {},
+        timestamp: Date.now(),
+        persistence: {
+          storageKey: "getAccounts",
+          persistData: null, // Will be filled from response.data
+        },
+      },
+    ]);
+
+    // Extract the single item response
+    const itemResponse = response.itemResponses[itemId];
+    const authData = itemResponse?.data as GetAccountsAuthData;
+
     if (!authData || !authData.accounts) {
       throw new Error("Authorization response missing account data");
     }
@@ -221,11 +227,15 @@ export class ExternalWallet extends BaseNativeWallet {
   }
 
   override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
-    await this.authorizationManager.requestAuthorization(
-      "getAddressBook",
-      {},
-      { persist: false }
-    );
+    await this.authorizationManager.requestAuthorization([
+      {
+        id: crypto.randomUUID(),
+        appId: this.appId,
+        method: "getAddressBook",
+        params: {},
+        timestamp: Date.now(),
+      },
+    ]);
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -274,6 +284,7 @@ export class ExternalWallet extends BaseNativeWallet {
       executionData?: any;
       earlyReturn?: any;
       error?: any;
+      persistence?: { storageKey: string; persistData: any };
     }
 
     const prepared: PreparedOperation[] = [];
@@ -303,6 +314,7 @@ export class ExternalWallet extends BaseNativeWallet {
           displayData: result.displayData,
           executionData: result.executionData,
           earlyReturn: result.earlyReturn,
+          persistence: result.persistence,
         });
       } catch (error) {
         // Prepare failed - store error to throw later
@@ -328,7 +340,7 @@ export class ExternalWallet extends BaseNativeWallet {
         continue;
       }
 
-      // Create authorization item
+      // Create authorization item with persistence config from prepare
       const itemId = Fr.random().toString();
       items.push({
         id: itemId,
@@ -336,37 +348,19 @@ export class ExternalWallet extends BaseNativeWallet {
         method: prep.originalName,
         params: prep.displayData,
         timestamp: Date.now(),
+        persistence: prep.persistence, // Include persistence config directly
       });
 
       itemIndexMap.set(itemId, i);
     }
 
     // ========================================================================
-    // PHASE 3: Request batch authorization
+    // PHASE 3: Request authorization
     // ========================================================================
     let response: AuthorizationResponse | null = null;
 
     if (items.length > 0) {
-      const authRequest: AuthorizationRequest = {
-        id: Fr.random().toString(),
-        appId: this.appId,
-        items,
-        timestamp: Date.now(),
-      };
-
-      const responseHandle = promiseWithResolvers<AuthorizationResponse>();
-      this.pendingAuthorizations.set(authRequest.id, {
-        promise: responseHandle,
-        request: authRequest,
-      });
-
-      const event = new AuthorizationRequestEvent(authRequest);
-      this.dispatchEvent(event);
-
-      response = await responseHandle.promise;
-      if (!response.approved) {
-        throw new Error("User denied batch request");
-      }
+      response = await this.authorizationManager.requestAuthorization(items);
     }
 
     // ========================================================================

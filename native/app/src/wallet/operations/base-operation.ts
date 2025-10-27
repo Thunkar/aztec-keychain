@@ -31,11 +31,16 @@ export abstract class ExternalOperation<
    *  - earlyReturn: Result if no authorization needed (e.g., already cached)
    *  - displayData: Information to show in authorization dialog
    *  - executionData: Data needed to perform the action
+   *  - persistence: Optional configuration for persistent authorization caching
    */
   abstract prepare(...args: TArgs): Promise<{
     earlyReturn?: TResult;
     displayData?: Record<string, unknown>;
     executionData?: TExecutionData;
+    persistence?: {
+      storageKey: string;
+      persistData: any;
+    };
   }>;
 
   /**
@@ -57,11 +62,13 @@ export abstract class ExternalOperation<
    *
    * @param displayData - Data to show in authorization dialog
    * @param interaction - The interaction created in phase 2A
+   * @param persistence - Optional persistence configuration from prepare phase
    * @returns Promise that resolves when authorization is granted or rejects if denied
    */
   abstract requestAuthorization(
     displayData: Record<string, unknown>,
-    interaction: WalletInteraction<WalletInteractionType>
+    interaction: WalletInteraction<WalletInteractionType>,
+    persistence?: { storageKey: string; persistData: any }
   ): Promise<void>;
 
   /**
@@ -139,7 +146,7 @@ export abstract class ExternalOperation<
     const interaction = await this.createInteraction(prepared.displayData!);
 
     // PHASE 2B: REQUEST AUTHORIZATION
-    await this.requestAuthorization(prepared.displayData!, interaction);
+    await this.requestAuthorization(prepared.displayData!, interaction, prepared.persistence);
 
     try {
       // PHASE 3: EXECUTE - Perform the action

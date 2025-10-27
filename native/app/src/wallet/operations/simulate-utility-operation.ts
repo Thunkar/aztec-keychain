@@ -86,6 +86,7 @@ export class SimulateUtilityOperation extends ExternalOperation<
     earlyReturn?: SimulateUtilityResult;
     displayData?: SimulateUtilityDisplayData;
     executionData?: SimulateUtilityExecutionData;
+    persistence?: { storageKey: string; persistData: any };
   }> {
     // Simulate the utility function
     const simulationResult = await this.pxe.simulateUtility(
@@ -124,6 +125,10 @@ export class SimulateUtilityOperation extends ExternalOperation<
     return {
       displayData: { payloadHash, executionTrace, title, contractName },
       executionData: { simulationResult, executionTrace, payloadHash },
+      persistence: {
+        storageKey: `simulateUtility:${payloadHash}`,
+        persistData: { title },
+      },
     };
   }
 
@@ -150,28 +155,29 @@ export class SimulateUtilityOperation extends ExternalOperation<
 
   async requestAuthorization(
     displayData: SimulateUtilityDisplayData,
-    interaction: WalletInteraction<WalletInteractionType>
+    interaction: WalletInteraction<WalletInteractionType>,
+    persistence?: { storageKey: string; persistData: any }
   ): Promise<void> {
     // Update status to requesting authorization
     await this.interactionManager.storeAndEmit(
       interaction.update({ status: "REQUESTING AUTHORIZATION" })
     );
 
-    // Request authorization with persistent caching
-    // Uses payload hash as storage key so same utility calls are auto-approved
-    await this.authorizationManager.requestAuthorization(
-      "simulateUtility",
+    // Request authorization with optional persistent caching
+    await this.authorizationManager.requestAuthorization([
       {
-        payloadHash: displayData.payloadHash,
-        executionTrace: displayData.executionTrace,
-        isUtility: true,
+        id: crypto.randomUUID(),
+        appId: this.authorizationManager.appId,
+        method: "simulateUtility",
+        params: {
+          payloadHash: displayData.payloadHash,
+          executionTrace: displayData.executionTrace,
+          isUtility: true,
+        },
+        timestamp: Date.now(),
+        persistence,
       },
-      {
-        persist: true,
-        storageKey: `simulateUtility:${displayData.payloadHash}`,
-        persistData: { title: displayData.title }, // Persist just the title
-      }
-    );
+    ]);
   }
 
   async execute(executionData: SimulateUtilityExecutionData): Promise<SimulateUtilityResult> {

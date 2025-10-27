@@ -20,6 +20,7 @@ export const WalletInteractionSchema = z
   .object({
     id: z.string(),
     type: z.enum([
+      "registerSender",
       "registerContract",
       "createAccount",
       "simulateTx",

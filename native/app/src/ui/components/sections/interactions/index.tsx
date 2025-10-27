@@ -71,6 +71,7 @@ const getInteractionTypeLabel = (type: WalletInteractionType) => {
     simulateUtility: "Simulate Utility",
     sendTx: "Send Transaction",
     profileTx: "Profile Transaction",
+    registerSender: "Register Sender",
   };
   return labels[type] || type;
 };
@@ -83,6 +84,7 @@ const getInteractionTypeColor = (type: WalletInteractionType) => {
     simulateUtility: "#ff9800", // orange (same as simulateTx)
     sendTx: "#7c4dff", // purple/violet (proving action)
     profileTx: "#00bcd4", // cyan
+    registerSender: "#444444",
   };
   return colors[type];
 };
@@ -110,7 +112,11 @@ export function InteractionsList({
     interaction: WalletInteraction<WalletInteractionType>
   ) => {
     // Only show trace for simulateTx, simulateUtility, and sendTx interactions
-    if (interaction.type === "simulateTx" || interaction.type === "sendTx" || interaction.type === "simulateUtility") {
+    if (
+      interaction.type === "simulateTx" ||
+      interaction.type === "sendTx" ||
+      interaction.type === "simulateUtility"
+    ) {
       try {
         const trace = await walletAPI.getExecutionTrace(interaction.id);
         if (trace) {
@@ -123,16 +129,15 @@ export function InteractionsList({
     }
   };
 
-  const handleTypeFilterChange = (
-    event: any
-  ) => {
+  const handleTypeFilterChange = (event: any) => {
     const value = event.target.value as WalletInteractionType[];
     onTypeFilterChange(value);
   };
 
   // Filter interactions based on selected types
   const filteredInteractions =
-    selectedTypes.length === 0 || selectedTypes.length === allInteractionTypes.length
+    selectedTypes.length === 0 ||
+    selectedTypes.length === allInteractionTypes.length
       ? interactions
       : interactions.filter((interaction) =>
           selectedTypes.includes(interaction.type)
@@ -152,131 +157,131 @@ export function InteractionsList({
           </Box>
         ) : (
           <List sx={{ width: "100%", p: 0 }}>
-        {filteredInteractions.map((interaction) => (
-            <ListItem key={interaction.id} sx={{ px: 0, py: 0.5 }}>
-              <Card
-                sx={{
-                  width: "100%",
-                  bgcolor: "background.paper",
-                  transition: "all 0.2s",
-                  overflow: "hidden",
-                  cursor:
-                    interaction.type === "simulateTx" ||
-                    interaction.type === "simulateUtility" ||
-                    interaction.type === "sendTx"
-                      ? "pointer"
-                      : "default",
-                  borderLeft: "4px solid",
-                  borderColor: getInteractionTypeColor(interaction.type),
-                  "&:hover": {
-                    boxShadow: 3,
-                    transform: "translateY(-2px)",
-                  },
-                  // Add shimmer effect for in-progress interactions
-                  ...(!interaction.complete && {
-                    position: "relative",
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: `linear-gradient(
+            {filteredInteractions.map((interaction) => (
+              <ListItem key={interaction.id} sx={{ px: 0, py: 0.5 }}>
+                <Card
+                  sx={{
+                    width: "100%",
+                    bgcolor: "background.paper",
+                    transition: "all 0.2s",
+                    overflow: "hidden",
+                    cursor:
+                      interaction.type === "simulateTx" ||
+                      interaction.type === "simulateUtility" ||
+                      interaction.type === "sendTx"
+                        ? "pointer"
+                        : "default",
+                    borderLeft: "4px solid",
+                    borderColor: getInteractionTypeColor(interaction.type),
+                    "&:hover": {
+                      boxShadow: 3,
+                      transform: "translateY(-2px)",
+                    },
+                    // Add shimmer effect for in-progress interactions
+                    ...(!interaction.complete && {
+                      position: "relative",
+                      "&::before": {
+                        content: '""',
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: `linear-gradient(
                         90deg,
                         transparent 0%,
                         rgba(33, 150, 243, 0.1) 50%,
                         transparent 100%
                       )`,
-                      backgroundSize: "1000px 100%",
-                      animation: `${shimmer} 2s infinite linear`,
-                      pointerEvents: "none",
-                    },
-                    animation: `${pulse} 2s ease-in-out infinite`,
-                  }),
-                }}
-                onClick={() => handleInteractionClick(interaction)}
-              >
-                <CardContent
-                  sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}
+                        backgroundSize: "1000px 100%",
+                        animation: `${shimmer} 2s infinite linear`,
+                        pointerEvents: "none",
+                      },
+                      animation: `${pulse} 2s ease-in-out infinite`,
+                    }),
+                  }}
+                  onClick={() => handleInteractionClick(interaction)}
                 >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mb: 0.5,
-                    }}
+                  <CardContent
+                    sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}
                   >
-                    <Chip
-                      label={getInteractionTypeLabel(interaction.type)}
-                      size="small"
+                    <Box
                       sx={{
-                        fontSize: "0.7rem",
-                        height: 20,
-                        bgcolor: getInteractionTypeColor(interaction.type),
-                        color: "white",
-                        fontWeight: 600,
-                        "& .MuiChip-label": {
-                          px: 1,
-                        },
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        mb: 0.5,
                       }}
-                    />
-                    <Chip
-                      icon={getStatusIcon(
-                        interaction.status,
-                        interaction.complete
-                      )}
-                      label={interaction.status}
-                      size="small"
-                      color={getStatusColor(
-                        interaction.status,
-                        interaction.complete
-                      )}
-                      sx={{ fontSize: "0.7rem", height: 20 }}
-                    />
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    fontWeight={500}
-                    sx={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {interaction.title}
-                  </Typography>
-                  {interaction.description && (
+                    >
+                      <Chip
+                        label={getInteractionTypeLabel(interaction.type)}
+                        size="small"
+                        sx={{
+                          fontSize: "0.7rem",
+                          height: 20,
+                          bgcolor: getInteractionTypeColor(interaction.type),
+                          color: "white",
+                          fontWeight: 600,
+                          "& .MuiChip-label": {
+                            px: 1,
+                          },
+                        }}
+                      />
+                      <Chip
+                        icon={getStatusIcon(
+                          interaction.status,
+                          interaction.complete
+                        )}
+                        label={interaction.status}
+                        size="small"
+                        color={getStatusColor(
+                          interaction.status,
+                          interaction.complete
+                        )}
+                        sx={{ fontSize: "0.7rem", height: 20 }}
+                      />
+                    </Box>
                     <Typography
-                      variant="caption"
-                      color="text.secondary"
+                      variant="body2"
+                      fontWeight={500}
                       sx={{
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {interaction.description}
+                      {interaction.title}
                     </Typography>
-                  )}
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{
-                      display: "block",
-                      mt: 0.5,
-                      fontFamily: "monospace",
-                      fontSize: "0.65rem",
-                      opacity: 0.7,
-                    }}
-                  >
-                    ID: {interaction.id.slice(0, 16)}...
-                  </Typography>
-                </CardContent>
-              </Card>
-            </ListItem>
-          ))}
+                    {interaction.description && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {interaction.description}
+                      </Typography>
+                    )}
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        display: "block",
+                        mt: 0.5,
+                        fontFamily: "monospace",
+                        fontSize: "0.65rem",
+                        opacity: 0.7,
+                      }}
+                    >
+                      ID: {interaction.id.slice(0, 16)}...
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </ListItem>
+            ))}
           </List>
         )}
       </Box>
@@ -295,7 +300,8 @@ export function InteractionsList({
             onChange={handleTypeFilterChange}
             input={<OutlinedInput label="Filter by Type" />}
             renderValue={(selected) =>
-              selected.length === 0 || selected.length === allInteractionTypes.length
+              selected.length === 0 ||
+              selected.length === allInteractionTypes.length
                 ? "All Types"
                 : `${selected.length} type${selected.length > 1 ? "s" : ""}`
             }

@@ -2,8 +2,7 @@ import type {
   AuthorizationRequest,
   AuthorizationResponse,
   AuthorizationItem,
-  AuthorizationData,
-  AuthorizationPersistence,
+  AuthorizationItemResponse,
 } from "../types/authorization";
 import { AuthorizationRequestEvent } from "../types/authorization";
 import {
@@ -23,7 +22,7 @@ import type { WalletDB } from "../database/wallet-db";
  */
 export class AuthorizationManager {
   constructor(
-    private appId: string,
+    public readonly appId: string,
     private db: WalletDB,
     private pendingAuthorizations: Map<
       string,
@@ -36,49 +35,57 @@ export class AuthorizationManager {
   ) {}
 
   /**
-   * Unified authorization method with flexible persistence options.
+   * Request authorization for one or more operations.
+   * Checks for existing persistent authorizations first and only requests new ones.
    *
-   * @param method - The method being authorized
-   * @param params - Parameters to display in authorization UI
-   * @param persistence - Persistence configuration
-   * @returns Authorization data from user response or stored data
+   * @param items - Array of authorization items (with optional persistence config)
+   * @returns Authorization response with approved items
    */
   async requestAuthorization(
-    method: string,
-    params: any,
-    persistence: AuthorizationPersistence = { persist: false }
-  ): Promise<AuthorizationData> {
-    // Determine the storage key (use custom or default to method)
-    const storageKey =
-      persistence.persist && persistence.storageKey
-        ? persistence.storageKey
-        : method;
+    items: AuthorizationItem[]
+  ): Promise<AuthorizationResponse> {
+    // Check for existing persistent authorizations
+    const itemsNeedingAuth: AuthorizationItem[] = [];
+    const autoApprovedItems: Record<string, AuthorizationItemResponse> = {};
 
-    // Check for existing persistent authorization
-    if (persistence.persist) {
-      const existingAuth = await this.db.retrievePersistentAuthorization(
-        this.appId,
-        storageKey
-      );
-      if (existingAuth) {
-        return existingAuth;
+    for (const item of items) {
+      if (item.persistence) {
+        const existingAuth = await this.db.retrievePersistentAuthorization(
+          this.appId,
+          item.persistence.storageKey
+        );
+
+        if (existingAuth) {
+          // Auto-approve this item
+          autoApprovedItems[item.id] = {
+            id: item.id,
+            approved: true,
+            appId: this.appId,
+            data: existingAuth,
+          };
+          continue;
+        }
       }
+
+      // No existing auth, needs user approval
+      itemsNeedingAuth.push(item);
     }
 
-    // Create a single item batch request
-    const itemId = crypto.randomUUID();
+    // If all items were auto-approved, return immediately
+    if (itemsNeedingAuth.length === 0) {
+      return {
+        id: crypto.randomUUID(),
+        approved: true,
+        appId: this.appId,
+        itemResponses: autoApprovedItems,
+      };
+    }
+
+    // Request authorization for remaining items
     const authRequest: AuthorizationRequest = {
       id: crypto.randomUUID(),
       appId: this.appId,
-      items: [
-        {
-          id: itemId,
-          appId: this.appId,
-          method,
-          params,
-          timestamp: Date.now(),
-        },
-      ],
+      items: itemsNeedingAuth,
       timestamp: Date.now(),
     };
 
@@ -94,28 +101,36 @@ export class AuthorizationManager {
     const response = await responseHandle.promise;
 
     if (!response.approved) {
-      throw new Error(`User denied ${method} request`);
+      throw new Error("User denied batch request");
     }
 
-    // Extract the single item response
-    const itemResponse = response.itemResponses?.[itemId];
+    // Store persistent authorizations for newly approved items
+    for (const item of itemsNeedingAuth) {
+      const itemResponse = response.itemResponses[item.id];
 
-    if (!itemResponse || !itemResponse.approved) {
-      throw new Error(`User denied ${method} request`);
-    }
+      if (itemResponse?.approved && item.persistence) {
+        // Use persistData from config if provided, otherwise use response data
+        const dataToStore =
+          item.persistence.persistData !== null &&
+          item.persistence.persistData !== undefined
+            ? item.persistence.persistData
+            : itemResponse.data;
 
-    // Store persistent authorization if configured
-    if (persistence.persist) {
-      const dataToStore = persistence.persistData ?? itemResponse.data;
-      if (dataToStore) {
         await this.db.storePersistentAuthorization(
           this.appId,
-          storageKey,
+          item.persistence.storageKey,
           dataToStore
         );
       }
     }
 
-    return itemResponse.data;
+    // Merge auto-approved items with newly approved items
+    return {
+      ...response,
+      itemResponses: {
+        ...autoApprovedItems,
+        ...response.itemResponses,
+      },
+    };
   }
 }

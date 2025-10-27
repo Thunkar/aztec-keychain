@@ -9,6 +9,10 @@ export type AuthorizationItem = {
   method: string;
   params: any;
   timestamp: number;
+  persistence?: {
+    storageKey: string;
+    persistData: any;
+  };
 };
 
 // Authorization data types for different methods

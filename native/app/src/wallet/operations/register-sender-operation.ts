@@ -84,12 +84,21 @@ export class RegisterSenderOperation extends ExternalOperation<
 
   async requestAuthorization(
     displayData: RegisterSenderDisplayData,
-    _interaction: WalletInteraction<WalletInteractionType>
+    _interaction: WalletInteraction<WalletInteractionType>,
+    _persistence?: { storageKey: string; persistData: any }
   ): Promise<void> {
-    await this.authorizationManager.requestAuthorization("registerSender", {
-      address: displayData.address.toString(),
-      alias: displayData.alias,
-    });
+    await this.authorizationManager.requestAuthorization([
+      {
+        id: crypto.randomUUID(),
+        appId: this.authorizationManager.appId,
+        method: "registerSender",
+        params: {
+          address: displayData.address.toString(),
+          alias: displayData.alias,
+        },
+        timestamp: Date.now(),
+      },
+    ]);
   }
 
   async execute(

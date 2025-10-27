@@ -149,11 +149,7 @@ export class SendTxOperation extends ExternalOperation<
         ),
       });
 
-      const prepared = await this.simulateTxOp.prepare(
-        executionPayload,
-        opts,
-        interaction
-      );
+      const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
 
       // Decode if not already done (prepare skips decoding for existing interactions)
       const decoded = prepared.executionData!.decoded;
@@ -234,7 +230,8 @@ export class SendTxOperation extends ExternalOperation<
 
   async requestAuthorization(
     displayData: SendTxDisplayData,
-    interaction: WalletInteraction<WalletInteractionType>
+    interaction: WalletInteraction<WalletInteractionType>,
+    _persistence?: { storageKey: string; persistData: any }
   ): Promise<void> {
     // Update status to requesting authorization
     await this.interactionManager.storeAndEmit(
@@ -242,14 +239,18 @@ export class SendTxOperation extends ExternalOperation<
     );
 
     // Request authorization (never persisted for sendTx)
-    await this.authorizationManager.requestAuthorization(
-      "sendTx",
+    await this.authorizationManager.requestAuthorization([
       {
-        callAuthorizations: displayData.callAuthorizations,
-        executionTrace: displayData.executionTrace,
+        id: crypto.randomUUID(),
+        appId: this.authorizationManager.appId,
+        method: "sendTx",
+        params: {
+          callAuthorizations: displayData.callAuthorizations,
+          executionTrace: displayData.executionTrace,
+        },
+        timestamp: Date.now(),
       },
-      { persist: false }
-    );
+    ]);
   }
 
   async execute(executionData: {

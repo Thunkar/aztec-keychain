@@ -28,16 +28,6 @@ export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
  * 3. Provides additional internal-only methods
  */
 export class InternalWallet extends ExternalWallet {
-  // Override authorization method to always approve instantly
-  protected override async requestAuthorization(
-    _method: string,
-    _params: any,
-    _persistence: AuthorizationPersistence = { persist: false }
-  ): Promise<AuthorizationData> {
-    // Internal requests are always pre-approved
-    return undefined;
-  }
-
   // Override getAccountFromAddress to skip authorization check
   protected override async getAccountFromAddress(
     address: AztecAddress
@@ -91,7 +81,7 @@ export class InternalWallet extends ExternalWallet {
       });
       await this.storeAndEmitInteraction(
         interaction.update({
-          status: "SENDING DEPLOYMENT",
+          status: "PROVING & SENDING DEPLOYMENT",
           description: `Address ${accountManager.address.toString()}`,
         })
       );
