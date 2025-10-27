@@ -25,6 +25,7 @@ export class TxDecodingService {
 
   /**
    * Decode transaction information including call authorizations and execution trace.
+   * Returns fallback data if decoding fails.
    */
   async decodeTransaction(
     simulationResult: TxSimulationResult
@@ -32,32 +33,55 @@ export class TxDecodingService {
     callAuthorizations: ReadableCallAuthorization[];
     executionTrace: DecodedExecutionTrace;
   }> {
-    const offChainEffects = collectOffchainEffects(
-      simulationResult.privateExecutionResult
-    );
-
-    // Parse call authorizations from offchain effects
-    const callAuthorizations = await Promise.all(
-      offChainEffects.map((effect) =>
-        this.formatter.parseCallAuthorizationFromEffect(effect)
-      )
-    );
-
-    const filteredCallAuthorizations = callAuthorizations.filter(Boolean);
-
-    // Format for display
-    const readableCallAuthorizations =
-      await this.formatter.formatCallAuthorizationsForDisplay(
-        filteredCallAuthorizations
+    try {
+      const offChainEffects = collectOffchainEffects(
+        simulationResult.privateExecutionResult
       );
 
-    // Decode execution call stack
-    const executionTrace =
-      await this.decoder.decodeSimulationResult(simulationResult);
+      // Parse call authorizations from offchain effects
+      const callAuthorizations = await Promise.all(
+        offChainEffects.map((effect) =>
+          this.formatter.parseCallAuthorizationFromEffect(effect)
+        )
+      );
 
-    return {
-      callAuthorizations: readableCallAuthorizations,
-      executionTrace,
-    };
+      const filteredCallAuthorizations = callAuthorizations.filter(Boolean);
+
+      // Format for display
+      const readableCallAuthorizations =
+        await this.formatter.formatCallAuthorizationsForDisplay(
+          filteredCallAuthorizations
+        );
+
+      // Decode execution call stack
+      const executionTrace =
+        await this.decoder.decodeSimulationResult(simulationResult);
+
+      return {
+        callAuthorizations: readableCallAuthorizations,
+        executionTrace,
+      };
+    } catch (error) {
+      console.error("Failed to decode transaction:", error);
+      // Return empty decoded data as fallback
+      return {
+        callAuthorizations: [],
+        executionTrace: {
+          privateExecution: {
+            type: "private-call" as const,
+            depth: 0,
+            counter: { start: 0, end: 0 },
+            contract: { name: "Unknown", address: "0x0" },
+            function: "unknown",
+            caller: { name: "Unknown", address: "0x0" },
+            isStaticCall: false,
+            args: [],
+            returnValues: [],
+            nestedEvents: [],
+          },
+          publicExecutionQueue: [],
+        },
+      };
+    }
   }
 }

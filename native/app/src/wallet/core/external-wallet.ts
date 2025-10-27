@@ -1,18 +1,13 @@
 import { type Account, type ChainInfo } from "@aztec/aztec.js/account";
 import {
-  AccountManager,
-  BaseWallet,
   type Aliased,
   type SimulateOptions,
   type SendOptions,
-  type UserFeeOptions,
-  type FeeOptions,
   type BatchedMethod,
   type BatchableMethods,
   type BatchResults,
-  type ContractInstanceAndArtifact
+  type ContractInstanceAndArtifact,
 } from "@aztec/aztec.js/wallet";
-import { getContractInstanceFromInstantiationParams, Contract } from "@aztec/aztec.js/contracts";
 import { type AztecNode } from "@aztec/aztec.js/node";
 import { type Logger } from "@aztec/aztec.js/log";
 import type { AuthWitness } from "@aztec/stdlib/auth-witness";
@@ -25,34 +20,15 @@ import {
   ExecutionPayload,
   mergeExecutionPayloads,
 } from "@aztec/entrypoints/payload";
-import { Fq, Fr } from "@aztec/foundation/fields";
+import { Fr } from "@aztec/foundation/fields";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
-  StubAccountContractArtifact,
-  createStubAccount,
-} from "@aztec/accounts/stub";
-import {
-  type TxProvingResult,
   type TxSimulationResult,
-  type TxExecutionRequest,
   type UtilitySimulationResult,
   TxHash,
 } from "@aztec/stdlib/tx";
-import {
-  EcdsaKAccountContract,
-  EcdsaRAccountContract,
-} from "@aztec/accounts/ecdsa";
-import { SchnorrAccountContract } from "@aztec/accounts/schnorr";
 import { type PXE } from "@aztec/pxe/server";
-import { WalletDB, type AccountType } from "../database/wallet-db";
-import {
-  AccountFeePaymentMethodOptions,
-  type DefaultAccountEntrypointOptions,
-} from "@aztec/entrypoints/account";
-import {
-  WalletInteraction,
-  type WalletInteractionType,
-} from "../types/wallet-interaction";
+import { WalletDB } from "../database/wallet-db";
 import {
   promiseWithResolvers,
   type PromiseWithResolvers,
@@ -63,23 +39,16 @@ import {
   type AuthorizationResponse,
   type AuthorizationItem,
   type GetAccountsAuthData,
-  type AuthorizationData,
-  type AuthorizationPersistence,
 } from "../types/authorization";
-import { TxDecodingService } from "../decoding/tx-decoding-service";
 import type { ReadableCallAuthorization } from "../decoding/call-authorization-formatter";
-import {
-  TxCallStackDecoder,
-  type DecodedExecutionTrace,
-} from "../decoding/tx-callstack-decoder";
-
-import { inspect } from "node:util";
-import {
-  hashExecutionPayload,
-  hashUtilityCall,
-  generateSimulationTitle,
-} from "../utils/simulation-utils";
+import { type DecodedExecutionTrace } from "../decoding/tx-callstack-decoder";
 import { BaseNativeWallet } from "./base-native-wallet";
+import { ExternalOperation } from "../operations/base-operation";
+import { RegisterContractOperation } from "../operations/register-contract-operation";
+import { RegisterSenderOperation } from "../operations/register-sender-operation";
+import { SimulateUtilityOperation } from "../operations/simulate-utility-operation";
+import { SimulateTxOperation } from "../operations/simulate-tx-operation";
+import { SendTxOperation } from "../operations/send-tx-operation";
 
 type ReadableTxInformation = {
   callAuthorizations: ReadableCallAuthorization[];
@@ -87,6 +56,13 @@ type ReadableTxInformation = {
 };
 
 export class ExternalWallet extends BaseNativeWallet {
+  // Operation instances
+  private registerContractOp: RegisterContractOperation;
+  private registerSenderOp: RegisterSenderOperation;
+  private simulateUtilityOp: SimulateUtilityOperation;
+  private simulateTxOp: SimulateTxOperation;
+  private sendTxOp: SendTxOperation;
+
   constructor(
     pxe: PXE,
     node: AztecNode,
@@ -103,92 +79,53 @@ export class ExternalWallet extends BaseNativeWallet {
     log: Logger
   ) {
     super(pxe, node, db, pendingAuthorizations, appId, chainInfo, log);
-  }
 
-  /**
-   * Unified authorization method with flexible persistence options.
-   *
-   * @param method - The method being authorized
-   * @param params - Parameters to display in authorization UI
-   * @param persistence - Persistence configuration
-   * @returns Authorization data from user response or stored data
-   */
-  protected async requestAuthorization(
-    method: string,
-    params: any,
-    persistence: AuthorizationPersistence = { persist: false }
-  ): Promise<AuthorizationData> {
-    // Determine the storage key (use custom or default to method)
-    const storageKey =
-      persistence.persist && persistence.storageKey
-        ? persistence.storageKey
-        : method;
-
-    // Check for existing persistent authorization
-    if (persistence.persist) {
-      const existingAuth = await this.db.retrievePersistentAuthorization(
-        this.appId,
-        storageKey
-      );
-      if (existingAuth) {
-        // Return stored authorization data directly
-        return existingAuth;
-      }
-    }
-
-    // Create a single item batch request
-    const itemId = crypto.randomUUID();
-    const authRequest: AuthorizationRequest = {
-      id: crypto.randomUUID(),
-      appId: this.appId,
-      items: [
-        {
-          id: itemId,
-          appId: this.appId,
-          method,
-          params,
-          timestamp: Date.now(),
-        },
-      ],
-      timestamp: Date.now(),
-    };
-
-    const responseHandle = promiseWithResolvers<AuthorizationResponse>();
-    this.pendingAuthorizations.set(authRequest.id, {
-      promise: responseHandle,
-      request: authRequest,
-    });
-
-    const event = new AuthorizationRequestEvent(authRequest);
-    this.dispatchEvent(event);
-
-    const response = await responseHandle.promise;
-
-    if (!response.approved) {
-      throw new Error(`User denied ${method} request`);
-    }
-
-    // Extract the single item response
-    const itemResponse = response.itemResponses?.[itemId];
-
-    if (!itemResponse || !itemResponse.approved) {
-      throw new Error(`User denied ${method} request`);
-    }
-
-    // Store persistent authorization if configured
-    if (persistence.persist) {
-      // Use custom persistData if provided, otherwise use response data
-      const dataToStore = persistence.persistData ?? itemResponse.data;
-      if (dataToStore) {
-        await this.db.storePersistentAuthorization(
-          this.appId,
-          storageKey,
-          dataToStore
-        );
-      }
-    }
-
-    return itemResponse.data;
+    // Initialize operations
+    this.registerContractOp = new RegisterContractOperation(
+      pxe,
+      this.decodingCache,
+      this.interactionManager,
+      this.authorizationManager
+    );
+    this.registerSenderOp = new RegisterSenderOperation(
+      pxe,
+      this.db,
+      this.interactionManager,
+      this.authorizationManager
+    );
+    this.simulateUtilityOp = new SimulateUtilityOperation(
+      pxe,
+      this.db,
+      this.decodingCache,
+      this.interactionManager,
+      this.authorizationManager
+    );
+    this.simulateTxOp = new SimulateTxOperation(
+      pxe,
+      this.db,
+      this.decodingCache,
+      this.interactionManager,
+      this.authorizationManager,
+      this.getFeeOptionsForGasEstimation.bind(this),
+      this.getDefaultFeeOptions.bind(this),
+      this.getFakeAccountDataFor.bind(this),
+      this.cancellableTransactions,
+      appId,
+      log
+    );
+    this.sendTxOp = new SendTxOperation(
+      pxe,
+      node,
+      this.db,
+      this.decodingCache,
+      this.interactionManager,
+      this.authorizationManager,
+      this.simulateTxOp,
+      this.createAuthWit.bind(this),
+      this.createTxExecutionRequestFromPayloadAndFee.bind(this),
+      this.getDefaultFeeOptions.bind(this),
+      this.contextualizeError.bind(this)
+    );
   }
 
   /**
@@ -236,7 +173,7 @@ export class ExternalWallet extends BaseNativeWallet {
   // External API methods - all require authorization
 
   override async getAccounts(): Promise<Aliased<AztecAddress>[]> {
-    const data = await this.requestAuthorization(
+    const data = await this.authorizationManager.requestAuthorization(
       "getAccounts",
       {},
       {
@@ -256,6 +193,10 @@ export class ExternalWallet extends BaseNativeWallet {
     }));
   }
 
+  /**
+   * Register a contract with the wallet.
+   * Uses the RegisterContractOperation for clean separation of concerns.
+   */
   override async registerContract(
     instanceData:
       | AztecAddress
@@ -263,108 +204,28 @@ export class ExternalWallet extends BaseNativeWallet {
       | ContractInstantiationData
       | ContractInstanceAndArtifact,
     artifact?: ContractArtifact,
-    secretKey?: Fr,
-    skipAuth?: boolean
+    secretKey?: Fr
   ): Promise<ContractInstanceWithAddress> {
-    // Determine the contract address to check
-    const addressToCheck = await this.decodingCache.resolveContractAddress(
-      instanceData,
-      artifact
-    );
-
-    // Check if contract already exists in PXE
-    const metadata = await this.getContractMetadata(addressToCheck);
-    if (metadata.contractInstance) {
-      // Contract already registered, no need to prompt
-      return metadata.contractInstance;
-    }
-
-    // Resolve contract name from various sources
-    const contractName = await this.decodingCache.resolveContractName(
+    return await this.registerContractOp.executeStandalone(
       instanceData,
       artifact,
-      addressToCheck
+      secretKey
     );
-
-    // Create interaction for tracking (unless skipped for batch)
-    const interaction = skipAuth
-      ? null
-      : WalletInteraction.from({
-          type: "registerContract",
-          status: "REGISTERING",
-          complete: false,
-          title: `Register ${contractName}`,
-        });
-
-    if (interaction) {
-      await this.storeAndEmitInteraction(interaction);
-    }
-
-    try {
-      // Request authorization (unless skipped for batch) - no persistence needed
-      if (!skipAuth) {
-        await this.requestAuthorization(
-          "registerContract",
-          {
-            address: addressToCheck.toString(),
-            contractName,
-          },
-          { persist: false }
-        );
-      }
-
-      // Register the contract with PXE
-      const result = await super.registerContract(
-        instanceData,
-        artifact,
-        secretKey
-      );
-
-      if (interaction) {
-        await this.storeAndEmitInteraction(
-          interaction.update({ status: "REGISTERED", complete: true })
-        );
-      }
-
-      return result;
-    } catch (error) {
-      // Update interaction to reflect error before rethrowing
-      if (interaction) {
-        await this.storeAndEmitInteraction(
-          interaction.update({
-            complete: true,
-            status: "REGISTRATION FAILED",
-            description: error instanceof Error ? error.message : String(error),
-          })
-        );
-      }
-      throw error;
-    }
   }
 
   override async registerSender(
     address: AztecAddress,
-    alias: string,
-    skipAuth?: boolean
+    alias: string
   ): Promise<AztecAddress> {
-    // Request authorization (unless skipped for batch) - no persistence needed
-    if (!skipAuth) {
-      await this.requestAuthorization(
-        "registerSender",
-        {
-          address: address.toString(),
-          alias,
-        },
-        { persist: false }
-      );
-    }
-
-    await this.db.storeSender(address, alias);
-    return this.pxe.registerSender(address);
+    return await this.registerSenderOp.executeStandalone(address, alias);
   }
 
   override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
-    await this.requestAuthorization("getAddressBook", {}, { persist: false });
+    await this.authorizationManager.requestAuthorization(
+      "getAddressBook",
+      {},
+      { persist: false }
+    );
 
     const senders = await this.pxe.getSenders();
     const storedSenders = await this.db.listSenders();
@@ -383,401 +244,178 @@ export class ExternalWallet extends BaseNativeWallet {
     opts: SendOptions,
     txInformation?: ReadableTxInformation
   ): Promise<TxHash> {
-    // ============================================================================
-    // TODO: TEMPORARY WORKAROUND - Remove once app bug is fixed
-    // ============================================================================
-    // The connected app sometimes sends transactions with empty execution payloads.
-    // We skip processing these to avoid cluttering the UI with meaningless interactions.
-    if (exec.calls.length === 0) {
-      return TxHash.zero();
-    }
-    // ============================================================================
-
-    // Compute payload hash for deduplication and use as ID
-    const payloadHash = hashExecutionPayload(exec);
-
-    // Generate a meaningful title from the execution payload
-    const title = await generateSimulationTitle(
-      exec,
-      this.decodingCache,
-      opts.from,
-      opts.fee?.embeddedPaymentMethodFeePayer
-    );
-
-    const interaction = WalletInteraction.from({
-      id: payloadHash,
-      type: "sendTx",
-      status: "CREATING",
-      complete: false,
-      title: title,
-    });
-    await this.storeAndEmitInteraction(interaction);
-
-    try {
-      const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
-
-      let callAuthorizations: ReadableCallAuthorization[];
-      let executionTrace: DecodedExecutionTrace | undefined;
-
-      if (!txInformation) {
-        await this.storeAndEmitInteraction(
-          interaction.update({ status: "COMPUTING AUTHORIZATIONS" })
-        );
-
-        const {
-          simulationResult,
-          txRequest: simulationTxRequest,
-          decoded,
-        } = await this.simulateTxInternal(
-          exec,
-          opts,
-          interaction,
-          true // withDecoding
-        );
-        ({ callAuthorizations, executionTrace } = decoded!);
-
-        // Store the simulation result using the payload hash
-        try {
-          await this.db.storeTxSimulation(
-            payloadHash,
-            simulationResult,
-            simulationTxRequest
-          );
-        } catch (storageError) {
-          // If storage fails, just log it - don't fail the tx
-          this.log.error(
-            `Failed to store simulation result for proving: ${storageError}`
-          );
-        }
-
-        await this.storeAndEmitInteraction(
-          interaction.update({ status: "REQUESTING AUTHORIZATION" })
-        );
-      } else {
-        callAuthorizations = txInformation.callAuthorizations;
-      }
-
-      // Create auth witnesses for call authorizations
-      const authWitnesses = await Promise.all(
-        callAuthorizations.map((auth) =>
-          this.createAuthWit(opts.from, {
-            caller: auth.rawData.caller,
-            call: auth.rawData.functionCall,
-          })
-        )
-      );
-      exec.authWitnesses.push(...authWitnesses);
-
-      // Create transaction request
-      const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-        exec,
-        opts.from,
-        fee
-      );
-
-      // ========================================================================
-      // Parallel Proving Optimization
-      // ========================================================================
-      // Start proving transaction immediately, before waiting for user authorization.
-      // This significantly reduces perceived wait time - proving can take 10-30s,
-      // so we begin proving in the background while the user reviews the tx.
-      // Only after user approves do we await the proof completion.
-      const provingPromise = this.pxe.proveTx(txRequest);
-
-      // Wait for user authorization while proving happens in parallel
-      if (!txInformation) {
-        await this.requestAuthorization(
-          "sendTx",
-          {
-            callAuthorizations,
-            executionTrace,
-          },
-          { persist: false }
-        );
-      }
-
-      // User approved - now wait for proof to complete
-      await this.storeAndEmitInteraction(
-        interaction.update({ status: "PROVING" })
-      );
-
-      const provenTx = await provingPromise;
-
-      const tx = await provenTx.toTx();
-      const txHash = tx.getTxHash();
-      if (await this.aztecNode.getTxEffect(txHash)) {
-        throw new Error(
-          `A settled tx with equal hash ${txHash.toString()} exists.`
-        );
-      }
-      await this.aztecNode.sendTx(tx).catch((err) => {
-        throw this.contextualizeError(err, inspect(tx));
-      });
-      await this.storeAndEmitInteraction(
-        interaction.update({ status: "SENT", complete: true })
-      );
-      return txHash;
-    } catch (error) {
-      // Update interaction to reflect error before rethrowing
-      await this.storeAndEmitInteraction(
-        interaction.update({
-          complete: true,
-          status: "PROVING FAILED",
-          description: error instanceof Error ? error.message : String(error),
-        })
-      );
-      throw error;
-    }
+    return await this.sendTxOp.executeStandalone(exec, opts, txInformation);
   }
 
   override async batch<
     const T extends readonly BatchedMethod<keyof BatchableMethods>[],
   >(methods: T): Promise<BatchResults<T>> {
-    type CachedResult =
+    // Map of method names to operation instances
+    const operationMap = {
+      registerContract: this.registerContractOp,
+      registerSender: this.registerSenderOp,
+      simulateUtility: this.simulateUtilityOp,
+      sendTx: this.sendTxOp,
+    } as const;
+
+    type BatchMethodResult =
       | ContractInstanceWithAddress
       | TxHash
       | AztecAddress
-      | Promise<never>
-      | null;
+      | UtilitySimulationResult;
 
     // ========================================================================
-    // PHASE 1: Convert methods to AuthorizationItems
+    // PHASE 1: PREPARE - Call prepare() on all operations
     // ========================================================================
-    // Check persistent cache and preprocess methods that need special handling:
-    // - sendTx: needs simulation data for display
-    // - registerContract: needs existence check to skip if already registered
-    const items: AuthorizationItem[] = [];
-    const cachedResults: CachedResult[] = [];
-    const itemMethodMap = new Map<string, string>();
-    const modifiedMethods: Array<{
-      name: string;
-      args: unknown[];
-    }> = [];
+    interface PreparedOperation {
+      operation: ExternalOperation<any, any, any>;
+      originalName: string;
+      displayData?: Record<string, unknown>;
+      executionData?: any;
+      earlyReturn?: any;
+      error?: any;
+    }
+
+    const prepared: PreparedOperation[] = [];
 
     for (const methodCall of methods) {
       const { name, args } = methodCall;
-      let modifiedArgs: unknown[] = [...args]; // Create a mutable copy
+      const operation = operationMap[name as keyof typeof operationMap];
 
-      // Check persistent cache
-      const persistentAuth = await this.db.retrievePersistentAuthorization(
-        this.appId,
-        name
-      );
-
-      if (persistentAuth) {
-        cachedResults.push(persistentAuth);
-        modifiedMethods.push({ name, args: modifiedArgs });
+      if (!operation) {
+        // Method doesn't have an operation (e.g., getAccounts, getAddressBook)
+        // Fall back to direct execution
+        prepared.push({
+          operation: null as any,
+          originalName: name,
+          error: new Error(`Method ${name} is not supported in batch`),
+        });
         continue;
       }
 
-      // Create AuthorizationItem for this item
-      let params: unknown = modifiedArgs;
+      try {
+        // Call prepare with the method's arguments
+        const result = await (operation as any).prepare(...args);
 
-      // Pre-process sendTx to include display data
-      if (name === "sendTx") {
-        try {
-          const [exec, opts] = args as Parameters<typeof this.sendTx>;
-          const { decoded: displayData } = await this.simulateTxInternal(
-            exec,
-            opts,
-            undefined,
-            true // withDecoding
-          );
-          modifiedArgs = [exec, opts, displayData];
-          params = {
-            originalArgs: modifiedArgs,
-            callAuthorizations: displayData!.callAuthorizations,
-            executionTrace: displayData!.executionTrace,
-          };
-        } catch (error) {
-          // If simulation/extraction fails, don't add to batch
-          // Push error as cached result so it gets thrown later
-          cachedResults.push(Promise.reject(error));
-          modifiedMethods.push({ name, args: modifiedArgs });
-          continue;
-        }
-      } else if (name === "registerContract") {
-        // Check if contract already exists in PXE
-        const [instanceData, artifact, secretKey] = args as Parameters<
-          typeof this.registerContract
-        >;
-        const address = await this.decodingCache.resolveContractAddress(
-          instanceData,
-          artifact
-        );
-        const metadata = await this.getContractMetadata(address);
+        prepared.push({
+          operation,
+          originalName: name,
+          displayData: result.displayData,
+          executionData: result.executionData,
+          earlyReturn: result.earlyReturn,
+        });
+      } catch (error) {
+        // Prepare failed - store error to throw later
+        prepared.push({
+          operation,
+          originalName: name,
+          error,
+        });
+      }
+    }
 
-        if (metadata.contractInstance) {
-          // Contract already registered, skip authorization
-          cachedResults.push(metadata.contractInstance);
-          modifiedMethods.push({ name, args: modifiedArgs });
-          continue;
-        }
+    // ========================================================================
+    // PHASE 2: Filter items needing authorization
+    // ========================================================================
+    const items: AuthorizationItem[] = [];
+    const itemIndexMap = new Map<string, number>(); // itemId -> prepared index
 
-        // Resolve contract name from various sources
-        const contractName = await this.decodingCache.resolveContractName(
-          instanceData,
-          artifact,
-          address
-        );
+    for (let i = 0; i < prepared.length; i++) {
+      const prep = prepared[i];
 
-        // Contract not registered, need authorization
-        // Add skipAuth flag to args so it bypasses auth in the execution phase
-        modifiedArgs = [instanceData, artifact, secretKey, true];
-        params = {
-          originalArgs: modifiedArgs,
-          contractAddress: address,
-          contractName,
-        };
-      } else if (name === "registerSender") {
-        // Add skipAuth flag to args
-        const registerSenderArgs = args as unknown as [AztecAddress, string?];
-        const [address, alias] = registerSenderArgs;
-        modifiedArgs = [address, alias ?? "", true];
-        params = {
-          originalArgs: modifiedArgs,
-          address,
-          alias,
-        };
+      // Skip if early return or error
+      if (prep.earlyReturn !== undefined || prep.error) {
+        continue;
       }
 
+      // Create authorization item
       const itemId = Fr.random().toString();
       items.push({
         id: itemId,
         appId: this.appId,
-        method: name,
-        params: params,
+        method: prep.originalName,
+        params: prep.displayData,
         timestamp: Date.now(),
       });
-      itemMethodMap.set(itemId, name);
 
-      cachedResults.push(null);
-      modifiedMethods.push({ name, args: modifiedArgs });
+      itemIndexMap.set(itemId, i);
     }
 
     // ========================================================================
-    // PHASE 2: Request batch authorization
+    // PHASE 3: Request batch authorization
     // ========================================================================
-    // If all operations are cached, skip authorization entirely and just execute
-    if (items.length === 0) {
-      return super.batch(methods);
+    let response: AuthorizationResponse | null = null;
+
+    if (items.length > 0) {
+      const authRequest: AuthorizationRequest = {
+        id: Fr.random().toString(),
+        appId: this.appId,
+        items,
+        timestamp: Date.now(),
+      };
+
+      const responseHandle = promiseWithResolvers<AuthorizationResponse>();
+      this.pendingAuthorizations.set(authRequest.id, {
+        promise: responseHandle,
+        request: authRequest,
+      });
+
+      const event = new AuthorizationRequestEvent(authRequest);
+      this.dispatchEvent(event);
+
+      response = await responseHandle.promise;
+      if (!response.approved) {
+        throw new Error("User denied batch request");
+      }
     }
 
-    // Request batch authorization using unified flow
-    const authRequest: AuthorizationRequest = {
-      id: Fr.random().toString(),
-      appId: this.appId,
-      items: items,
-      timestamp: Date.now(),
-    };
-
-    const responseHandle = promiseWithResolvers<AuthorizationResponse>();
-    this.pendingAuthorizations.set(authRequest.id, {
-      promise: responseHandle,
-      request: authRequest,
-    });
-
-    const event = new AuthorizationRequestEvent(authRequest);
-    this.dispatchEvent(event);
-
-    const response = await responseHandle.promise;
-    if (!response.approved) {
-      throw new Error("User denied batch request");
-    }
-
     // ========================================================================
-    // PHASE 3: Store persistent authorizations
+    // PHASE 4: EXECUTE - Call executeBatch() on all operations
     // ========================================================================
-    await this.db.storeBatchPersistentAuthorizations(
-      this.appId,
-      response.itemResponses,
-      itemMethodMap
-    );
-
-    // ========================================================================
-    // PHASE 4: Execute approved items
-    // ========================================================================
-    // Use dynamic dispatch (like BaseWallet.batch) with skipAuth flags
-    // Build results array that matches Aztec.js BatchResults type structure
-    type BatchMethodResult = ContractInstanceWithAddress | TxHash | AztecAddress;
     type ResultWrapper = { name: string; result: BatchMethodResult };
     const results: ResultWrapper[] = [];
-    let itemIndex = 0;
 
-    for (let i = 0; i < modifiedMethods.length; i++) {
-      const { name, args } = modifiedMethods[i];
+    for (let i = 0; i < prepared.length; i++) {
+      const prep = prepared[i];
       let result: BatchMethodResult;
 
-      if (cachedResults[i] !== null) {
-        // Use cached result (from persistent auth, PXE check, or error)
-        // If it's a rejected promise (from simulation failure), await it to throw
-        const cachedResult = cachedResults[i];
-        if (
-          cachedResult &&
-          typeof (cachedResult as unknown as Promise<never>).then === "function"
-        ) {
-          result = await (cachedResult as Promise<never>);
-        } else {
-          result = cachedResult as BatchMethodResult;
-        }
-      } else {
-        const item = items[itemIndex];
-        const itemResponse = response.itemResponses[item.id];
-
-        if (!itemResponse || !itemResponse.approved) {
-          throw new Error(`Authorization denied for ${item.method}`);
-        }
-
-        // Create interaction for trackable operations before execution
-        let interaction: WalletInteraction<WalletInteractionType> | null = null;
-        if (name === "registerContract") {
-          const params = item.params as {
-            contractAddress: AztecAddress;
-            contractName: string;
-          };
-          interaction = WalletInteraction.from({
-            type: "registerContract",
-            status: "REGISTERING",
-            complete: false,
-            title: `Register ${params.contractName}`,
-          });
-          await this.storeAndEmitInteraction(interaction);
-        }
-
-        try {
-          // Use dynamic dispatch to call the method, just like BaseWallet.batch()
-          // The skipAuth flag (added during preprocessing in Phase 1) bypasses authorization
-          const fn = (this as unknown as Record<string, (...args: unknown[]) => Promise<BatchMethodResult>>)[name];
-          result = await fn.apply(this, args);
-
-          // Update interaction on success
-          if (interaction) {
-            await this.storeAndEmitInteraction(
-              interaction.update({ status: "REGISTERED", complete: true })
-            );
+      // Handle early returns
+      if (prep.earlyReturn !== undefined) {
+        result = prep.earlyReturn;
+      }
+      // Handle prepare errors
+      else if (prep.error) {
+        throw prep.error;
+      }
+      // Execute the operation
+      else {
+        // Find the authorization item for this operation
+        let itemId: string | undefined;
+        for (const [id, index] of itemIndexMap.entries()) {
+          if (index === i) {
+            itemId = id;
+            break;
           }
-        } catch (error) {
-          // Update interaction on failure
-          if (interaction) {
-            await this.storeAndEmitInteraction(
-              interaction.update({
-                complete: true,
-                status: "REGISTRATION FAILED",
-                description:
-                  error instanceof Error ? error.message : String(error),
-              })
-            );
-          }
-          throw error;
         }
 
-        itemIndex++;
+        // Verify authorization if needed
+        if (itemId && response) {
+          const itemResponse = response.itemResponses[itemId];
+          if (!itemResponse || !itemResponse.approved) {
+            throw new Error(`Authorization denied for ${prep.originalName}`);
+          }
+        }
+
+        // Execute using the operation's executeBatch method
+        result = await prep.operation.executeBatch(
+          prep.displayData!,
+          prep.executionData!
+        );
       }
 
-      // Wrap result with method name for discriminated union deserialization
-      // This matches the BatchResults type structure from Aztec.js
+      // Wrap result for BatchResults type
       results.push({
-        name,
+        name: prep.originalName,
         result,
       });
     }
@@ -787,303 +425,28 @@ export class ExternalWallet extends BaseNativeWallet {
 
   override async simulateTx(
     executionPayload: ExecutionPayload,
-    opts: SimulateOptions,
-    existingInteraction?: WalletInteraction<WalletInteractionType>
+    opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    const { simulationResult } = await this.simulateTxInternal(
-      executionPayload,
-      opts,
-      existingInteraction,
-      false
-    );
-    return simulationResult;
+    return await this.simulateTxOp.executeStandalone(executionPayload, opts);
   }
 
   /**
-   * Internal transaction simulation with optional decoding.
-   *
-   * @param executionPayload - The transaction execution payload
-   * @param opts - Simulation options
-   * @param existingInteraction - Existing interaction to update (e.g., from sendTx flow)
-   * @param withDecoding - Whether to decode the simulation result for display
-   * @returns Simulation result, tx request, and optionally decoded data
+   * Public method: Simulate utility function (standalone call).
+   * Handles interaction tracking and user authorization.
    */
-  private async simulateTxInternal(
-    executionPayload: ExecutionPayload,
-    opts: SimulateOptions,
-    existingInteraction?: WalletInteraction<WalletInteractionType>,
-    withDecoding: boolean = false
-  ): Promise<{
-    simulationResult: TxSimulationResult;
-    txRequest: TxExecutionRequest;
-    decoded?: ReadableTxInformation;
-  }> {
-    // ============================================================================
-    // TODO: TEMPORARY WORKAROUND - Remove once app bug is fixed
-    // ============================================================================
-    // The connected app sometimes sends transactions with empty execution payloads.
-    // Skip creating interactions for empty payloads to avoid cluttering the UI.
-    const hasEmptyPayload = executionPayload.calls.length === 0;
-
-    // Generate a meaningful title and use hash as ID for deduplication
-    const payloadHash = hashExecutionPayload(executionPayload);
-    const title = await generateSimulationTitle(
-      executionPayload,
-      this.decodingCache, // Use the shared decoding cache for better contract name resolution
-      opts.from, // Pass the account address to filter out entrypoint calls
-      opts.fee?.embeddedPaymentMethodFeePayer
-    );
-
-    let interaction: WalletInteraction<WalletInteractionType>;
-
-    // Only create/store interaction if payload is not empty or if one already exists
-    if (!hasEmptyPayload || existingInteraction) {
-      interaction =
-        existingInteraction ??
-        WalletInteraction.from({
-          id: payloadHash, // Use hash as ID for deduplication
-          type: "simulateTx",
-          title,
-          description: `App: ${this.appId}`,
-          complete: false,
-          status: "SIMULATING",
-          timestamp: Date.now(), // Always update timestamp
-        });
-      await this.storeAndEmitInteraction(interaction);
-    }
-
-    try {
-      const feeOptions = opts.fee?.estimateGas
-        ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
-        : await this.getDefaultFeeOptions(opts.from, opts.fee);
-      const feeExecutionPayload =
-        await feeOptions.walletFeePaymentMethod?.getExecutionPayload();
-      const executionOptions: DefaultAccountEntrypointOptions = {
-        txNonce: Fr.random(),
-        cancellable: this.cancellableTransactions,
-        feePaymentMethodOptions: feeOptions.accountFeePaymentMethodOptions,
-      };
-      const finalExecutionPayload = feeExecutionPayload
-        ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
-        : executionPayload;
-
-      const {
-        account: fromAccount,
-        instance,
-        artifact,
-      } = await this.getFakeAccountDataFor(opts.from);
-      const txRequest = await fromAccount.createTxExecutionRequest(
-        finalExecutionPayload,
-        feeOptions.gasSettings,
-        executionOptions
-      );
-      const contractOverrides = {
-        [opts.from.toString()]: { instance, artifact },
-      };
-      const simulationResult = await this.pxe.simulateTx(
-        txRequest,
-        true /* simulatePublic */,
-        true,
-        true,
-        {
-          contracts: contractOverrides,
-        }
-      );
-
-      // For standalone simulations (no existingInteraction), decode and request authorization
-      let decoded;
-      if (!existingInteraction) {
-        // Always decode for standalone simulations to show the user what data will be shared
-        try {
-          const decodingService = new TxDecodingService(this.decodingCache);
-          decoded = await decodingService.decodeTransaction(simulationResult);
-        } catch (error) {
-          this.log.error(`Failed to decode transaction:`, error);
-          // Continue without decoded data - the simulation itself succeeded
-          decoded = {
-            callAuthorizations: [],
-            executionTrace: {
-              privateCallStack: [],
-              publicExecutionQueue: [],
-            },
-          };
-        }
-
-        // Request authorization with composite key and custom persistence data
-        if (!hasEmptyPayload) {
-          await this.storeAndEmitInteraction(
-            interaction.update({ status: "REQUESTING AUTHORIZATION" })
-          );
-
-          await this.requestAuthorization(
-            "simulateTx",
-            {
-              payloadHash,
-              callAuthorizations: decoded.callAuthorizations,
-              executionTrace: decoded.executionTrace,
-            },
-            {
-              persist: true,
-              storageKey: `simulateTx:${payloadHash}`,
-              persistData: { title: interaction.title },
-            }
-          );
-        }
-
-        // Store the simulation result using the payload hash
-        try {
-          await this.db.storeTxSimulation(
-            payloadHash,
-            simulationResult,
-            txRequest
-          );
-        } catch (storageError) {
-          // If storage fails, just log it - don't fail the simulation
-          this.log.error(`Failed to store simulation result: ${storageError}`);
-        }
-
-        if (interaction) {
-          await this.storeAndEmitInteraction(
-            interaction.update({ complete: true, status: "SIMULATED" })
-          );
-        }
-      } else {
-        // For existing interactions (like sendTx flow), decode if requested
-        if (withDecoding) {
-          try {
-            const decodingService = new TxDecodingService(this.decodingCache);
-            decoded = await decodingService.decodeTransaction(simulationResult);
-          } catch (error) {
-            this.log.error(`Failed to decode transaction:`, error);
-            // Continue without decoded data - the simulation itself succeeded
-            decoded = {
-              callAuthorizations: [],
-              executionTrace: {
-                privateCallStack: [],
-                publicExecutionQueue: [],
-              },
-            };
-          }
-        }
-
-        // Store for existing interactions too, using payload hash
-        await this.db.storeTxSimulation(
-          payloadHash,
-          simulationResult,
-          txRequest
-        );
-      }
-
-      return { simulationResult, txRequest, decoded };
-    } catch (error) {
-      // Update interaction to reflect error before rethrowing
-      if (interaction) {
-        await this.storeAndEmitInteraction(
-          interaction.update({
-            complete: true,
-            status: "SIMULATION FAILED",
-            description: error instanceof Error ? error.message : String(error),
-          })
-        );
-      }
-      throw error;
-    }
-  }
-
   override async simulateUtility(
     functionName: string,
-    args: any[],
+    args: unknown[],
     to: AztecAddress,
     authwits?: AuthWitness[],
     from?: AztecAddress
   ): Promise<UtilitySimulationResult> {
-    // Generate hash for deduplication and title
-    const payloadHash = hashUtilityCall(functionName, args, to, from);
-
-    // Try to get contract name for better title using the decoding cache
-    const contractName = await this.decodingCache.getAddressAlias(to);
-
-    const interaction = WalletInteraction.from({
-      id: payloadHash, // Use hash as ID for deduplication
-      type: "simulateUtility",
-      title: `${contractName}.${functionName}`,
-      description: `App: ${this.appId}`,
-      complete: false,
-      status: "SIMULATING",
-      timestamp: Date.now(), // Always update timestamp
-    });
-    await this.storeAndEmitInteraction(interaction);
-
-    try {
-      // Simulate the utility function
-      const simulationResult = await this.pxe.simulateUtility(
-        functionName,
-        args,
-        to,
-        authwits,
-        from
-      );
-
-      // For utility functions, create a simplified execution trace
-      // Format arguments using the TxCallStackDecoder
-      const decoder = new TxCallStackDecoder(this.decodingCache);
-      const decodedArgs = await decoder.formatUtilityArguments(
-        to,
-        functionName,
-        args
-      );
-
-      const simpleTrace = {
-        functionName,
-        args: decodedArgs,
-        contractAddress: to.toString(),
-        contractName,
-        result: simulationResult.result,
-        isUtility: true,
-      };
-
-      // Store the utility trace for later display
-      try {
-        await this.db.storeUtilityTrace(interaction.id, simpleTrace);
-      } catch (storageError) {
-        // If storage fails, just log it - don't fail the simulation
-        this.log.error(`Failed to store utility trace: ${storageError}`);
-      }
-
-      // Request authorization with composite key and custom persistence data
-      await this.storeAndEmitInteraction(
-        interaction.update({ status: "REQUESTING AUTHORIZATION" })
-      );
-
-      await this.requestAuthorization(
-        "simulateUtility",
-        {
-          payloadHash,
-          executionTrace: simpleTrace,
-          isUtility: true,
-        },
-        {
-          persist: true,
-          storageKey: `simulateUtility:${payloadHash}`,
-          persistData: { title: interaction.title },
-        }
-      );
-
-      await this.storeAndEmitInteraction(
-        interaction.update({ complete: true, status: "SIMULATED" })
-      );
-
-      return simulationResult;
-    } catch (error) {
-      // Update interaction to reflect error before rethrowing
-      await this.storeAndEmitInteraction(
-        interaction.update({
-          complete: true,
-          status: "SIMULATION FAILED",
-          description: error instanceof Error ? error.message : String(error),
-        })
-      );
-      throw error;
-    }
+    return await this.simulateUtilityOp.executeStandalone(
+      functionName,
+      args,
+      to,
+      authwits,
+      from
+    );
   }
 }

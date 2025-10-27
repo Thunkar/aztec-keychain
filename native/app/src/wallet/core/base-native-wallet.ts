@@ -6,6 +6,8 @@ import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js/cont
 import { type AztecNode } from "@aztec/aztec.js/node";
 import { type Logger } from "@aztec/aztec.js/log";
 import { DecodingCache } from "../decoding/decoding-cache";
+import { InteractionManager } from "../managers/interaction-manager";
+import { AuthorizationManager } from "../managers/authorization-manager";
 import type { PXE } from "@aztec/pxe/server";
 import type { AccountType, WalletDB } from "../database/wallet-db";
 import type { PromiseWithResolvers } from "@aztec/foundation/promise";
@@ -50,8 +52,9 @@ export abstract class BaseNativeWallet
   extends BaseWallet
   implements EventTarget
 {
-  private eventEmitter = new EventTarget();
   protected decodingCache: DecodingCache;
+  protected interactionManager: InteractionManager;
+  protected authorizationManager: AuthorizationManager;
 
   constructor(
     pxe: PXE,
@@ -72,6 +75,15 @@ export abstract class BaseNativeWallet
     // Create a single decoding cache instance shared across all wallet operations
     // This cache stores contract names, artifacts, and aliases to avoid repeated PXE lookups
     this.decodingCache = new DecodingCache(pxe, db);
+
+    // Create manager instances for operations to use
+    this.interactionManager = new InteractionManager(db);
+    this.authorizationManager = new AuthorizationManager(
+      appId,
+      db,
+      pendingAuthorizations,
+      this.interactionManager // Use interactionManager as the event emitter
+    );
   }
 
   /**
@@ -249,11 +261,11 @@ export abstract class BaseNativeWallet
   // ============================================================================
   // EventTarget Implementation
   // ============================================================================
-  // Delegates to internal EventTarget emitter.
+  // Delegates to InteractionManager which implements EventTarget.
   // Allows external code to listen for wallet events (interactions, auth requests).
 
   dispatchEvent(event: Event): boolean {
-    return this.eventEmitter.dispatchEvent(event);
+    return this.interactionManager.dispatchEvent(event);
   }
 
   addEventListener(
@@ -261,7 +273,7 @@ export abstract class BaseNativeWallet
     callback: EventListenerOrEventListenerObject,
     options?: boolean | AddEventListenerOptions
   ): void {
-    return this.eventEmitter.addEventListener(type, callback, options);
+    return this.interactionManager.addEventListener(type, callback, options);
   }
 
   removeEventListener(
@@ -269,7 +281,7 @@ export abstract class BaseNativeWallet
     callback: EventListenerOrEventListenerObject,
     options?: boolean | EventListenerOptions
   ): void {
-    return this.eventEmitter.removeEventListener(type, callback, options);
+    return this.interactionManager.removeEventListener(type, callback, options);
   }
 
   /**
