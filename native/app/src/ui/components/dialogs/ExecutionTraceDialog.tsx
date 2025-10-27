@@ -6,7 +6,7 @@ import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import CloseIcon from "@mui/icons-material/Close";
 import { ExecutionTraceDisplay } from "../shared/ExecutionTraceDisplay";
-import type { DecodedExecutionTrace } from "../../../wallet-utils/decoding/tx-callstack-decoder";
+import type { DecodedExecutionTrace } from "../../../wallet/decoding/tx-callstack-decoder";
 
 interface ExecutionTraceDialogProps {
   open: boolean;

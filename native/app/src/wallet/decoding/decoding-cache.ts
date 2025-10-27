@@ -1,7 +1,7 @@
 import type { PXE } from "@aztec/pxe/server";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { ContractArtifact } from "@aztec/stdlib/abi";
-import type { WalletDB } from "../wallet_db";
+import type { WalletDB } from "../database/wallet-db";
 import type {
   ContractInstanceWithAddress,
   ContractInstantiationData,

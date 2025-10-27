@@ -26,7 +26,7 @@ import {
   Science as SimulationIcon,
   Delete as DeleteIcon,
 } from "@mui/icons-material";
-import { WalletContext } from "../../../../../renderer";
+import { WalletContext } from "../../../../renderer";
 import { EditAccountAuthorizationDialog } from "../../../dialogs/EditAccountAuthorizationDialog";
 import { ExecutionTraceDialog } from "../../../dialogs/ExecutionTraceDialog";
 

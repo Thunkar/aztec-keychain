@@ -4,7 +4,7 @@ import Typography from "@mui/material/Typography";
 import Checkbox from "@mui/material/Checkbox";
 import TextField from "@mui/material/TextField";
 import FormControlLabel from "@mui/material/FormControlLabel";
-import { WalletContext } from "../../renderer.tsx";
+import { WalletContext } from "../../renderer";
 import type { InternalAccount } from "../../../wallet/core/internal-wallet.ts";
 import type { AuthorizationItem } from "../../../wallet/types/authorization";
 

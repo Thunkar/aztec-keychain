@@ -4,7 +4,7 @@ import started from "electron-squirrel-startup";
 import { ipcMain, utilityProcess } from "electron/main";
 import { WalletInternalProxy } from "./ipc/wallet-internal-proxy";
 import { inspect } from "node:util";
-import fs, { mkdir, mkdirSync } from "node:fs";
+import fs, { mkdirSync } from "node:fs";
 import os from "node:os";
 
 // Setup logging to file for debugging

@@ -18,8 +18,8 @@ import type {
   ExecutionEvent,
   PrivateCallEvent,
   PublicEnqueueEvent,
-} from "../../../wallet-utils/decoding/tx-callstack-decoder";
-import type { ReadableCallAuthorization } from "../../../wallet-utils/decoding/call-authorization-formatter";
+} from "../../../wallet/decoding/tx-callstack-decoder";
+import type { ReadableCallAuthorization } from "../../../wallet/decoding/call-authorization-formatter";
 
 interface ExecutionTraceDisplayProps {
   trace: DecodedExecutionTrace;

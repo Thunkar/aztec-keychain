@@ -10,7 +10,7 @@ import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import { ContactBox } from "./components/ContactBox.tsx";
 import { DraggableFab } from "../../shared/DraggableFab.tsx";
-import { WalletContext } from "../../../../renderer.tsx";
+import { WalletContext } from "../../../renderer";
 import type { Aliased } from "@aztec/aztec.js";
 
 export function ContactsManager() {

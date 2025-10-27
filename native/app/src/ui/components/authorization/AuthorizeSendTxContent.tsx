@@ -1,7 +1,7 @@
 import Typography from "@mui/material/Typography";
-import type { AuthorizationItem } from "../../../wallet-utils/authorization";
-import type { ReadableCallAuthorization } from "../../../wallet-utils/decoding/call-authorization-formatter";
-import type { DecodedExecutionTrace } from "../../../wallet-utils/decoding/tx-callstack-decoder";
+import type { AuthorizationItem } from "../../../wallet/types/authorization";
+import type { ReadableCallAuthorization } from "../../../wallet/decoding/call-authorization-formatter";
+import type { DecodedExecutionTrace } from "../../../wallet/decoding/tx-callstack-decoder";
 import { ExecutionTraceDisplay } from "../shared/ExecutionTraceDisplay";
 
 interface AuthorizeSendTxContentProps {

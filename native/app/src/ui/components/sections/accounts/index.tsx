@@ -7,8 +7,8 @@ import Alert from "@mui/material/Alert";
 import { randomBytes } from "@aztec/foundation/crypto";
 import { AccountBox } from "./components/AccountBox.tsx";
 import { DraggableFab } from "../../shared/DraggableFab.tsx";
-import { WalletContext } from "../../../../renderer.tsx";
-import type { InternalAccount } from "../../../../wallet-utils/internal-wallet.ts";
+import { WalletContext } from "../../../renderer";
+import type { InternalAccount } from "../../../../wallet/core/internal-wallet";
 
 export function AccountsManager() {
   const [accounts, setAccounts] = useState<InternalAccount[]>([]);

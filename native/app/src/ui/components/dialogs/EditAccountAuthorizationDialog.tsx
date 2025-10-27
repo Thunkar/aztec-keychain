@@ -14,7 +14,7 @@ import {
   ListItem,
   Alert,
 } from "@mui/material";
-import { WalletContext } from "../../../renderer";
+import { WalletContext } from "../../renderer";
 
 interface EditAccountAuthorizationDialogProps {
   open: boolean;

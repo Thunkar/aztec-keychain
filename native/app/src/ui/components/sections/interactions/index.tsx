@@ -21,10 +21,10 @@ import { CheckCircle, Error as ErrorIcon } from "@mui/icons-material";
 import type {
   WalletInteraction,
   WalletInteractionType,
-} from "../../../../wallet-utils/wallet-interaction";
+} from "../../../../wallet/types/wallet-interaction";
 import { ExecutionTraceDialog } from "../../dialogs/ExecutionTraceDialog";
-import type { DecodedExecutionTrace } from "../../../../wallet-utils/decoding/tx-callstack-decoder";
-import { WalletContext } from "../../../../renderer";
+import type { DecodedExecutionTrace } from "../../../../wallet/decoding/tx-callstack-decoder";
+import { WalletContext } from "../../../renderer";
 
 interface InteractionsListProps {
   interactions: WalletInteraction<WalletInteractionType>[];

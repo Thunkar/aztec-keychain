@@ -15,7 +15,7 @@ import type {
   AuthorizationRequest,
   AuthorizationItemResponse,
   AuthorizationItem,
-} from "../../../wallet-utils/authorization";
+} from "../../../wallet/types/authorization";
 import { AuthorizeSendTxContent } from "../authorization/AuthorizeSendTxContent";
 import { AuthorizeSimulateTxContent } from "../authorization/AuthorizeSimulateTxContent";
 import { AuthorizeContractContent } from "../authorization/AuthorizeContractContent";
