@@ -1,4 +1,4 @@
-import { Fr } from "@aztec/aztec.js";
+import { Fr } from "@aztec/aztec.js/fields";
 import { type Wallet, WalletSchema } from "@aztec/aztec.js/wallet";
 import {
   promiseWithResolvers,

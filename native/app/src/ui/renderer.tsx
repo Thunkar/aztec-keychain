@@ -11,7 +11,7 @@ import { colors } from "./styles.js";
 import { App } from "../ui/App.js";
 import { WalletApi } from "../ui/utils/wallet-api.js";
 import type { InternalWalletInterface } from "../ipc/wallet-internal-proxy.js";
-import { Fr } from "@aztec/aztec.js";
+import { Fr } from "@aztec/aztec.js/fields";
 
 const themeOptions: ThemeOptions = {
   palette: {

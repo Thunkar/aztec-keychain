@@ -1,10 +1,7 @@
-import {
-  type Account,
-  AztecAddress,
-  type Aliased,
-  type Fr,
-  type SendOptions,
-} from "@aztec/aztec.js";
+import { type Account } from "@aztec/aztec.js/account";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { type Aliased, type SendOptions } from "@aztec/aztec.js/wallet";
+import { type Fr } from "@aztec/aztec.js/fields";
 import { ExternalWallet } from "./external-wallet";
 import type { AccountType } from "../database/wallet-db";
 import type {

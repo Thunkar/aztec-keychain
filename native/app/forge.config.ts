@@ -26,6 +26,12 @@ type CustomWalker = CopyClass<Walker> & {
 
 const externalDependencies = ["@aztec/kv-store", "@aztec/bb.js"];
 
+// Map to swap dependency names: key = dependency name to copy, value = source package name
+const dependencyMap: Record<string, string> = {
+  // Example: "@some/package": "@some/other-package"
+  "@spalladino/viem": "viem",
+};
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -62,7 +68,12 @@ const config: ForgeConfig = {
 
       await Promise.all(
         Array.from(depsToCopy.values()).map(async (packageName) => {
-          const sourcePath = path.join(sourceNodeModulesPath, packageName);
+          // Use mapped source if available, otherwise use the original package name
+          const sourcePackageName = dependencyMap[packageName] || packageName;
+          const sourcePath = path.join(
+            sourceNodeModulesPath,
+            sourcePackageName
+          );
           const destPath = path.join(destNodeModulesPath, packageName);
 
           await fsp.mkdir(path.dirname(destPath), { recursive: true });

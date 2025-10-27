@@ -1,4 +1,4 @@
-import type { AztecAddress } from "@aztec/aztec.js";
+import type { AztecAddress } from "@aztec/aztec.js/addresses";
 
 export function keyToHex(key: number[]): string {
   return `0x${key.map((i) => i.toString(16).padStart(2, "0")).join("")}`;

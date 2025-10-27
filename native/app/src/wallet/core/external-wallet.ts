@@ -1,22 +1,20 @@
+import { type Account, type ChainInfo } from "@aztec/aztec.js/account";
 import {
-  type Account,
   AccountManager,
   BaseWallet,
-  type SimulateOptions,
-  getContractInstanceFromInstantiationParams,
-  type AztecNode,
   type Aliased,
-  type ChainInfo,
-  Contract,
+  type SimulateOptions,
   type SendOptions,
   type UserFeeOptions,
   type FeeOptions,
   type BatchedMethod,
   type BatchableMethods,
   type BatchResults,
-  type ContractInstanceAndArtifact,
-  type Logger,
-} from "@aztec/aztec.js";
+  type ContractInstanceAndArtifact
+} from "@aztec/aztec.js/wallet";
+import { getContractInstanceFromInstantiationParams, Contract } from "@aztec/aztec.js/contracts";
+import { type AztecNode } from "@aztec/aztec.js/node";
+import { type Logger } from "@aztec/aztec.js/log";
 import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 import { type ContractArtifact } from "@aztec/stdlib/abi";
 import type {

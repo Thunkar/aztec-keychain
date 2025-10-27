@@ -1,18 +1,10 @@
-import {
-  type Account,
-  AccountManager,
-  AztecAddress,
-  BaseWallet,
-  Fq,
-  Fr,
-  getContractInstanceFromInstantiationParams,
-  SignerlessAccount,
-  type AztecNode,
-  type ChainInfo,
-  type FeeOptions,
-  type Logger,
-  type UserFeeOptions,
-} from "@aztec/aztec.js";
+import { type Account, SignerlessAccount, type ChainInfo } from "@aztec/aztec.js/account";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { AccountManager, BaseWallet, type FeeOptions, type UserFeeOptions } from "@aztec/aztec.js/wallet";
+import { Fq, Fr } from "@aztec/aztec.js/fields";
+import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js/contracts";
+import { type AztecNode } from "@aztec/aztec.js/node";
+import { type Logger } from "@aztec/aztec.js/log";
 import { DecodingCache } from "../decoding/decoding-cache";
 import type { PXE } from "@aztec/pxe/server";
 import type { AccountType, WalletDB } from "../database/wallet-db";

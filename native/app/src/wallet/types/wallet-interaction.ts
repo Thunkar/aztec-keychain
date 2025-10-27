@@ -1,4 +1,4 @@
-import type { FieldsOf } from "@aztec/aztec.js";
+import type { FieldsOf } from "@aztec/foundation/types";
 import { optional } from "@aztec/foundation/schemas";
 import { serializeToBuffer, BufferReader } from "@aztec/foundation/serialize";
 import { jsonStringify } from "@aztec/foundation/json-rpc";

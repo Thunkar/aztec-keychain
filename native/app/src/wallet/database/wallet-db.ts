@@ -1,4 +1,6 @@
-import { AztecAddress, Fr, Fq, type Aliased } from "@aztec/aztec.js";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { Fr, Fq } from "@aztec/aztec.js/fields";
+import { type Aliased } from "@aztec/aztec.js/wallet";
 import { type LogFn, type Logger } from "@aztec/foundation/log";
 import { type AztecAsyncMap, type AztecAsyncKVStore } from "@aztec/kv-store";
 import {

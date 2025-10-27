@@ -1,10 +1,8 @@
-import {
-  getContractInstanceFromInstantiationParams,
-  SponsoredFeePaymentMethod,
-  AztecAddress,
-  Fr,
-  type Wallet,
-} from "@aztec/aztec.js";
+import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js/contracts";
+import { SponsoredFeePaymentMethod } from "@aztec/aztec.js/fee";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { Fr } from "@aztec/aztec.js/fields";
+import { type Wallet } from "@aztec/aztec.js/wallet";
 import { SPONSORED_FPC_SALT } from "@aztec/constants";
 import { SponsoredFPCContract } from "@aztec/noir-contracts.js/SponsoredFPC";
 

@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from "@aztec/aztec.js";
+import { createLogger, type Logger } from "@aztec/aztec.js/log";
 import type { MessagePortMain } from "electron";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 

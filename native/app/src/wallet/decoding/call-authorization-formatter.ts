@@ -1,8 +1,6 @@
-import {
-  CallAuthorizationRequest,
-  decodeFromAbi,
-  type Aliased,
-} from "@aztec/aztec.js";
+import { decodeFromAbi } from "@aztec/aztec.js/abi";
+import { type Aliased } from "@aztec/aztec.js/wallet";
+import { CallAuthorizationRequest } from "@aztec/aztec.js/authorization";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
   FunctionCall,

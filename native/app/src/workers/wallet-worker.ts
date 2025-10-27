@@ -1,9 +1,7 @@
-import {
-  createAztecNodeClient,
-  WalletSchema,
-  type ChainInfo,
-  Fr,
-} from "@aztec/aztec.js";
+import { createAztecNodeClient } from "@aztec/aztec.js/node";
+import { type ChainInfo } from "@aztec/aztec.js/account";
+import { WalletSchema } from "@aztec/aztec.js/wallet";
+import { Fr } from "@aztec/aztec.js/fields";
 import { parseWithOptionals, schemaHasMethod } from "@aztec/foundation/schemas";
 import { jsonStringify } from "@aztec/foundation/json-rpc";
 import type { MessagePortMain } from "electron";
@@ -87,7 +85,7 @@ async function init(
           2,
           {
             dataDirectory: configOverrides.dataDirectory,
-            dataStoreMapSizeKB: 2e10,
+            dataStoreMapSizeKb: 2e10,
           },
           createProxyLogger("pxe:data:lmdb", logPort)
         ),
@@ -99,7 +97,7 @@ async function init(
         2,
         {
           dataDirectory: resolve(keychainHomeDir, `wallet-${rollupAddress}`),
-          dataStoreMapSizeKB: 2e10,
+          dataStoreMapSizeKb: 2e10,
         },
         walletDBLogger
       );

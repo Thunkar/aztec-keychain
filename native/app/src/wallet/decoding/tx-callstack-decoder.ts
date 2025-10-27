@@ -10,7 +10,7 @@ import {
   getAllFunctionAbis,
   type FunctionAbi,
 } from "@aztec/stdlib/abi";
-import { decodeFromAbi } from "@aztec/aztec.js";
+import { decodeFromAbi } from "@aztec/aztec.js/abi";
 import { formatAbiValue } from "./utils";
 import type { DecodingCache } from "./decoding-cache";
 import { Fr } from "@aztec/foundation/fields";

@@ -6,8 +6,8 @@ import type {
   ContractInstanceWithAddress,
   ContractInstantiationData,
 } from "@aztec/stdlib/contract";
-import type { ContractInstanceAndArtifact } from "@aztec/aztec.js";
-import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js";
+import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js/contracts";
+import { type ContractInstanceAndArtifact } from "@aztec/aztec.js/wallet";
 
 interface ContractMetadata {
   contractInstance?: {

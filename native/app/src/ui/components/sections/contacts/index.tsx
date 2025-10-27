@@ -1,4 +1,5 @@
-import { AztecAddress } from "@aztec/aztec.js";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { type Aliased } from "@aztec/aztec.js/wallet";
 import { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -11,7 +12,6 @@ import TextField from "@mui/material/TextField";
 import { ContactBox } from "./components/ContactBox.tsx";
 import { DraggableFab } from "../../shared/DraggableFab.tsx";
 import { WalletContext } from "../../../renderer";
-import type { Aliased } from "@aztec/aztec.js";
 
 export function ContactsManager() {
   const [contacts, setContacts] = useState<Aliased<AztecAddress>[]>([]);

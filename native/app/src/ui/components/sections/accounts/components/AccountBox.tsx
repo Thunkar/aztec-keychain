@@ -11,7 +11,8 @@ import IconButton from "@mui/material/IconButton";
 import { useState } from "react";
 import QrCode from "@mui/icons-material/QrCode";
 import { QRDialog } from "../../../dialogs/QRDialog";
-import type { Aliased, AztecAddress } from "@aztec/aztec.js";
+import { type Aliased } from "@aztec/aztec.js/wallet";
+import { type AztecAddress } from "@aztec/aztec.js/addresses";
 
 interface AccountBoxProps {
   account: Aliased<AztecAddress> & { type: string };

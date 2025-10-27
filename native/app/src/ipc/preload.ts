@@ -1,4 +1,6 @@
-import type { Aliased, AztecAddress, Fr } from "@aztec/aztec.js";
+import { type Aliased } from "@aztec/aztec.js/wallet";
+import { type AztecAddress } from "@aztec/aztec.js/addresses";
+import { type Fr } from "@aztec/aztec.js/fields";
 import { contextBridge, ipcRenderer } from "electron";
 import type { TxHash, TxReceipt } from "@aztec/stdlib/tx";
 import type {
