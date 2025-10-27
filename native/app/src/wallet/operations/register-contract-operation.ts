@@ -1,15 +1,54 @@
 import { ExternalOperation } from "./base-operation";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
-import type { ContractInstanceWithAddress, ContractInstantiationData } from "@aztec/stdlib/contract";
-import { getContractInstanceFromInstantiationParams, computePartialAddress } from "@aztec/stdlib/contract";
+import type {
+  ContractInstanceWithAddress,
+  ContractInstantiationData,
+} from "@aztec/stdlib/contract";
+import {
+  getContractInstanceFromInstantiationParams,
+  computePartialAddress,
+} from "@aztec/stdlib/contract";
 import type { ContractArtifact } from "@aztec/stdlib/abi";
 import type { Fr } from "@aztec/foundation/fields";
 import type { ContractInstanceAndArtifact } from "@aztec/aztec.js/wallet";
 import type { PXE } from "@aztec/pxe/server";
-import { WalletInteraction, type WalletInteractionType } from "../types/wallet-interaction";
+import {
+  WalletInteraction,
+  type WalletInteractionType,
+} from "../types/wallet-interaction";
 import type { DecodingCache } from "../decoding/decoding-cache";
 import type { InteractionManager } from "../managers/interaction-manager";
 import type { AuthorizationManager } from "../managers/authorization-manager";
+
+// Type for the possible instance data inputs
+type RegisterContractInstanceData =
+  | AztecAddress
+  | ContractInstanceWithAddress
+  | ContractInstantiationData
+  | ContractInstanceAndArtifact;
+
+// Arguments tuple for the operation
+type RegisterContractArgs = [
+  instanceData: RegisterContractInstanceData,
+  artifact?: ContractArtifact,
+  secretKey?: Fr,
+];
+
+// Result type for the operation
+type RegisterContractResult = ContractInstanceWithAddress;
+
+// Execution data stored between prepare and execute phases
+interface RegisterContractExecutionData {
+  instanceData: RegisterContractInstanceData;
+  artifact?: ContractArtifact;
+  secretKey?: Fr;
+}
+
+// Display data for authorization UI
+type RegisterContractDisplayData = {
+  contractAddress: AztecAddress;
+  contractName: string;
+} & Record<string, unknown>;
 
 /**
  * RegisterContract operation implementation.
@@ -20,42 +59,36 @@ import type { AuthorizationManager } from "../managers/authorization-manager";
  * - Registers contract with PXE
  */
 export class RegisterContractOperation extends ExternalOperation<
-  [
-    instanceData: AztecAddress | ContractInstanceWithAddress | ContractInstantiationData | ContractInstanceAndArtifact,
-    artifact?: ContractArtifact,
-    secretKey?: Fr
-  ],
-  ContractInstanceWithAddress,
-  {
-    instanceData: AztecAddress | ContractInstanceWithAddress | ContractInstantiationData | ContractInstanceAndArtifact;
-    artifact?: ContractArtifact;
-    secretKey?: Fr;
-  }
+  RegisterContractArgs,
+  RegisterContractResult,
+  RegisterContractExecutionData
 > {
+  protected interactionManager: InteractionManager;
+
   constructor(
     private pxe: PXE,
     private decodingCache: DecodingCache,
-    private interactionManager: InteractionManager,
+    interactionManager: InteractionManager,
     private authorizationManager: AuthorizationManager
   ) {
     super();
+    this.interactionManager = interactionManager;
   }
 
   async prepare(
-    instanceData: AztecAddress | ContractInstanceWithAddress | ContractInstantiationData | ContractInstanceAndArtifact,
+    instanceData: RegisterContractInstanceData,
     artifact?: ContractArtifact,
     secretKey?: Fr
   ): Promise<{
-    earlyReturn?: ContractInstanceWithAddress;
-    displayData?: { contractAddress: AztecAddress; contractName: string };
-    executionData?: {
-      instanceData: AztecAddress | ContractInstanceWithAddress | ContractInstantiationData | ContractInstanceAndArtifact;
-      artifact?: ContractArtifact;
-      secretKey?: Fr;
-    };
+    earlyReturn?: RegisterContractResult;
+    displayData?: RegisterContractDisplayData;
+    executionData?: RegisterContractExecutionData;
   }> {
     // Resolve contract address
-    const contractAddress = await this.decodingCache.resolveContractAddress(instanceData, artifact);
+    const contractAddress = await this.decodingCache.resolveContractAddress(
+      instanceData,
+      artifact
+    );
 
     // Check if already registered (early return case)
     const metadata = await this.pxe.getContractMetadata(contractAddress);
@@ -66,7 +99,11 @@ export class RegisterContractOperation extends ExternalOperation<
     }
 
     // Resolve contract name for display
-    const contractName = await this.decodingCache.resolveContractName(instanceData, artifact, contractAddress);
+    const contractName = await this.decodingCache.resolveContractName(
+      instanceData,
+      artifact,
+      contractAddress
+    );
 
     return {
       displayData: { contractAddress, contractName },
@@ -74,10 +111,9 @@ export class RegisterContractOperation extends ExternalOperation<
     };
   }
 
-  async authorize(
-    displayData: { contractAddress: AztecAddress; contractName: string }
-  ): Promise<{ interaction: WalletInteraction<WalletInteractionType> }> {
-    // Create interaction
+  async createInteraction(
+    displayData: RegisterContractDisplayData
+  ): Promise<WalletInteraction<WalletInteractionType>> {
     const interaction = WalletInteraction.from({
       type: "registerContract",
       status: "REGISTERING",
@@ -87,29 +123,43 @@ export class RegisterContractOperation extends ExternalOperation<
 
     await this.interactionManager.storeAndEmit(interaction);
 
-    // Request authorization
-    await this.authorizationManager.request("registerContract", {
+    return interaction;
+  }
+
+  async requestAuthorization(
+    displayData: RegisterContractDisplayData,
+    _interaction: WalletInteraction<WalletInteractionType>
+  ): Promise<void> {
+    await this.authorizationManager.requestAuthorization("registerContract", {
       contractAddress: displayData.contractAddress,
       contractName: displayData.contractName,
     });
-
-    return { interaction };
   }
 
-  async execute(executionData: {
-    instanceData: AztecAddress | ContractInstanceWithAddress | ContractInstantiationData | ContractInstanceAndArtifact;
-    artifact?: ContractArtifact;
-    secretKey?: Fr;
-  }): Promise<ContractInstanceWithAddress> {
+  async execute(
+    executionData: RegisterContractExecutionData
+  ): Promise<RegisterContractResult> {
     const { instanceData, artifact, secretKey } = executionData;
 
     // Type guards
-    const isInstanceWithAddress = (data: any): data is ContractInstanceWithAddress =>
-      data.address !== undefined;
-    const isContractInstantiationData = (data: any): data is ContractInstantiationData =>
-      data.salt !== undefined;
-    const isContractInstanceAndArtifact = (data: any): data is ContractInstanceAndArtifact =>
-      data.instance !== undefined && data.artifact !== undefined;
+    const isInstanceWithAddress = (
+      data: RegisterContractInstanceData
+    ): data is ContractInstanceWithAddress =>
+      typeof data === "object" &&
+      data !== null &&
+      "address" in data &&
+      !("instance" in data);
+    const isContractInstantiationData = (
+      data: RegisterContractInstanceData
+    ): data is ContractInstantiationData =>
+      typeof data === "object" && data !== null && "salt" in data;
+    const isContractInstanceAndArtifact = (
+      data: RegisterContractInstanceData
+    ): data is ContractInstanceAndArtifact =>
+      typeof data === "object" &&
+      data !== null &&
+      "instance" in data &&
+      "artifact" in data;
 
     let instance: ContractInstanceWithAddress;
 
@@ -124,59 +174,40 @@ export class RegisterContractOperation extends ExternalOperation<
     } else if (isContractInstantiationData(instanceData)) {
       // Need to create instance from instantiation data
       if (!artifact) {
-        throw new Error(`Contract artifact must be provided when registering a contract using instantiation data`);
+        throw new Error(
+          `Contract artifact must be provided when registering a contract using instantiation data`
+        );
       }
-      instance = await getContractInstanceFromInstantiationParams(artifact, instanceData);
+      instance = await getContractInstanceFromInstantiationParams(
+        artifact,
+        instanceData
+      );
       await this.pxe.registerContract({ artifact, instance });
     } else {
       // instanceData is AztecAddress
       if (!artifact) {
-        throw new Error(`Contract artifact must be provided when registering a contract from an address`);
+        throw new Error(
+          `Contract artifact must be provided when registering a contract from an address`
+        );
       }
       instance = await this.pxe.getContractInstance(instanceData);
       if (!instance) {
-        throw new Error(`No contract instance found for address: ${instanceData}`);
+        throw new Error(
+          `No contract instance found for address: ${instanceData}`
+        );
       }
       await this.pxe.registerContract({ artifact, instance });
     }
 
     // Register secret key if provided
     if (secretKey) {
-      await this.pxe.registerAccount(secretKey, await computePartialAddress(instance));
+      await this.pxe.registerAccount(
+        secretKey,
+        await computePartialAddress(instance)
+      );
     }
 
     return instance;
-  }
-
-  createBatchInteraction(displayData: { contractAddress: AztecAddress; contractName: string }): WalletInteraction<WalletInteractionType> {
-    const interaction = WalletInteraction.from({
-      type: "registerContract",
-      status: "REGISTERING",
-      complete: false,
-      title: `Register ${displayData.contractName}`,
-    });
-    // Store immediately - batch always creates interactions
-    this.interactionManager.storeAndEmit(interaction);
-    return interaction;
-  }
-
-  async updateInteractionSuccess(interaction: WalletInteraction<WalletInteractionType>): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        status: this.getSuccessStatus(),
-        complete: true,
-      })
-    );
-  }
-
-  async updateInteractionFailure(interaction: WalletInteraction<WalletInteractionType>, error: unknown): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        complete: true,
-        status: this.getFailureStatus(),
-        description: error instanceof Error ? error.message : String(error),
-      })
-    );
   }
 
   getSuccessStatus(): string {

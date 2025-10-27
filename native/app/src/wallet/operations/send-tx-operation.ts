@@ -21,13 +21,47 @@ import {
   hashExecutionPayload,
   generateSimulationTitle,
 } from "../utils/simulation-utils";
-import type { SendOptions } from "@aztec/aztec.js/wallet";
+import type {
+  SendOptions,
+  FeeOptions,
+  UserFeeOptions,
+} from "@aztec/aztec.js/wallet";
 import type { SimulateTxOperation } from "./simulate-tx-operation";
+import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 
-type ReadableTxInformation = {
+// Readable transaction information with decoded data
+interface ReadableTxInformation {
   callAuthorizations: ReadableCallAuthorization[];
   executionTrace?: DecodedExecutionTrace;
-};
+}
+
+// Arguments tuple for the operation
+type SendTxArgs = [
+  executionPayload: ExecutionPayload,
+  opts: SendOptions,
+  txInformation?: ReadableTxInformation,
+];
+
+// Result type for the operation
+type SendTxResult = TxHash;
+
+// Execution data stored between prepare and execute phases
+interface SendTxExecutionData {
+  exec: ExecutionPayload;
+  from: AztecAddress;
+  txRequest: TxExecutionRequest;
+  callAuthorizations: ReadableCallAuthorization[];
+  executionTrace?: DecodedExecutionTrace;
+  needsAuthorization: boolean;
+}
+
+// Display data for authorization UI
+type SendTxDisplayData = {
+  payloadHash: string;
+  title: string;
+  callAuthorizations: ReadableCallAuthorization[];
+  executionTrace?: DecodedExecutionTrace;
+} & Record<string, unknown>;
 
 /**
  * SendTx operation implementation.
@@ -41,45 +75,37 @@ type ReadableTxInformation = {
  * - Error handling with descriptive status messages
  */
 export class SendTxOperation extends ExternalOperation<
-  [
-    executionPayload: ExecutionPayload,
-    opts: SendOptions,
-    txInformation?: ReadableTxInformation,
-  ],
-  TxHash,
-  {
-    exec: ExecutionPayload;
-    from: AztecAddress;
-    txRequest: TxExecutionRequest;
-    callAuthorizations: ReadableCallAuthorization[];
-    executionTrace?: DecodedExecutionTrace;
-    needsAuthorization: boolean;
-  }
+  SendTxArgs,
+  SendTxResult,
+  SendTxExecutionData
 > {
+  protected interactionManager: InteractionManager;
+
   constructor(
     private pxe: PXE,
     private aztecNode: AztecNode,
     private db: WalletDB,
     private decodingCache: DecodingCache,
-    private interactionManager: InteractionManager,
+    interactionManager: InteractionManager,
     private authorizationManager: AuthorizationManager,
     private simulateTxOp: SimulateTxOperation,
     private createAuthWit: (
       from: AztecAddress,
-      auth: { caller: AztecAddress; call: any }
-    ) => Promise<any>,
+      auth: { caller: AztecAddress; call: unknown }
+    ) => Promise<AuthWitness>,
     private createTxExecutionRequestFromPayloadAndFee: (
       exec: ExecutionPayload,
       from: AztecAddress,
-      fee: any
+      fee: FeeOptions
     ) => Promise<TxExecutionRequest>,
     private getDefaultFeeOptions: (
       from: AztecAddress,
-      fee: any
-    ) => Promise<any>,
-    private contextualizeError: (err: any, context: string) => Error
+      fee: UserFeeOptions
+    ) => Promise<FeeOptions>,
+    private contextualizeError: (err: unknown, context: string) => Error
   ) {
     super();
+    this.interactionManager = interactionManager;
   }
 
   async prepare(
@@ -130,13 +156,7 @@ export class SendTxOperation extends ExternalOperation<
       );
 
       // Decode if not already done (prepare skips decoding for existing interactions)
-      let decoded = prepared.executionData!.decoded;
-      if (!decoded) {
-        const decodingService = new TxDecodingService(this.decodingCache);
-        decoded = await decodingService.decodeTransaction(
-          prepared.executionData!.simulationResult
-        );
-      }
+      const decoded = prepared.executionData!.decoded;
 
       ({ callAuthorizations, executionTrace } = decoded);
 
@@ -195,24 +215,33 @@ export class SendTxOperation extends ExternalOperation<
     };
   }
 
-  async authorize(displayData: {
-    payloadHash: string;
-    title: string;
-    callAuthorizations: ReadableCallAuthorization[];
-    executionTrace?: DecodedExecutionTrace;
-  }): Promise<{ interaction: WalletInteraction<WalletInteractionType> }> {
+  async createInteraction(
+    displayData: SendTxDisplayData
+  ): Promise<WalletInteraction<WalletInteractionType>> {
     const interaction = WalletInteraction.from({
       id: displayData.payloadHash,
       type: "sendTx",
       title: displayData.title,
       complete: false,
-      status: "REQUESTING AUTHORIZATION",
+      status: "CREATING",
       timestamp: Date.now(),
     });
 
     await this.interactionManager.storeAndEmit(interaction);
 
-    // Request authorization
+    return interaction;
+  }
+
+  async requestAuthorization(
+    displayData: SendTxDisplayData,
+    interaction: WalletInteraction<WalletInteractionType>
+  ): Promise<void> {
+    // Update status to requesting authorization
+    await this.interactionManager.storeAndEmit(
+      interaction.update({ status: "REQUESTING AUTHORIZATION" })
+    );
+
+    // Request authorization (never persisted for sendTx)
     await this.authorizationManager.requestAuthorization(
       "sendTx",
       {
@@ -221,8 +250,6 @@ export class SendTxOperation extends ExternalOperation<
       },
       { persist: false }
     );
-
-    return { interaction };
   }
 
   async execute(executionData: {
@@ -246,50 +273,6 @@ export class SendTxOperation extends ExternalOperation<
     });
 
     return txHash;
-  }
-
-  createBatchInteraction(displayData: {
-    payloadHash: string;
-    title: string;
-    callAuthorizations: ReadableCallAuthorization[];
-    executionTrace?: DecodedExecutionTrace;
-  }): WalletInteraction<WalletInteractionType> {
-    const interaction = WalletInteraction.from({
-      id: displayData.payloadHash,
-      type: "sendTx",
-      title: displayData.title,
-      complete: false,
-      status: "CREATING",
-      timestamp: Date.now(),
-    });
-
-    this.interactionManager.storeAndEmit(interaction);
-
-    return interaction;
-  }
-
-  async updateInteractionSuccess(
-    interaction: WalletInteraction<WalletInteractionType>
-  ): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        status: this.getSuccessStatus(),
-        complete: true,
-      })
-    );
-  }
-
-  async updateInteractionFailure(
-    interaction: WalletInteraction<WalletInteractionType>,
-    error: unknown
-  ): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        complete: true,
-        status: this.getFailureStatus(),
-        description: error instanceof Error ? error.message : String(error),
-      })
-    );
   }
 
   getSuccessStatus(): string {

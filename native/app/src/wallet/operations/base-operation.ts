@@ -1,4 +1,7 @@
-import type { WalletInteraction, WalletInteractionType } from "../types/wallet-interaction";
+import type {
+  WalletInteraction,
+  WalletInteractionType,
+} from "../types/wallet-interaction";
 import type { InteractionManager } from "../managers/interaction-manager";
 import type { AuthorizationManager } from "../managers/authorization-manager";
 
@@ -14,7 +17,12 @@ import type { AuthorizationManager } from "../managers/authorization-manager";
  * - Standalone: Full flow with authorization
  * - Batch: Prepare in Phase 1, Execute in Phase 4, Authorization handled by batch
  */
-export abstract class ExternalOperation<TArgs extends unknown[], TResult, TExecutionData = unknown> {
+export abstract class ExternalOperation<
+  TArgs extends unknown[],
+  TResult,
+  TExecutionData = unknown,
+> {
+  protected abstract interactionManager: InteractionManager;
   /**
    * PHASE 1: PREPARE
    * Pure logic with no side effects.
@@ -31,16 +39,30 @@ export abstract class ExternalOperation<TArgs extends unknown[], TResult, TExecu
   }>;
 
   /**
-   * PHASE 2: AUTHORIZE (Standalone only)
-   * Create interaction and request user permission.
-   * Operations should use their injected managers from constructor.
+   * PHASE 2A: CREATE INTERACTION (Standalone only)
+   * Create the interaction object for tracking this operation.
+   * Operations should use their injected interaction manager from constructor.
+   *
+   * @param displayData - Data to show in interaction
+   * @returns The created interaction
+   */
+  abstract createInteraction(
+    displayData: Record<string, unknown>
+  ): Promise<WalletInteraction<WalletInteractionType>>;
+
+  /**
+   * PHASE 2B: REQUEST AUTHORIZATION (Standalone only)
+   * Request user permission for this operation.
+   * Operations should use their injected authorization manager from constructor.
    *
    * @param displayData - Data to show in authorization dialog
-   * @returns Object containing the created interaction for tracking
+   * @param interaction - The interaction created in phase 2A
+   * @returns Promise that resolves when authorization is granted or rejects if denied
    */
-  abstract authorize(
-    displayData: Record<string, unknown>
-  ): Promise<{ interaction: WalletInteraction<WalletInteractionType> }>;
+  abstract requestAuthorization(
+    displayData: Record<string, unknown>,
+    interaction: WalletInteraction<WalletInteractionType>
+  ): Promise<void>;
 
   /**
    * PHASE 3: EXECUTE
@@ -50,35 +72,6 @@ export abstract class ExternalOperation<TArgs extends unknown[], TResult, TExecu
    * @returns Result of the operation
    */
   abstract execute(executionData: TExecutionData): Promise<TResult>;
-
-  /**
-   * Create interaction for batch execution.
-   * Called in Phase 4 of batch flow before executing.
-   * Operations should use their injected interaction manager from constructor.
-   *
-   * @param displayData - Data to show in interaction
-   * @returns The created interaction
-   */
-  abstract createBatchInteraction(
-    displayData: Record<string, unknown>
-  ): WalletInteraction<WalletInteractionType>;
-
-  /**
-   * Update interaction on success.
-   * Operations should use their injected interaction manager from constructor.
-   *
-   * @param interaction - The interaction to update
-   */
-  abstract updateInteractionSuccess(interaction: WalletInteraction<WalletInteractionType>): Promise<void>;
-
-  /**
-   * Update interaction on failure.
-   * Operations should use their injected interaction manager from constructor.
-   *
-   * @param interaction - The interaction to update
-   * @param error - The error that occurred
-   */
-  abstract updateInteractionFailure(interaction: WalletInteraction<WalletInteractionType>, error: unknown): Promise<void>;
 
   /**
    * Get success status message for interaction updates.
@@ -91,13 +84,50 @@ export abstract class ExternalOperation<TArgs extends unknown[], TResult, TExecu
   abstract getFailureStatus(): string;
 
   /**
-   * Standalone execution flow: prepare → authorize → execute
+   * Update interaction on success.
+   * Uses the operation's interactionManager and getSuccessStatus().
+   *
+   * @param interaction - The interaction to update
+   */
+  async updateInteractionSuccess(
+    interaction: WalletInteraction<WalletInteractionType>
+  ): Promise<void> {
+    await this.interactionManager.storeAndEmit(
+      interaction.update({
+        status: this.getSuccessStatus(),
+        complete: true,
+      })
+    );
+  }
+
+  /**
+   * Update interaction on failure.
+   * Uses the operation's interactionManager and getFailureStatus().
+   *
+   * @param interaction - The interaction to update
+   * @param error - The error that occurred
+   */
+  async updateInteractionFailure(
+    interaction: WalletInteraction<WalletInteractionType>,
+    error: unknown
+  ): Promise<void> {
+    await this.interactionManager.storeAndEmit(
+      interaction.update({
+        complete: true,
+        status: this.getFailureStatus(),
+        description: error instanceof Error ? error.message : String(error),
+      })
+    );
+  }
+
+  /**
+   * Standalone execution flow: prepare → createInteraction → requestAuthorization → execute
    *
    * @param args - Arguments for the operation
    * @returns Result of the operation
    */
   async executeStandalone(...args: TArgs): Promise<TResult> {
-    // PREPARE
+    // PHASE 1: PREPARE
     const prepared = await this.prepare(...args);
 
     // Early return if no authorization needed
@@ -105,11 +135,14 @@ export abstract class ExternalOperation<TArgs extends unknown[], TResult, TExecu
       return prepared.earlyReturn;
     }
 
-    // AUTHORIZE - Create interaction and request permission
-    const { interaction } = await this.authorize(prepared.displayData!);
+    // PHASE 2A: CREATE INTERACTION
+    const interaction = await this.createInteraction(prepared.displayData!);
+
+    // PHASE 2B: REQUEST AUTHORIZATION
+    await this.requestAuthorization(prepared.displayData!, interaction);
 
     try {
-      // EXECUTE - Perform the action
+      // PHASE 3: EXECUTE - Perform the action
       const result = await this.execute(prepared.executionData!);
 
       // Update interaction on success
@@ -135,7 +168,7 @@ export abstract class ExternalOperation<TArgs extends unknown[], TResult, TExecu
     executionData: TExecutionData
   ): Promise<TResult> {
     // Create interaction (batch always creates interactions)
-    const interaction = this.createBatchInteraction(displayData);
+    const interaction = await this.createInteraction(displayData);
 
     try {
       // EXECUTE - Perform the action

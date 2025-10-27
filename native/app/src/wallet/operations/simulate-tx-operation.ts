@@ -24,11 +24,55 @@ import {
   generateSimulationTitle,
 } from "../utils/simulation-utils";
 import type { FeeOptions, SimulateOptions } from "@aztec/aztec.js/wallet";
+import type { Logger } from "@aztec/aztec.js/log";
+import type { ContractInstanceWithAddress } from "@aztec/stdlib/contract";
+import type { ContractArtifact } from "@aztec/stdlib/abi";
 
-type ReadableTxInformation = {
+// Readable transaction information with decoded data
+interface ReadableTxInformation {
   callAuthorizations: ReadableCallAuthorization[];
   executionTrace: DecodedExecutionTrace;
-};
+}
+
+// Fake account data structure
+interface FakeAccountData {
+  account: {
+    createTxExecutionRequest: (
+      payload: ExecutionPayload,
+      gasSettings: unknown,
+      options: DefaultAccountEntrypointOptions
+    ) => Promise<TxExecutionRequest>;
+  };
+  instance: ContractInstanceWithAddress;
+  artifact: ContractArtifact;
+}
+
+// Arguments tuple for the operation
+type SimulateTxArgs = [
+  executionPayload: ExecutionPayload,
+  opts: SimulateOptions,
+  existingInteraction?: WalletInteraction<WalletInteractionType>,
+];
+
+// Result type for the operation
+type SimulateTxResult = TxSimulationResult;
+
+// Execution data stored between prepare and execute phases
+interface SimulateTxExecutionData {
+  simulationResult: TxSimulationResult;
+  txRequest: TxExecutionRequest;
+  payloadHash: string;
+  decoded?: ReadableTxInformation;
+  hasEmptyPayload: boolean;
+}
+
+// Display data for authorization UI
+type SimulateTxDisplayData = {
+  payloadHash: string;
+  title: string;
+  decoded: ReadableTxInformation;
+  hasEmptyPayload: boolean;
+} & Record<string, unknown>;
 
 /**
  * SimulateTx operation implementation.
@@ -43,44 +87,35 @@ type ReadableTxInformation = {
  * - Support for existing interactions (e.g., from sendTx flow)
  */
 export class SimulateTxOperation extends ExternalOperation<
-  [
-    executionPayload: ExecutionPayload,
-    opts: SimulateOptions,
-    existingInteraction?: WalletInteraction<WalletInteractionType>,
-  ],
-  TxSimulationResult,
-  {
-    simulationResult: TxSimulationResult;
-    txRequest: TxExecutionRequest;
-    payloadHash: string;
-    decoded?: ReadableTxInformation;
-    hasEmptyPayload: boolean;
-  }
+  SimulateTxArgs,
+  SimulateTxResult,
+  SimulateTxExecutionData
 > {
+  protected interactionManager: InteractionManager;
+
   constructor(
     private pxe: PXE,
     private db: WalletDB,
     private decodingCache: DecodingCache,
-    private interactionManager: InteractionManager,
+    interactionManager: InteractionManager,
     private authorizationManager: AuthorizationManager,
     private getFeeOptionsForGasEstimation: (
       from: AztecAddress,
-      fee: any
+      fee: SimulateOptions["fee"]
     ) => Promise<FeeOptions>,
     private getDefaultFeeOptions: (
       from: AztecAddress,
-      fee: any
+      fee: SimulateOptions["fee"]
     ) => Promise<FeeOptions>,
-    private getFakeAccountDataFor: (address: AztecAddress) => Promise<{
-      account: any;
-      instance: any;
-      artifact: any;
-    }>,
+    private getFakeAccountDataFor: (
+      address: AztecAddress
+    ) => Promise<FakeAccountData>,
     private cancellableTransactions: boolean,
     private appId: string,
-    private log: any
+    private log: Logger
   ) {
     super();
+    this.interactionManager = interactionManager;
   }
 
   async prepare(
@@ -88,20 +123,9 @@ export class SimulateTxOperation extends ExternalOperation<
     opts: SimulateOptions,
     existingInteraction?: WalletInteraction<WalletInteractionType>
   ): Promise<{
-    earlyReturn?: TxSimulationResult;
-    displayData?: {
-      payloadHash: string;
-      title: string;
-      decoded: ReadableTxInformation;
-      hasEmptyPayload: boolean;
-    };
-    executionData?: {
-      simulationResult: TxSimulationResult;
-      txRequest: TxExecutionRequest;
-      payloadHash: string;
-      decoded?: ReadableTxInformation;
-      hasEmptyPayload: boolean;
-    };
+    earlyReturn?: SimulateTxResult;
+    displayData?: SimulateTxDisplayData;
+    executionData?: SimulateTxExecutionData;
   }> {
     // Check for empty payload (temporary workaround for app bug)
     const hasEmptyPayload = executionPayload.calls.length === 0;
@@ -157,40 +181,11 @@ export class SimulateTxOperation extends ExternalOperation<
       { contracts: contractOverrides }
     );
 
-    // Decode transaction for standalone simulations (not for existingInteraction like sendTx flow)
-    let decoded: ReadableTxInformation | undefined;
-    if (!existingInteraction) {
-      try {
-        const decodingService = new TxDecodingService(this.decodingCache);
-        decoded = await decodingService.decodeTransaction(simulationResult);
-      } catch (error) {
-        this.log.error(`Failed to decode transaction:`, error);
-        // Continue without decoded data - the simulation itself succeeded
-        decoded = {
-          callAuthorizations: [],
-          executionTrace: {
-            privateExecution: {
-              type: "private-call" as const,
-              depth: 0,
-              counter: { start: 0, end: 0 },
-              contract: { name: "Unknown", address: "0x0" },
-              function: "unknown",
-              caller: { name: "Unknown", address: "0x0" },
-              isStaticCall: false,
-              args: [],
-              returnValues: [],
-              nestedEvents: [],
-            },
-            publicExecutionQueue: [],
-          },
-        };
-      }
-    }
+    const decodingService = new TxDecodingService(this.decodingCache);
+    const decoded = await decodingService.decodeTransaction(simulationResult);
 
     return {
-      displayData: decoded
-        ? { payloadHash, title, decoded, hasEmptyPayload }
-        : undefined,
+      displayData: { payloadHash, title, decoded, hasEmptyPayload },
       executionData: {
         simulationResult,
         txRequest,
@@ -201,12 +196,9 @@ export class SimulateTxOperation extends ExternalOperation<
     };
   }
 
-  async authorize(displayData: {
-    payloadHash: string;
-    title: string;
-    decoded: ReadableTxInformation;
-    hasEmptyPayload: boolean;
-  }): Promise<{ interaction: WalletInteraction<WalletInteractionType> }> {
+  async createInteraction(
+    displayData: SimulateTxDisplayData
+  ): Promise<WalletInteraction<WalletInteractionType>> {
     // Create interaction with payload hash as ID for deduplication
     const interaction = WalletInteraction.from({
       id: displayData.payloadHash,
@@ -218,41 +210,39 @@ export class SimulateTxOperation extends ExternalOperation<
       timestamp: Date.now(),
     });
 
-    // Only store interaction if payload is not empty (workaround for app bug)
-    if (!displayData.hasEmptyPayload) {
-      await this.interactionManager.storeAndEmit(interaction);
+    await this.interactionManager.storeAndEmit(interaction);
 
-      // Update status to requesting authorization
-      await this.interactionManager.storeAndEmit(
-        interaction.update({ status: "REQUESTING AUTHORIZATION" })
-      );
-
-      // Request authorization with persistent caching
-      await this.authorizationManager.requestAuthorization(
-        "simulateTx",
-        {
-          payloadHash: displayData.payloadHash,
-          callAuthorizations: displayData.decoded.callAuthorizations,
-          executionTrace: displayData.decoded.executionTrace,
-        },
-        {
-          persist: true,
-          storageKey: `simulateTx:${displayData.payloadHash}`,
-          persistData: { title: displayData.title },
-        }
-      );
-    }
-
-    return { interaction };
+    return interaction;
   }
 
-  async execute(executionData: {
-    simulationResult: TxSimulationResult;
-    txRequest: TxExecutionRequest;
-    payloadHash: string;
-    decoded?: ReadableTxInformation;
-    hasEmptyPayload: boolean;
-  }): Promise<TxSimulationResult> {
+  async requestAuthorization(
+    displayData: SimulateTxDisplayData,
+    interaction: WalletInteraction<WalletInteractionType>
+  ): Promise<void> {
+    // Update status to requesting authorization
+    await this.interactionManager.storeAndEmit(
+      interaction.update({ status: "REQUESTING AUTHORIZATION" })
+    );
+
+    // Request authorization with persistent caching
+    await this.authorizationManager.requestAuthorization(
+      "simulateTx",
+      {
+        payloadHash: displayData.payloadHash,
+        callAuthorizations: displayData.decoded.callAuthorizations,
+        executionTrace: displayData.decoded.executionTrace,
+      },
+      {
+        persist: true,
+        storageKey: `simulateTx:${displayData.payloadHash}`,
+        persistData: { title: displayData.title },
+      }
+    );
+  }
+
+  async execute(
+    executionData: SimulateTxExecutionData
+  ): Promise<SimulateTxResult> {
     // Store the simulation result using the payload hash
     if (!executionData.hasEmptyPayload) {
       try {
@@ -268,54 +258,6 @@ export class SimulateTxOperation extends ExternalOperation<
     }
 
     return executionData.simulationResult;
-  }
-
-  createBatchInteraction(displayData: {
-    payloadHash: string;
-    title: string;
-    decoded: ReadableTxInformation;
-    hasEmptyPayload: boolean;
-  }): WalletInteraction<WalletInteractionType> {
-    const interaction = WalletInteraction.from({
-      id: displayData.payloadHash,
-      type: "simulateTx",
-      title: displayData.title,
-      description: `App: ${this.appId}`,
-      complete: false,
-      status: "SIMULATING",
-      timestamp: Date.now(),
-    });
-
-    // Store immediately if not empty payload
-    if (!displayData.hasEmptyPayload) {
-      this.interactionManager.storeAndEmit(interaction);
-    }
-
-    return interaction;
-  }
-
-  async updateInteractionSuccess(
-    interaction: WalletInteraction<WalletInteractionType>
-  ): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        status: this.getSuccessStatus(),
-        complete: true,
-      })
-    );
-  }
-
-  async updateInteractionFailure(
-    interaction: WalletInteraction<WalletInteractionType>,
-    error: unknown
-  ): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        complete: true,
-        status: this.getFailureStatus(),
-        description: error instanceof Error ? error.message : String(error),
-      })
-    );
   }
 
   getSuccessStatus(): string {

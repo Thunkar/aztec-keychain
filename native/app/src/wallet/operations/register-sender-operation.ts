@@ -1,10 +1,31 @@
 import { ExternalOperation } from "./base-operation";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { PXE } from "@aztec/pxe/server";
-import { WalletInteraction, type WalletInteractionType } from "../types/wallet-interaction";
+import {
+  WalletInteraction,
+  type WalletInteractionType,
+} from "../types/wallet-interaction";
 import type { WalletDB } from "../database/wallet-db";
 import type { InteractionManager } from "../managers/interaction-manager";
 import type { AuthorizationManager } from "../managers/authorization-manager";
+
+// Arguments tuple for the operation
+type RegisterSenderArgs = [address: AztecAddress, alias: string];
+
+// Result type for the operation
+type RegisterSenderResult = AztecAddress;
+
+// Execution data stored between prepare and execute phases
+interface RegisterSenderExecutionData {
+  address: AztecAddress;
+  alias: string;
+}
+
+// Display data for authorization UI
+type RegisterSenderDisplayData = {
+  address: AztecAddress;
+  alias: string;
+};
 
 /**
  * RegisterSender operation implementation.
@@ -15,26 +36,29 @@ import type { AuthorizationManager } from "../managers/authorization-manager";
  * - Creates interaction for tracking
  */
 export class RegisterSenderOperation extends ExternalOperation<
-  [address: AztecAddress, alias: string],
-  AztecAddress,
-  { address: AztecAddress; alias: string }
+  RegisterSenderArgs,
+  RegisterSenderResult,
+  RegisterSenderExecutionData
 > {
+  protected interactionManager: InteractionManager;
+
   constructor(
     private pxe: PXE,
     private db: WalletDB,
-    private interactionManager: InteractionManager,
+    interactionManager: InteractionManager,
     private authorizationManager: AuthorizationManager
   ) {
     super();
+    this.interactionManager = interactionManager;
   }
 
   async prepare(
     address: AztecAddress,
     alias: string
   ): Promise<{
-    earlyReturn?: AztecAddress;
-    displayData?: { address: AztecAddress; alias: string };
-    executionData?: { address: AztecAddress; alias: string };
+    earlyReturn?: RegisterSenderResult;
+    displayData?: RegisterSenderDisplayData;
+    executionData?: RegisterSenderExecutionData;
   }> {
     // No early return case for registerSender - always needs authorization
     return {
@@ -43,10 +67,9 @@ export class RegisterSenderOperation extends ExternalOperation<
     };
   }
 
-  async authorize(
-    displayData: { address: AztecAddress; alias: string }
-  ): Promise<{ interaction: WalletInteraction<WalletInteractionType> }> {
-    // Create interaction
+  async createInteraction(
+    displayData: RegisterSenderDisplayData
+  ): Promise<WalletInteraction<WalletInteractionType>> {
     const interaction = WalletInteraction.from({
       type: "registerSender",
       status: "REGISTERING",
@@ -56,55 +79,27 @@ export class RegisterSenderOperation extends ExternalOperation<
 
     await this.interactionManager.storeAndEmit(interaction);
 
-    // Request authorization
-    await this.authorizationManager.request("registerSender", {
+    return interaction;
+  }
+
+  async requestAuthorization(
+    displayData: RegisterSenderDisplayData,
+    _interaction: WalletInteraction<WalletInteractionType>
+  ): Promise<void> {
+    await this.authorizationManager.requestAuthorization("registerSender", {
       address: displayData.address.toString(),
       alias: displayData.alias,
     });
-
-    return { interaction };
   }
 
-  async execute(executionData: {
-    address: AztecAddress;
-    alias: string;
-  }): Promise<AztecAddress> {
+  async execute(
+    executionData: RegisterSenderExecutionData
+  ): Promise<RegisterSenderResult> {
     // Store sender in database
     await this.db.storeSender(executionData.address, executionData.alias);
 
     // Register with PXE
     return await this.pxe.registerSender(executionData.address);
-  }
-
-  createBatchInteraction(displayData: { address: AztecAddress; alias: string }): WalletInteraction<WalletInteractionType> {
-    const interaction = WalletInteraction.from({
-      type: "registerSender",
-      status: "REGISTERING",
-      complete: false,
-      title: `Register sender ${displayData.alias}`,
-    });
-    // Store immediately - batch always creates interactions
-    this.interactionManager.storeAndEmit(interaction);
-    return interaction;
-  }
-
-  async updateInteractionSuccess(interaction: WalletInteraction<WalletInteractionType>): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        status: this.getSuccessStatus(),
-        complete: true,
-      })
-    );
-  }
-
-  async updateInteractionFailure(interaction: WalletInteraction<WalletInteractionType>, error: unknown): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        complete: true,
-        status: this.getFailureStatus(),
-        description: error instanceof Error ? error.message : String(error),
-      })
-    );
   }
 
   getSuccessStatus(): string {
