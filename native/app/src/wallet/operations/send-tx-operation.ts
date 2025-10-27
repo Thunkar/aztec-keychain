@@ -36,22 +36,14 @@ interface ReadableTxInformation {
 }
 
 // Arguments tuple for the operation
-type SendTxArgs = [
-  executionPayload: ExecutionPayload,
-  opts: SendOptions,
-  txInformation?: ReadableTxInformation,
-];
+type SendTxArgs = [executionPayload: ExecutionPayload, opts: SendOptions];
 
 // Result type for the operation
 type SendTxResult = TxHash;
 
 // Execution data stored between prepare and execute phases
 interface SendTxExecutionData {
-  exec: ExecutionPayload;
-  from: AztecAddress;
   txRequest: TxExecutionRequest;
-  callAuthorizations: ReadableCallAuthorization[];
-  executionTrace?: DecodedExecutionTrace;
 }
 
 // Display data for authorization UI
@@ -109,61 +101,31 @@ export class SendTxOperation extends ExternalOperation<
 
   async prepare(
     executionPayload: ExecutionPayload,
-    opts: SendOptions,
-    txInformation?: ReadableTxInformation
+    opts: SendOptions
   ): Promise<{
     earlyReturn?: TxHash;
-    displayData?: {
-      payloadHash: string;
-      title: string;
-      callAuthorizations: ReadableCallAuthorization[];
-      executionTrace?: DecodedExecutionTrace;
-    };
-    executionData?: {
-      exec: ExecutionPayload;
-      from: AztecAddress;
-      txRequest: TxExecutionRequest;
-      callAuthorizations: ReadableCallAuthorization[];
-      executionTrace?: DecodedExecutionTrace;
-    };
+    displayData: SendTxDisplayData;
+    executionData: SendTxExecutionData;
   }> {
     const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
 
     let callAuthorizations: ReadableCallAuthorization[];
     let executionTrace: DecodedExecutionTrace | undefined;
 
-    if (!txInformation) {
-      // Use simulateTx operation's prepare method
-      const interaction = WalletInteraction.from({
-        id: hashExecutionPayload(executionPayload),
-        type: "sendTx",
-        status: "COMPUTING AUTHORIZATIONS",
-        complete: false,
-        title: await generateSimulationTitle(
-          executionPayload,
-          this.decodingCache,
-          opts.from,
-          opts.fee?.embeddedPaymentMethodFeePayer
-        ),
-      });
+    // Use simulateTx operation's prepare method
+    const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
 
-      const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
+    // Decode if not already done (prepare skips decoding for existing interactions)
+    const decoded = prepared.executionData!.decoded;
 
-      // Decode if not already done (prepare skips decoding for existing interactions)
-      const decoded = prepared.executionData!.decoded;
+    ({ callAuthorizations, executionTrace } = decoded);
 
-      ({ callAuthorizations, executionTrace } = decoded);
-
-      // Store simulation result
-      await this.db.storeTxSimulation(
-        prepared.executionData!.payloadHash,
-        prepared.executionData!.simulationResult,
-        prepared.executionData!.txRequest
-      );
-    } else {
-      callAuthorizations = txInformation.callAuthorizations;
-      executionTrace = txInformation.executionTrace;
-    }
+    // Store simulation result
+    await this.db.storeTxSimulation(
+      prepared.executionData!.payloadHash,
+      prepared.executionData!.simulationResult,
+      prepared.executionData!.txRequest
+    );
 
     // Create auth witnesses for call authorizations
     const authWitnesses = await Promise.all(
@@ -199,11 +161,7 @@ export class SendTxOperation extends ExternalOperation<
         executionTrace,
       },
       executionData: {
-        exec: executionPayload,
-        from: opts.from,
         txRequest,
-        callAuthorizations,
-        executionTrace,
       },
     };
   }
@@ -251,8 +209,6 @@ export class SendTxOperation extends ExternalOperation<
   }
 
   async execute(executionData: {
-    exec: ExecutionPayload;
-    from: AztecAddress;
     txRequest: TxExecutionRequest;
   }): Promise<TxHash> {
     const provenTx = await this.pxe.proveTx(executionData.txRequest);

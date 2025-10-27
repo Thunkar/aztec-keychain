@@ -35,36 +35,14 @@ export function AuthorizeSimulateTxContent({
         </Typography>
       )}
 
-      <Typography
-        variant="body2"
-        sx={{
-          bgcolor: "rgba(33, 150, 243, 0.15)",
-          color: "text.primary",
-          p: 1.5,
-          borderRadius: 1,
-          mb: 2,
-          border: "1px solid",
-          borderColor: "info.main",
-        }}
-      >
-        <strong>Note:</strong> Simulations are run locally and do not affect the
-        blockchain. This authorization controls what execution data the app can
-        see from the simulation.
-        {isUtility && (
-          <>
-            {" "}
-            Utility functions do not go through account entrypoints and never
-            pay fees.
-          </>
-        )}
-      </Typography>
-
       {executionTrace && (
         <Box sx={{ mb: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
             Simulation Preview:
           </Typography>
-          {isUtility && typeof executionTrace === "object" && "functionName" in executionTrace ? (
+          {isUtility &&
+          typeof executionTrace === "object" &&
+          "functionName" in executionTrace ? (
             // Simple display for utility functions
             <Box
               sx={{
@@ -79,7 +57,8 @@ export function AuthorizeSimulateTxContent({
               </Typography>
               <Typography variant="body2" gutterBottom>
                 <strong>Contract:</strong>{" "}
-                {executionTrace.contractName || `${executionTrace.contractAddress?.substring(0, 16)}...`}
+                {executionTrace.contractName ||
+                  `${executionTrace.contractAddress?.substring(0, 16)}...`}
               </Typography>
               {executionTrace.args && (
                 <Typography variant="body2" component="div">

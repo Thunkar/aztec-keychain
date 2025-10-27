@@ -63,66 +63,6 @@ export class DecodingCache {
   }
 
   /**
-   * Preload contract metadata and artifacts for multiple addresses.
-   * This populates both instance and artifact caches in parallel.
-   */
-  async preload(addresses: AztecAddress[]): Promise<void> {
-    // Filter out addresses already in cache
-    const uncachedAddresses = addresses.filter(
-      (addr) => !this.instanceCache.has(addr.toString())
-    );
-
-    if (uncachedAddresses.length === 0) {
-      return;
-    }
-
-    // Fetch all contract metadata in parallel
-    const metadataPromises = uncachedAddresses.map(async (address) => {
-      try {
-        const metadata = await this.pxe.getContractMetadata(address);
-        this.instanceCache.set(address.toString(), metadata);
-        return metadata;
-      } catch (error) {
-        // Ignore errors for individual contracts
-        return null;
-      }
-    });
-
-    const metadataResults = await Promise.all(metadataPromises);
-
-    // Extract unique contract class IDs
-    const classIds = new Set<string>();
-    for (const metadata of metadataResults) {
-      if (metadata?.contractInstance?.currentContractClassId) {
-        classIds.add(metadata.contractInstance.currentContractClassId.toString());
-      }
-    }
-
-    // Filter out class IDs already in cache
-    const uncachedClassIds = Array.from(classIds).filter(
-      (classId) => !this.artifactCache.has(classId)
-    );
-
-    // Fetch all artifacts in parallel
-    const artifactPromises = uncachedClassIds.map(async (classIdStr) => {
-      try {
-        // We need to reconstruct the class ID object from string
-        // The actual class ID type should be used here
-        const classId = classIdStr; // TODO: might need proper deserialization
-        const { artifact } = await this.pxe.getContractClassMetadata(
-          classId as any,
-          true
-        );
-        this.artifactCache.set(classIdStr, artifact);
-      } catch (error) {
-        // Ignore errors for individual artifacts
-      }
-    });
-
-    await Promise.all(artifactPromises);
-  }
-
-  /**
    * Get address alias with caching.
    * Checks accounts, senders, and contract metadata in order.
    */

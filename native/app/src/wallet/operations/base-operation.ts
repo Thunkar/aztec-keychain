@@ -11,11 +11,12 @@ import type { AuthorizationManager } from "../managers/authorization-manager";
  * Defines the standard 3-phase pattern for all batchable operations:
  * 1. PREPARE - Pure logic, gather data, check early returns
  * 2. AUTHORIZE - Create interaction, request user permission (standalone only)
- * 3. EXECUTE - Perform the actual action
+ * 3. EXECUTE - Perform the actual action (pure business logic)
  *
  * Each operation can be called:
- * - Standalone: Full flow with authorization
- * - Batch: Prepare in Phase 1, Execute in Phase 4, Authorization handled by batch
+ * - Standalone: Full flow with authorization (via executeStandalone)
+ * - Batch: Batch caller handles prepare, authorization, interaction creation,
+ *          then calls execute() with interaction tracking
  */
 export abstract class ExternalOperation<
   TArgs extends unknown[],
@@ -73,7 +74,7 @@ export abstract class ExternalOperation<
 
   /**
    * PHASE 3: EXECUTE
-   * Perform the actual action. Pure execution logic.
+   * Pure business logic for the operation. No side effects (no interaction management).
    *
    * @param executionData - Data from prepare phase
    * @returns Result of the operation
@@ -146,47 +147,18 @@ export abstract class ExternalOperation<
     const interaction = await this.createInteraction(prepared.displayData!);
 
     // PHASE 2B: REQUEST AUTHORIZATION
-    await this.requestAuthorization(prepared.displayData!, interaction, prepared.persistence);
+    await this.requestAuthorization(
+      prepared.displayData!,
+      interaction,
+      prepared.persistence
+    );
 
+    // PHASE 3: EXECUTE - Perform the action
     try {
-      // PHASE 3: EXECUTE - Perform the action
       const result = await this.execute(prepared.executionData!);
-
-      // Update interaction on success
       await this.updateInteractionSuccess(interaction);
-
       return result;
     } catch (error) {
-      // Update interaction on failure
-      await this.updateInteractionFailure(interaction, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Batch execution flow: just execute (prepare already done, authorization handled by batch)
-   *
-   * @param displayData - Display data from prepare phase
-   * @param executionData - Execution data from prepare phase
-   * @returns Result of the operation
-   */
-  async executeBatch(
-    displayData: Record<string, unknown>,
-    executionData: TExecutionData
-  ): Promise<TResult> {
-    // Create interaction (batch always creates interactions)
-    const interaction = await this.createInteraction(displayData);
-
-    try {
-      // EXECUTE - Perform the action
-      const result = await this.execute(executionData);
-
-      // Update interaction on success
-      await this.updateInteractionSuccess(interaction);
-
-      return result;
-    } catch (error) {
-      // Update interaction on failure
       await this.updateInteractionFailure(interaction, error);
       throw error;
     }

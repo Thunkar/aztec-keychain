@@ -257,10 +257,9 @@ export class ExternalWallet extends BaseNativeWallet {
 
   override async sendTx(
     exec: ExecutionPayload,
-    opts: SendOptions,
-    txInformation?: ReadableTxInformation
+    opts: SendOptions
   ): Promise<TxHash> {
-    return await this.sendTxOp.executeStandalone(exec, opts, txInformation);
+    return await this.sendTxOp.executeStandalone(exec, opts);
   }
 
   override async batch<
@@ -370,7 +369,7 @@ export class ExternalWallet extends BaseNativeWallet {
     }
 
     // ========================================================================
-    // PHASE 4: EXECUTE - Call executeBatch() on all operations
+    // PHASE 4: EXECUTE - Call execute() with interaction tracking on all operations
     // ========================================================================
     type ResultWrapper = { name: string; result: BatchMethodResult };
     const results: ResultWrapper[] = [];
@@ -406,11 +405,23 @@ export class ExternalWallet extends BaseNativeWallet {
           }
         }
 
-        // Execute using the operation's executeBatch method
-        result = await prep.operation.executeBatch(
-          prep.displayData!,
-          prep.executionData!
+        // Execute with interaction tracking
+        // Create interaction
+        const interaction = await prep.operation.createInteraction(
+          prep.displayData!
         );
+
+        try {
+          // Execute the operation
+          result = await prep.operation.execute(prep.executionData!);
+
+          // Update interaction on success
+          await prep.operation.updateInteractionSuccess(interaction);
+        } catch (error) {
+          // Update interaction on failure
+          await prep.operation.updateInteractionFailure(interaction, error);
+          throw error;
+        }
       }
 
       // Wrap result for BatchResults type
