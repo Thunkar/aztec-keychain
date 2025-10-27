@@ -2,12 +2,7 @@ import { type Account } from "@aztec/aztec.js/account";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { type Aliased, type SendOptions } from "@aztec/aztec.js/wallet";
 import { type Fr } from "@aztec/aztec.js/fields";
-import { ExternalWallet } from "./external-wallet";
 import type { AccountType } from "../database/wallet-db";
-import type {
-  AuthorizationData,
-  AuthorizationPersistence,
-} from "../types/authorization.ts";
 import { WalletInteraction } from "../types/wallet-interaction";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 
@@ -17,6 +12,8 @@ import { TxDecodingService } from "../decoding/tx-decoding-service";
 import { DecodingCache } from "../decoding/decoding-cache";
 
 import { inspect } from "node:util";
+import { BaseNativeWallet } from "./base-native-wallet.ts";
+import type { AuthorizationResponse } from "../types/authorization.ts";
 
 // Enriched account type for internal use
 export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
@@ -27,7 +24,7 @@ export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
  * 2. Returns enriched data (e.g., account types)
  * 3. Provides additional internal-only methods
  */
-export class InternalWallet extends ExternalWallet {
+export class InternalWallet extends BaseNativeWallet {
   // Override getAccountFromAddress to skip authorization check
   protected override async getAccountFromAddress(
     address: AztecAddress
@@ -50,6 +47,20 @@ export class InternalWallet extends ExternalWallet {
     );
   }
 
+  override async registerSender(
+    address: AztecAddress,
+    alias: string
+  ): Promise<AztecAddress> {
+    // Store sender in database
+    await this.db.storeSender(address, alias);
+    // Register with PXE
+    return await this.pxe.registerSender(address);
+  }
+
+  override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
+    return this.getAddressBookInternal();
+  }
+
   async createAccount(
     alias: string,
     type: AccountType,
@@ -63,7 +74,7 @@ export class InternalWallet extends ExternalWallet {
       complete: false,
       title: `Creating and deploying account ${alias}`,
     });
-    await this.storeAndEmitInteraction(interaction);
+    await this.interactionManager.storeAndEmit(interaction);
 
     try {
       const accountManager = await this.getAccountManager(
@@ -79,7 +90,7 @@ export class InternalWallet extends ExternalWallet {
         alias,
         signingKey,
       });
-      await this.storeAndEmitInteraction(
+      await this.interactionManager.storeAndEmit(
         interaction.update({
           status: "PROVING & SENDING DEPLOYMENT",
           description: `Address ${accountManager.address.toString()}`,
@@ -101,12 +112,12 @@ export class InternalWallet extends ExternalWallet {
       };
 
       await deployMethod.send(opts).wait();
-      await this.storeAndEmitInteraction(
+      await this.interactionManager.storeAndEmit(
         interaction.update({ status: "DEPLOYED", complete: true })
       );
     } catch (error: any) {
       // Update interaction with error status
-      await this.storeAndEmitInteraction(
+      await this.interactionManager.storeAndEmit(
         interaction.update({
           status: "ERROR",
           complete: true,
@@ -204,6 +215,13 @@ export class InternalWallet extends ExternalWallet {
     accounts: Aliased<AztecAddress>[]
   ): Promise<void> {
     await this.db.updateAccountAuthorization(appId, accounts);
+  }
+
+  async updateAddressBookAuthorization(
+    appId: string,
+    contacts: Aliased<AztecAddress>[]
+  ): Promise<void> {
+    await this.db.updateAddressBookAuthorization(appId, contacts);
   }
 
   async revokeAuthorization(key: string): Promise<void> {

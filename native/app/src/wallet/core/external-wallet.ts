@@ -16,10 +16,7 @@ import type {
   ContractInstanceWithAddress,
   ContractInstantiationData,
 } from "@aztec/stdlib/contract";
-import {
-  ExecutionPayload,
-  mergeExecutionPayloads,
-} from "@aztec/entrypoints/payload";
+import { ExecutionPayload } from "@aztec/entrypoints/payload";
 import { Fr } from "@aztec/foundation/fields";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
@@ -35,6 +32,7 @@ import {
   type AuthorizationResponse,
   type AuthorizationItem,
   type GetAccountsAuthData,
+  type GetAddressBookAuthData,
 } from "../types/authorization";
 import type { ReadableCallAuthorization } from "../decoding/call-authorization-formatter";
 import { type DecodedExecutionTrace } from "../decoding/tx-callstack-decoder";
@@ -227,26 +225,34 @@ export class ExternalWallet extends BaseNativeWallet {
   }
 
   override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
-    await this.authorizationManager.requestAuthorization([
+    const itemId = crypto.randomUUID();
+    const response = await this.authorizationManager.requestAuthorization([
       {
-        id: crypto.randomUUID(),
+        id: itemId,
         appId: this.appId,
         method: "getAddressBook",
         params: {},
         timestamp: Date.now(),
+        persistence: {
+          storageKey: "getAddressBook",
+          persistData: null, // Will be filled from response.data
+        },
       },
     ]);
 
-    const senders = await this.pxe.getSenders();
-    const storedSenders = await this.db.listSenders();
-    for (const storedSender of storedSenders) {
-      if (
-        senders.findIndex((sender) => sender.equals(storedSender.item)) === -1
-      ) {
-        await this.pxe.registerSender(storedSender.item);
-      }
+    // Extract the single item response
+    const itemResponse = response.itemResponses[itemId];
+    const authData = itemResponse?.data as GetAddressBookAuthData;
+
+    if (!authData || !authData.contacts) {
+      throw new Error("Authorization response missing contact data");
     }
-    return storedSenders;
+
+    const { contacts } = authData;
+    return contacts.map((contact: any) => ({
+      alias: contact.alias,
+      item: AztecAddress.fromString(contact.item),
+    }));
   }
 
   override async sendTx(

@@ -315,6 +315,7 @@ export class WalletDB {
    */
   async getAppAuthorizations(appId: string): Promise<{
     accounts: { alias: string; item: string }[];
+    contacts: { alias: string; item: string }[];
     simulations: Array<{
       type: "simulateTx" | "simulateUtility";
       payloadHash: string;
@@ -324,6 +325,7 @@ export class WalletDB {
     otherMethods: string[];
   }> {
     const accounts: { alias: string; item: string }[] = [];
+    const contacts: { alias: string; item: string }[] = [];
     const simulations: Array<{
       type: "simulateTx" | "simulateUtility";
       payloadHash: string;
@@ -349,6 +351,9 @@ export class WalletDB {
       if (method === "getAccounts") {
         const data = JSON.parse(value.toString());
         accounts.push(...(data.accounts || []));
+      } else if (method === "getAddressBook") {
+        const data = JSON.parse(value.toString());
+        contacts.push(...(data.contacts || []));
       } else if (method === "simulateTx" && parts.length === 3) {
         const payloadHash = parts[2];
         const data = JSON.parse(value.toString());
@@ -372,7 +377,7 @@ export class WalletDB {
       }
     }
 
-    return { accounts, simulations, otherMethods };
+    return { accounts, contacts, simulations, otherMethods };
   }
 
   /**
@@ -383,6 +388,16 @@ export class WalletDB {
     accounts: Aliased<AztecAddress>[]
   ) {
     await this.storePersistentAuthorization(appId, "getAccounts", { accounts });
+  }
+
+  /**
+   * Update the getAddressBook authorization for an app
+   */
+  async updateAddressBookAuthorization(
+    appId: string,
+    contacts: Aliased<AztecAddress>[]
+  ) {
+    await this.storePersistentAuthorization(appId, "getAddressBook", { contacts });
   }
 
   /**

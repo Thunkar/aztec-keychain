@@ -52,7 +52,6 @@ interface SendTxExecutionData {
   txRequest: TxExecutionRequest;
   callAuthorizations: ReadableCallAuthorization[];
   executionTrace?: DecodedExecutionTrace;
-  needsAuthorization: boolean;
 }
 
 // Display data for authorization UI
@@ -61,7 +60,7 @@ type SendTxDisplayData = {
   title: string;
   callAuthorizations: ReadableCallAuthorization[];
   executionTrace?: DecodedExecutionTrace;
-} & Record<string, unknown>;
+};
 
 /**
  * SendTx operation implementation.
@@ -126,7 +125,6 @@ export class SendTxOperation extends ExternalOperation<
       txRequest: TxExecutionRequest;
       callAuthorizations: ReadableCallAuthorization[];
       executionTrace?: DecodedExecutionTrace;
-      needsAuthorization: boolean;
     };
   }> {
     const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
@@ -206,7 +204,6 @@ export class SendTxOperation extends ExternalOperation<
         txRequest,
         callAuthorizations,
         executionTrace,
-        needsAuthorization: !txInformation,
       },
     };
   }

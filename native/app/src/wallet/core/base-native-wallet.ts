@@ -1,6 +1,16 @@
-import { type Account, SignerlessAccount, type ChainInfo } from "@aztec/aztec.js/account";
+import {
+  type Account,
+  SignerlessAccount,
+  type ChainInfo,
+} from "@aztec/aztec.js/account";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
-import { AccountManager, BaseWallet, type FeeOptions, type UserFeeOptions } from "@aztec/aztec.js/wallet";
+import {
+  AccountManager,
+  BaseWallet,
+  type FeeOptions,
+  type UserFeeOptions,
+  type Aliased,
+} from "@aztec/aztec.js/wallet";
 import { Fq, Fr } from "@aztec/aztec.js/fields";
 import { getContractInstanceFromInstantiationParams } from "@aztec/aztec.js/contracts";
 import { type AztecNode } from "@aztec/aztec.js/node";
@@ -258,6 +268,29 @@ export abstract class BaseNativeWallet
     return Promise.resolve(this.chainInfo);
   }
 
+  /**
+   * Internal method to retrieve all senders from the address book.
+   * This method does not require authorization and returns all stored senders.
+   * It also ensures that all stored senders are registered with the PXE.
+   *
+   * @returns All stored senders with their aliases
+   */
+  protected async getAddressBookInternal(): Promise<Aliased<AztecAddress>[]> {
+    const senders = await this.pxe.getSenders();
+    const storedSenders = await this.db.listSenders();
+
+    // Register any stored senders that aren't in PXE
+    for (const storedSender of storedSenders) {
+      if (
+        senders.findIndex((sender) => sender.equals(storedSender.item)) === -1
+      ) {
+        await this.pxe.registerSender(storedSender.item);
+      }
+    }
+
+    return storedSenders;
+  }
+
   // ============================================================================
   // EventTarget Implementation
   // ============================================================================
@@ -285,23 +318,6 @@ export abstract class BaseNativeWallet
   }
 
   /**
-   * Stores an interaction in the database and emits an update event.
-   *
-   * Interactions track the lifecycle of wallet operations (sending tx, registering contracts, etc.)
-   * and are displayed in the UI. This method persists the interaction and notifies listeners.
-   *
-   * @param interaction - The interaction to store and emit
-   * @returns The same interaction (for chaining)
-   */
-  async storeAndEmitInteraction(
-    interaction: WalletInteraction<WalletInteractionType>
-  ) {
-    await this.db.createOrUpdateInteraction(interaction);
-    this.dispatchEvent(new WalletUpdateEvent(interaction));
-    return interaction;
-  }
-
-  /**
    * Resolves a pending authorization request with a user response.
    *
    * Called by the UI when the user approves/denies an authorization dialog.
@@ -310,10 +326,6 @@ export abstract class BaseNativeWallet
    * @param response - Authorization response from user interaction
    */
   resolveAuthorization(response: AuthorizationResponse) {
-    const pending = this.pendingAuthorizations.get(response.id);
-    if (pending) {
-      pending.promise.resolve(response);
-      this.pendingAuthorizations.delete(response.id);
-    }
+    this.authorizationManager.resolveAuthorization(response);
   }
 }

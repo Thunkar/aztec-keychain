@@ -133,4 +133,20 @@ export class AuthorizationManager {
       },
     };
   }
+
+  /**
+   * Resolves a pending authorization request with a user response.
+   *
+   * Called by the UI when the user approves/denies an authorization dialog.
+   * Completes the promise that the wallet is waiting on, allowing the operation to proceed or fail.
+   *
+   * @param response - Authorization response from user interaction
+   */
+  resolveAuthorization(response: AuthorizationResponse) {
+    const pending = this.pendingAuthorizations.get(response.id);
+    if (pending) {
+      pending.promise.resolve(response);
+      this.pendingAuthorizations.delete(response.id);
+    }
+  }
 }

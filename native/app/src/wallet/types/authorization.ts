@@ -20,6 +20,10 @@ export type GetAccountsAuthData = {
   accounts: Aliased<AztecAddress>[];
 };
 
+export type GetAddressBookAuthData = {
+  contacts: Aliased<AztecAddress>[];
+};
+
 export type RegisterContractAuthData = {
   persistent?: boolean;
   address?: string;
@@ -51,6 +55,7 @@ export type SimulateTxAuthData = SimulateAuthData;
 // Union of all possible authorization data types
 export type AuthorizationData =
   | GetAccountsAuthData
+  | GetAddressBookAuthData
   | RegisterContractAuthData
   | RegisterSenderAuthData
   | SendTxAuthData
