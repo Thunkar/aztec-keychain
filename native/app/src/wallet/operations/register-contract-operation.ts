@@ -1,4 +1,8 @@
-import { ExternalOperation } from "./base-operation";
+import {
+  ExternalOperation,
+  type PrepareResult,
+  type PersistenceConfig,
+} from "./base-operation";
 import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type {
   ContractInstanceWithAddress,
@@ -61,7 +65,8 @@ type RegisterContractDisplayData = {
 export class RegisterContractOperation extends ExternalOperation<
   RegisterContractArgs,
   RegisterContractResult,
-  RegisterContractExecutionData
+  RegisterContractExecutionData,
+  RegisterContractDisplayData
 > {
   protected interactionManager: InteractionManager;
 
@@ -79,12 +84,13 @@ export class RegisterContractOperation extends ExternalOperation<
     instanceData: RegisterContractInstanceData,
     artifact?: ContractArtifact,
     secretKey?: Fr
-  ): Promise<{
-    earlyReturn?: RegisterContractResult;
-    displayData: RegisterContractDisplayData;
-    executionData?: RegisterContractExecutionData;
-    error?: Error;
-  }> {
+  ): Promise<
+    PrepareResult<
+      RegisterContractResult,
+      RegisterContractDisplayData,
+      RegisterContractExecutionData
+    >
+  > {
     // Resolve contract address
     const contractAddress = await this.decodingCache.resolveContractAddress(
       instanceData,
@@ -129,8 +135,12 @@ export class RegisterContractOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: RegisterContractDisplayData
+    displayData: RegisterContractDisplayData,
+    _persistence?: PersistenceConfig
   ): Promise<void> {
+    // Update status to requesting authorization
+    await this.emitProgress("REQUESTING AUTHORIZATION");
+
     await this.authorizationManager.requestAuthorization([
       {
         id: crypto.randomUUID(),

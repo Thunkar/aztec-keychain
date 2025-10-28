@@ -1,4 +1,8 @@
-import { ExternalOperation } from "./base-operation";
+import {
+  ExternalOperation,
+  type PrepareResult,
+  type PersistenceConfig,
+} from "./base-operation";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 import type { UtilitySimulationResult } from "@aztec/stdlib/tx";
@@ -64,7 +68,8 @@ type SimulateUtilityDisplayData = {
 export class SimulateUtilityOperation extends ExternalOperation<
   SimulateUtilityArgs,
   SimulateUtilityResult,
-  SimulateUtilityExecutionData
+  SimulateUtilityExecutionData,
+  SimulateUtilityDisplayData
 > {
   protected interactionManager: InteractionManager;
 
@@ -85,13 +90,13 @@ export class SimulateUtilityOperation extends ExternalOperation<
     to: AztecAddress,
     authwits?: AuthWitness[],
     from?: AztecAddress
-  ): Promise<{
-    earlyReturn?: SimulateUtilityResult;
-    displayData: SimulateUtilityDisplayData;
-    executionData?: SimulateUtilityExecutionData;
-    error?: Error;
-    persistence?: { storageKey: string; persistData: any };
-  }> {
+  ): Promise<
+    PrepareResult<
+      SimulateUtilityResult,
+      SimulateUtilityDisplayData,
+      SimulateUtilityExecutionData
+    >
+  > {
     // Generate hash for deduplication (needed even on error)
     const payloadHash = hashUtilityCall(functionName, args, to, from);
 
@@ -188,7 +193,8 @@ export class SimulateUtilityOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: SimulateUtilityDisplayData
+    displayData: SimulateUtilityDisplayData,
+    persistence?: PersistenceConfig
   ): Promise<void> {
     // Update status to requesting authorization
     await this.emitProgress("REQUESTING AUTHORIZATION");
@@ -205,7 +211,7 @@ export class SimulateUtilityOperation extends ExternalOperation<
           isUtility: true,
         },
         timestamp: Date.now(),
-        persistence: this.persistenceConfig,
+        persistence,
       },
     ]);
   }

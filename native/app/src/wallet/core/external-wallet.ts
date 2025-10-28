@@ -34,8 +34,6 @@ import {
   type GetAccountsAuthData,
   type GetAddressBookAuthData,
 } from "../types/authorization";
-import type { ReadableCallAuthorization } from "../decoding/call-authorization-formatter";
-import { type DecodedExecutionTrace } from "../decoding/tx-callstack-decoder";
 import { BaseNativeWallet } from "./base-native-wallet";
 import { ExternalOperation } from "../operations/base-operation";
 import { RegisterContractOperation } from "../operations/register-contract-operation";
@@ -43,11 +41,6 @@ import { RegisterSenderOperation } from "../operations/register-sender-operation
 import { SimulateUtilityOperation } from "../operations/simulate-utility-operation";
 import { SimulateTxOperation } from "../operations/simulate-tx-operation";
 import { SendTxOperation } from "../operations/send-tx-operation";
-
-type ReadableTxInformation = {
-  callAuthorizations: ReadableCallAuthorization[];
-  executionTrace: DecodedExecutionTrace;
-};
 
 export class ExternalWallet extends BaseNativeWallet {
   constructor(
@@ -134,7 +127,6 @@ export class ExternalWallet extends BaseNativeWallet {
     return new SendTxOperation(
       this.pxe,
       this.aztecNode,
-      this.db,
       this.decodingCache,
       this.interactionManager,
       this.authorizationManager,

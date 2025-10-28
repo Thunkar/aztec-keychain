@@ -1,4 +1,8 @@
-import { ExternalOperation } from "./base-operation";
+import {
+  ExternalOperation,
+  type PrepareResult,
+  type PersistenceConfig,
+} from "./base-operation";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { ExecutionPayload } from "@aztec/entrypoints/payload";
 import { TxHash } from "@aztec/stdlib/tx";
@@ -63,14 +67,14 @@ type SendTxDisplayData = {
 export class SendTxOperation extends ExternalOperation<
   SendTxArgs,
   SendTxResult,
-  SendTxExecutionData
+  SendTxExecutionData,
+  SendTxDisplayData
 > {
   protected interactionManager: InteractionManager;
 
   constructor(
     private pxe: PXE,
     private aztecNode: AztecNode,
-    private db: WalletDB,
     private decodingCache: DecodingCache,
     interactionManager: InteractionManager,
     private authorizationManager: AuthorizationManager,
@@ -97,19 +101,13 @@ export class SendTxOperation extends ExternalOperation<
   async prepare(
     executionPayload: ExecutionPayload,
     opts: SendOptions
-  ): Promise<{
-    earlyReturn?: TxHash;
-    displayData: SendTxDisplayData;
-    executionData?: SendTxExecutionData;
-    error?: Error;
-  }> {
+  ): Promise<
+    PrepareResult<SendTxResult, SendTxDisplayData, SendTxExecutionData>
+  > {
     const payloadHash = hashExecutionPayload(executionPayload);
 
     try {
       const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
-
-      let callAuthorizations: ReadableCallAuthorization[];
-      let executionTrace: DecodedExecutionTrace | undefined;
 
       // Use simulateTx operation's prepare method
       const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
@@ -130,15 +128,8 @@ export class SendTxOperation extends ExternalOperation<
       }
 
       // Decode simulation results
-      const decoded = prepared.executionData!.decoded;
-      ({ callAuthorizations, executionTrace } = decoded);
-
-      // Store simulation result
-      await this.db.storeTxSimulation(
-        prepared.executionData!.payloadHash,
-        prepared.executionData!.simulationResult,
-        prepared.executionData!.txRequest
-      );
+      const { callAuthorizations, executionTrace } =
+        prepared.executionData!.decoded;
 
       // Create auth witnesses for call authorizations
       const authWitnesses = await Promise.all(
@@ -210,7 +201,8 @@ export class SendTxOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: SendTxDisplayData
+    displayData: SendTxDisplayData,
+    _persistence?: PersistenceConfig
   ): Promise<void> {
     // Update status to requesting authorization
     await this.emitProgress("REQUESTING AUTHORIZATION");

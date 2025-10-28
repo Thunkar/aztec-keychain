@@ -1,4 +1,8 @@
-import { ExternalOperation } from "./base-operation";
+import {
+  ExternalOperation,
+  type PrepareResult,
+  type PersistenceConfig,
+} from "./base-operation";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import {
   ExecutionPayload,
@@ -88,7 +92,8 @@ type SimulateTxDisplayData = {
 export class SimulateTxOperation extends ExternalOperation<
   SimulateTxArgs,
   SimulateTxResult,
-  SimulateTxExecutionData
+  SimulateTxExecutionData,
+  SimulateTxDisplayData
 > {
   protected interactionManager: InteractionManager;
 
@@ -120,13 +125,13 @@ export class SimulateTxOperation extends ExternalOperation<
   async prepare(
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
-  ): Promise<{
-    earlyReturn?: SimulateTxResult;
-    displayData: SimulateTxDisplayData;
-    executionData?: SimulateTxExecutionData;
-    error?: Error;
-    persistence?: { storageKey: string; persistData: any };
-  }> {
+  ): Promise<
+    PrepareResult<
+      SimulateTxResult,
+      SimulateTxDisplayData,
+      SimulateTxExecutionData
+    >
+  > {
     // Generate payload hash and title
     const payloadHash = hashExecutionPayload(executionPayload);
     const title = await generateSimulationTitle(
@@ -178,6 +183,8 @@ export class SimulateTxOperation extends ExternalOperation<
         true,
         { contracts: contractOverrides }
       );
+
+      await this.db.storeTxSimulation(payloadHash, simulationResult, txRequest);
 
       const decodingService = new TxDecodingService(this.decodingCache);
       const decoded = await decodingService.decodeTransaction(simulationResult);
@@ -246,7 +253,8 @@ export class SimulateTxOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: SimulateTxDisplayData
+    displayData: SimulateTxDisplayData,
+    persistence?: PersistenceConfig
   ): Promise<void> {
     // Update status to requesting authorization
     await this.emitProgress("REQUESTING AUTHORIZATION");
@@ -265,7 +273,7 @@ export class SimulateTxOperation extends ExternalOperation<
           from: displayData.from.toString(),
         },
         timestamp: Date.now(),
-        persistence: this.persistenceConfig,
+        persistence,
       },
     ]);
   }
@@ -273,20 +281,6 @@ export class SimulateTxOperation extends ExternalOperation<
   async execute(
     executionData: SimulateTxExecutionData
   ): Promise<SimulateTxResult> {
-    // Store the simulation result using the payload hash
-    await this.emitProgress("STORING SIMULATION");
-
-    try {
-      await this.db.storeTxSimulation(
-        executionData.payloadHash,
-        executionData.simulationResult,
-        executionData.txRequest
-      );
-    } catch (storageError) {
-      // If storage fails, just log it - don't fail the simulation
-      this.log.error(`Failed to store simulation result: ${storageError}`);
-    }
-
     return executionData.simulationResult;
   }
 

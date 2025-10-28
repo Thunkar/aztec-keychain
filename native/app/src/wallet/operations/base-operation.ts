@@ -6,6 +6,53 @@ import type { InteractionManager } from "../managers/interaction-manager";
 import type { AuthorizationManager } from "../managers/authorization-manager";
 
 /**
+ * Persistence configuration for authorization caching.
+ */
+export interface PersistenceConfig {
+  storageKey: string;
+  persistData: any;
+}
+
+/**
+ * Result from the prepare phase of an operation.
+ *
+ * @template TResult - The final result type of the operation
+ * @template TDisplayData - The display data type for the UI
+ * @template TExecutionData - The execution data type for the execute phase
+ */
+export interface PrepareResult<TResult, TDisplayData, TExecutionData> {
+  /**
+   * If set, the operation can return early without authorization/execution.
+   * Used for cached results or when the operation is already complete.
+   */
+  earlyReturn?: TResult;
+
+  /**
+   * Data to display in the UI and authorization dialog.
+   * ALWAYS required, even if an error occurred.
+   */
+  displayData: TDisplayData;
+
+  /**
+   * Data needed for the execute phase.
+   * Only set if prepare was successful and execution is needed.
+   */
+  executionData?: TExecutionData;
+
+  /**
+   * Error that occurred during prepare phase.
+   * If set, authorization and execution will be skipped.
+   */
+  error?: Error;
+
+  /**
+   * Optional configuration for persistent authorization caching.
+   * If set, the authorization can be cached and reused.
+   */
+  persistence?: PersistenceConfig;
+}
+
+/**
  * Base class for external wallet operations.
  *
  * Defines the standard 3-phase pattern for all batchable operations:
@@ -17,48 +64,39 @@ import type { AuthorizationManager } from "../managers/authorization-manager";
  * - Standalone: Full flow with authorization (via executeStandalone)
  * - Batch: Batch caller handles prepare, authorization, interaction creation,
  *          then calls execute() with interaction tracking
+ *
+ * @template TArgs - Tuple of argument types for the operation
+ * @template TResult - The final result type of the operation
+ * @template TExecutionData - Data passed from prepare to execute phase
+ * @template TDisplayData - Data shown in UI and authorization dialog
  */
 export abstract class ExternalOperation<
   TArgs extends unknown[],
   TResult,
   TExecutionData = unknown,
+  TDisplayData extends Record<string, unknown> = Record<string, unknown>,
 > {
   protected abstract interactionManager: InteractionManager;
 
   /**
-   * The current interaction being executed.
-   * Set before execute() by the caller (standalone or batch) for progress tracking.
+   * The interaction for the current execution context.
+   * Set by executeStandalone before calling execute() for progress tracking via emitProgress().
+   * NOT a persistent property - only valid during execute() call.
    */
-  protected currentInteraction?: WalletInteraction<WalletInteractionType>;
+  protected interaction?: WalletInteraction<WalletInteractionType>;
 
-  /**
-   * Persistence configuration for the current execution.
-   * Set during prepare() phase if the operation supports persistent authorization.
-   */
-  protected persistenceConfig?: { storageKey: string; persistData: any };
   /**
    * PHASE 1: PREPARE
    * Pure logic with no side effects.
    * Must ALWAYS return displayData (even on error) so interaction can be created.
    * If an error occurs, catch it and return via error field with minimal displayData.
    *
-   * @returns Prepared data including:
-   *  - earlyReturn: Result if no authorization needed (e.g., already cached)
-   *  - displayData: Information to show in authorization dialog (ALWAYS REQUIRED)
-   *  - executionData: Data needed to perform the action (not set if error occurred)
-   *  - error: Error that occurred during prepare (stops authorization/execution)
-   *  - persistence: Optional configuration for persistent authorization caching
+   * @param args - Arguments for the operation
+   * @returns PrepareResult containing earlyReturn, displayData, executionData, error, and persistence config
    */
-  abstract prepare(...args: TArgs): Promise<{
-    earlyReturn?: TResult;
-    displayData: Record<string, unknown>;
-    executionData?: TExecutionData;
-    error?: Error;
-    persistence?: {
-      storageKey: string;
-      persistData: any;
-    };
-  }>;
+  abstract prepare(
+    ...args: TArgs
+  ): Promise<PrepareResult<TResult, TDisplayData, TExecutionData>>;
 
   /**
    * PHASE 2A: CREATE INTERACTION (Standalone only)
@@ -69,20 +107,22 @@ export abstract class ExternalOperation<
    * @returns The created interaction
    */
   abstract createInteraction(
-    displayData: Record<string, unknown>
+    displayData: TDisplayData
   ): Promise<WalletInteraction<WalletInteractionType>>;
 
   /**
    * PHASE 2B: REQUEST AUTHORIZATION (Standalone only)
    * Request user permission for this operation.
    * Operations should use their injected authorization manager from constructor.
-   * Uses currentInteraction to update status and persistenceConfig for caching.
    *
    * @param displayData - Data to show in authorization dialog
+   * @param interaction - The current interaction for progress tracking
+   * @param persistence - Optional persistence configuration for authorization caching
    * @returns Promise that resolves when authorization is granted or rejects if denied
    */
   abstract requestAuthorization(
-    displayData: Record<string, unknown>
+    displayData: TDisplayData,
+    persistence?: PersistenceConfig
   ): Promise<void>;
 
   /**
@@ -102,12 +142,12 @@ export abstract class ExternalOperation<
   setCurrentInteraction(
     interaction: WalletInteraction<WalletInteractionType> | undefined
   ): void {
-    this.currentInteraction = interaction;
+    this.interaction = interaction;
   }
 
   /**
-   * Emit a progress update for the current interaction.
-   * Safe to call from execute() - updates the tracked interaction if one is set.
+   * Emit a progress update for the current execution interaction.
+   * Safe to call from execute() or requestAuthorization() - uses the interaction from execution context.
    *
    * @param status - The status message to display
    * @param description - Optional additional description
@@ -116,9 +156,9 @@ export abstract class ExternalOperation<
     status: string,
     description?: string
   ): Promise<void> {
-    if (this.currentInteraction) {
+    if (this.interaction) {
       await this.interactionManager.storeAndEmit(
-        this.currentInteraction.update({ status, description })
+        this.interaction.update({ status, description })
       );
     }
   }
@@ -188,6 +228,9 @@ export abstract class ExternalOperation<
     // PHASE 2A: CREATE INTERACTION (displayData is always present now)
     const interaction = await this.createInteraction(prepared.displayData);
 
+    // Set interaction context for emitProgress calls
+    this.setCurrentInteraction(interaction);
+
     // Check if prepare encountered an error
     if (prepared.error) {
       // Prepare failed - track error in interaction and throw
@@ -195,12 +238,8 @@ export abstract class ExternalOperation<
       throw prepared.error;
     }
 
-    // Store persistence config in operation instance
-    this.persistenceConfig = prepared.persistence;
-
     // PHASE 2B: REQUEST AUTHORIZATION
-    this.setCurrentInteraction(interaction);
-    await this.requestAuthorization(prepared.displayData);
+    await this.requestAuthorization(prepared.displayData, prepared.persistence);
 
     // PHASE 3: EXECUTE - Perform the action with interaction tracking
     const result = await this.execute(prepared.executionData!);

@@ -1,4 +1,8 @@
-import { ExternalOperation } from "./base-operation";
+import {
+  ExternalOperation,
+  type PrepareResult,
+  type PersistenceConfig,
+} from "./base-operation";
 import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { PXE } from "@aztec/pxe/server";
 import {
@@ -38,7 +42,8 @@ type RegisterSenderDisplayData = {
 export class RegisterSenderOperation extends ExternalOperation<
   RegisterSenderArgs,
   RegisterSenderResult,
-  RegisterSenderExecutionData
+  RegisterSenderExecutionData,
+  RegisterSenderDisplayData
 > {
   protected interactionManager: InteractionManager;
 
@@ -55,12 +60,13 @@ export class RegisterSenderOperation extends ExternalOperation<
   async prepare(
     address: AztecAddress,
     alias: string
-  ): Promise<{
-    earlyReturn?: RegisterSenderResult;
-    displayData: RegisterSenderDisplayData;
-    executionData?: RegisterSenderExecutionData;
-    error?: Error;
-  }> {
+  ): Promise<
+    PrepareResult<
+      RegisterSenderResult,
+      RegisterSenderDisplayData,
+      RegisterSenderExecutionData
+    >
+  > {
     return {
       displayData: { address, alias },
       executionData: { address, alias },
@@ -83,8 +89,12 @@ export class RegisterSenderOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: RegisterSenderDisplayData
+    displayData: RegisterSenderDisplayData,
+    _persistence?: PersistenceConfig
   ): Promise<void> {
+    // Update status to requesting authorization
+    await this.emitProgress("REQUESTING AUTHORIZATION");
+
     await this.authorizationManager.requestAuthorization([
       {
         id: crypto.randomUUID(),
