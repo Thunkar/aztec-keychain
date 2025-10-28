@@ -3,7 +3,10 @@ import type { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 import type { UtilitySimulationResult } from "@aztec/stdlib/tx";
 import type { PXE } from "@aztec/pxe/server";
-import { WalletInteraction, type WalletInteractionType } from "../types/wallet-interaction";
+import {
+  WalletInteraction,
+  type WalletInteractionType,
+} from "../types/wallet-interaction";
 import type { WalletDB } from "../database/wallet-db";
 import type { InteractionManager } from "../managers/interaction-manager";
 import type { AuthorizationManager } from "../managers/authorization-manager";
@@ -27,7 +30,7 @@ type SimulateUtilityArgs = [
   args: unknown[],
   to: AztecAddress,
   authwits?: AuthWitness[],
-  from?: AztecAddress
+  from?: AztecAddress,
 ];
 
 // Result type for the operation
@@ -84,57 +87,83 @@ export class SimulateUtilityOperation extends ExternalOperation<
     from?: AztecAddress
   ): Promise<{
     earlyReturn?: SimulateUtilityResult;
-    displayData?: SimulateUtilityDisplayData;
+    displayData: SimulateUtilityDisplayData;
     executionData?: SimulateUtilityExecutionData;
+    error?: Error;
     persistence?: { storageKey: string; persistData: any };
   }> {
-    // Simulate the utility function
-    const simulationResult = await this.pxe.simulateUtility(
-      functionName,
-      args,
-      to,
-      authwits,
-      from
-    );
-
-    // Generate hash for deduplication
+    // Generate hash for deduplication (needed even on error)
     const payloadHash = hashUtilityCall(functionName, args, to, from);
 
-    // Get contract name for better display
-    const contractName = await this.decodingCache.getAddressAlias(to);
+    try {
+      // Simulate the utility function
+      const simulationResult = await this.pxe.simulateUtility(
+        functionName,
+        args,
+        to,
+        authwits,
+        from
+      );
 
-    // Format arguments and result using the TxCallStackDecoder
-    const decoder = new TxCallStackDecoder(this.decodingCache);
-    const decodedArgs = await decoder.formatUtilityArguments(
-      to,
-      functionName,
-      args
-    );
-    const formattedResult = await decoder.formatUtilityResult(
-      to,
-      functionName,
-      simulationResult.result
-    );
+      // Get contract name for better display
+      const contractName = await this.decodingCache.getAddressAlias(to);
 
-    const executionTrace = {
-      functionName,
-      args: decodedArgs,
-      contractAddress: to.toString(),
-      contractName,
-      result: formattedResult,
-      isUtility: true as const,
-    };
+      // Format arguments and result using the TxCallStackDecoder
+      const decoder = new TxCallStackDecoder(this.decodingCache);
+      const decodedArgs = await decoder.formatUtilityArguments(
+        to,
+        functionName,
+        args
+      );
+      const formattedResult = await decoder.formatUtilityResult(
+        to,
+        functionName,
+        simulationResult.result
+      );
 
-    const title = `${contractName}.${functionName}`;
+      const executionTrace = {
+        functionName,
+        args: decodedArgs,
+        contractAddress: to.toString(),
+        contractName,
+        result: formattedResult,
+        isUtility: true as const,
+      };
 
-    return {
-      displayData: { payloadHash, executionTrace, title, contractName },
-      executionData: { simulationResult, executionTrace, payloadHash },
-      persistence: {
-        storageKey: `simulateUtility:${payloadHash}`,
-        persistData: { title },
-      },
-    };
+      const title = `${contractName}.${functionName}`;
+
+      return {
+        displayData: { payloadHash, executionTrace, title, contractName },
+        executionData: { simulationResult, executionTrace, payloadHash },
+        persistence: {
+          storageKey: `simulateUtility:${payloadHash}`,
+          persistData: { title },
+        },
+      };
+    } catch (error) {
+      // Simulation failed - return error with minimal display data
+      const contractName = await this.decodingCache
+        .getAddressAlias(to)
+        .catch(() => "Unknown Contract");
+      const title = `${contractName}.${functionName}`;
+
+      return {
+        displayData: {
+          payloadHash,
+          executionTrace: {
+            functionName,
+            args: [],
+            contractAddress: to.toString(),
+            contractName,
+            result: "Error during simulation",
+            isUtility: true as const,
+          },
+          title,
+          contractName,
+        },
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   async createInteraction(
@@ -181,7 +210,9 @@ export class SimulateUtilityOperation extends ExternalOperation<
     ]);
   }
 
-  async execute(executionData: SimulateUtilityExecutionData): Promise<SimulateUtilityResult> {
+  async execute(
+    executionData: SimulateUtilityExecutionData
+  ): Promise<SimulateUtilityResult> {
     // Execution is just returning the simulation result
     // The actual simulation happened in prepare phase
     return executionData.simulationResult;

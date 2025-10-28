@@ -57,10 +57,10 @@ export class RegisterSenderOperation extends ExternalOperation<
     alias: string
   ): Promise<{
     earlyReturn?: RegisterSenderResult;
-    displayData?: RegisterSenderDisplayData;
+    displayData: RegisterSenderDisplayData;
     executionData?: RegisterSenderExecutionData;
+    error?: Error;
   }> {
-    // No early return case for registerSender - always needs authorization
     return {
       displayData: { address, alias },
       executionData: { address, alias },

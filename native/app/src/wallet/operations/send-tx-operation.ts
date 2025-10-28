@@ -100,66 +100,96 @@ export class SendTxOperation extends ExternalOperation<
   ): Promise<{
     earlyReturn?: TxHash;
     displayData: SendTxDisplayData;
-    executionData: SendTxExecutionData;
+    executionData?: SendTxExecutionData;
+    error?: Error;
   }> {
-    const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
-
-    let callAuthorizations: ReadableCallAuthorization[];
-    let executionTrace: DecodedExecutionTrace | undefined;
-
-    // Use simulateTx operation's prepare method
-    const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
-
-    // Decode if not already done (prepare skips decoding for existing interactions)
-    const decoded = prepared.executionData!.decoded;
-
-    ({ callAuthorizations, executionTrace } = decoded);
-
-    // Store simulation result
-    await this.db.storeTxSimulation(
-      prepared.executionData!.payloadHash,
-      prepared.executionData!.simulationResult,
-      prepared.executionData!.txRequest
-    );
-
-    // Create auth witnesses for call authorizations
-    const authWitnesses = await Promise.all(
-      callAuthorizations.map((auth) =>
-        this.createAuthWit(opts.from, {
-          caller: auth.rawData.caller,
-          call: auth.rawData.functionCall,
-        })
-      )
-    );
-    executionPayload.authWitnesses.push(...authWitnesses);
-
-    // Create transaction request
-    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-      executionPayload,
-      opts.from,
-      fee
-    );
-
     const payloadHash = hashExecutionPayload(executionPayload);
-    const title = await generateSimulationTitle(
-      executionPayload,
-      this.decodingCache,
-      opts.from,
-      opts.fee?.embeddedPaymentMethodFeePayer
-    );
 
-    return {
-      displayData: {
-        payloadHash,
-        title,
-        from: opts.from,
-        callAuthorizations,
-        executionTrace,
-      },
-      executionData: {
-        txRequest,
-      },
-    };
+    try {
+      const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
+
+      let callAuthorizations: ReadableCallAuthorization[];
+      let executionTrace: DecodedExecutionTrace | undefined;
+
+      // Use simulateTx operation's prepare method
+      const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
+
+      // Check if simulation failed
+      if (prepared.error) {
+        // Simulation failed - return error with minimal display data
+        return {
+          displayData: {
+            payloadHash,
+            title: "Send Transaction",
+            from: opts.from,
+            callAuthorizations: [],
+            executionTrace: undefined,
+          },
+          error: new Error(`Simulation failed: ${prepared.error.message}`),
+        };
+      }
+
+      // Decode simulation results
+      const decoded = prepared.executionData!.decoded;
+      ({ callAuthorizations, executionTrace } = decoded);
+
+      // Store simulation result
+      await this.db.storeTxSimulation(
+        prepared.executionData!.payloadHash,
+        prepared.executionData!.simulationResult,
+        prepared.executionData!.txRequest
+      );
+
+      // Create auth witnesses for call authorizations
+      const authWitnesses = await Promise.all(
+        callAuthorizations.map((auth) =>
+          this.createAuthWit(opts.from, {
+            caller: auth.rawData.caller,
+            call: auth.rawData.functionCall,
+          })
+        )
+      );
+      executionPayload.authWitnesses.push(...authWitnesses);
+
+      // Create transaction request
+      const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+        executionPayload,
+        opts.from,
+        fee
+      );
+
+      const title = await generateSimulationTitle(
+        executionPayload,
+        this.decodingCache,
+        opts.from,
+        opts.fee?.embeddedPaymentMethodFeePayer
+      );
+
+      return {
+        displayData: {
+          payloadHash,
+          title,
+          from: opts.from,
+          callAuthorizations,
+          executionTrace,
+        },
+        executionData: {
+          txRequest,
+        },
+      };
+    } catch (error) {
+      // Unexpected error during prepare - return with minimal display data
+      return {
+        displayData: {
+          payloadHash,
+          title: "Send Transaction",
+          from: opts.from,
+          callAuthorizations: [],
+          executionTrace: undefined,
+        },
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   async createInteraction(

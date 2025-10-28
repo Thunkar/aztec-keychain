@@ -1,5 +1,5 @@
 import { ExternalOperation } from "./base-operation";
-import type { AztecAddress } from "@aztec/stdlib/aztec-address";
+import { AztecAddress } from "@aztec/stdlib/aztec-address";
 import type {
   ContractInstanceWithAddress,
   ContractInstantiationData,
@@ -81,8 +81,9 @@ export class RegisterContractOperation extends ExternalOperation<
     secretKey?: Fr
   ): Promise<{
     earlyReturn?: RegisterContractResult;
-    displayData?: RegisterContractDisplayData;
+    displayData: RegisterContractDisplayData;
     executionData?: RegisterContractExecutionData;
+    error?: Error;
   }> {
     // Resolve contract address
     const contractAddress = await this.decodingCache.resolveContractAddress(
@@ -94,6 +95,7 @@ export class RegisterContractOperation extends ExternalOperation<
     const metadata = await this.pxe.getContractMetadata(contractAddress);
     if (metadata.contractInstance) {
       return {
+        displayData: { contractAddress, contractName: "Already Registered" },
         earlyReturn: metadata.contractInstance,
       };
     }

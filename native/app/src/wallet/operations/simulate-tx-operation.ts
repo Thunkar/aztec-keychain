@@ -122,8 +122,9 @@ export class SimulateTxOperation extends ExternalOperation<
     opts: SimulateOptions
   ): Promise<{
     earlyReturn?: SimulateTxResult;
-    displayData?: SimulateTxDisplayData;
+    displayData: SimulateTxDisplayData;
     executionData?: SimulateTxExecutionData;
+    error?: Error;
     persistence?: { storageKey: string; persistData: any };
   }> {
     // Generate payload hash and title
@@ -135,64 +136,94 @@ export class SimulateTxOperation extends ExternalOperation<
       opts.fee?.embeddedPaymentMethodFeePayer
     );
 
-    // Process fee options
-    const feeOptions = opts.fee?.estimateGas
-      ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
-      : await this.getDefaultFeeOptions(opts.from, opts.fee);
+    try {
+      // Process fee options
+      const feeOptions = opts.fee?.estimateGas
+        ? await this.getFeeOptionsForGasEstimation(opts.from, opts.fee)
+        : await this.getDefaultFeeOptions(opts.from, opts.fee);
 
-    const feeExecutionPayload =
-      await feeOptions.walletFeePaymentMethod?.getExecutionPayload();
-    const executionOptions: DefaultAccountEntrypointOptions = {
-      txNonce: Fr.random(),
-      cancellable: this.cancellableTransactions,
-      feePaymentMethodOptions: feeOptions.accountFeePaymentMethodOptions,
-    };
+      const feeExecutionPayload =
+        await feeOptions.walletFeePaymentMethod?.getExecutionPayload();
+      const executionOptions: DefaultAccountEntrypointOptions = {
+        txNonce: Fr.random(),
+        cancellable: this.cancellableTransactions,
+        feePaymentMethodOptions: feeOptions.accountFeePaymentMethodOptions,
+      };
 
-    const finalExecutionPayload = feeExecutionPayload
-      ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
-      : executionPayload;
+      const finalExecutionPayload = feeExecutionPayload
+        ? mergeExecutionPayloads([feeExecutionPayload, executionPayload])
+        : executionPayload;
 
-    // Create transaction execution request
-    const {
-      account: fromAccount,
-      instance,
-      artifact,
-    } = await this.getFakeAccountDataFor(opts.from);
-    const txRequest = await fromAccount.createTxExecutionRequest(
-      finalExecutionPayload,
-      feeOptions.gasSettings,
-      executionOptions
-    );
+      // Create transaction execution request
+      const {
+        account: fromAccount,
+        instance,
+        artifact,
+      } = await this.getFakeAccountDataFor(opts.from);
+      const txRequest = await fromAccount.createTxExecutionRequest(
+        finalExecutionPayload,
+        feeOptions.gasSettings,
+        executionOptions
+      );
 
-    const contractOverrides = {
-      [opts.from.toString()]: { instance, artifact },
-    };
+      const contractOverrides = {
+        [opts.from.toString()]: { instance, artifact },
+      };
 
-    // Simulate the transaction
-    const simulationResult = await this.pxe.simulateTx(
-      txRequest,
-      true /* simulatePublic */,
-      true,
-      true,
-      { contracts: contractOverrides }
-    );
-
-    const decodingService = new TxDecodingService(this.decodingCache);
-    const decoded = await decodingService.decodeTransaction(simulationResult);
-
-    return {
-      displayData: { payloadHash, title, from: opts.from, decoded },
-      executionData: {
-        simulationResult,
+      // Simulate the transaction
+      const simulationResult = await this.pxe.simulateTx(
         txRequest,
-        payloadHash,
-        decoded,
-      },
-      persistence: {
-        storageKey: `simulateTx:${payloadHash}`,
-        persistData: { title },
-      },
-    };
+        true /* simulatePublic */,
+        true,
+        true,
+        { contracts: contractOverrides }
+      );
+
+      const decodingService = new TxDecodingService(this.decodingCache);
+      const decoded = await decodingService.decodeTransaction(simulationResult);
+
+      return {
+        displayData: { payloadHash, title, from: opts.from, decoded },
+        executionData: {
+          simulationResult,
+          txRequest,
+          payloadHash,
+          decoded,
+        },
+        persistence: {
+          storageKey: `simulateTx:${payloadHash}`,
+          persistData: { title },
+        },
+      };
+    } catch (error) {
+      // Simulation failed - return error with minimal display data
+      return {
+        displayData: {
+          payloadHash,
+          title,
+          from: opts.from,
+          decoded: {
+            callAuthorizations: [],
+            executionTrace: {
+              privateExecution: {
+                type: "private-call",
+                depth: 0,
+                counter: { start: 0, end: 0 },
+                contract: { name: "Unknown", address: "0x0" },
+                function: "unknown",
+                caller: { name: "Unknown", address: "0x0" },
+                isStaticCall: false,
+                args: [],
+                returnValues: [],
+                nestedEvents: [],
+              },
+              publicExecutionQueue: [],
+            },
+          },
+        },
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   async createInteraction(

@@ -39,17 +39,21 @@ export abstract class ExternalOperation<
   /**
    * PHASE 1: PREPARE
    * Pure logic with no side effects.
+   * Must ALWAYS return displayData (even on error) so interaction can be created.
+   * If an error occurs, catch it and return via error field with minimal displayData.
    *
    * @returns Prepared data including:
    *  - earlyReturn: Result if no authorization needed (e.g., already cached)
-   *  - displayData: Information to show in authorization dialog
-   *  - executionData: Data needed to perform the action
+   *  - displayData: Information to show in authorization dialog (ALWAYS REQUIRED)
+   *  - executionData: Data needed to perform the action (not set if error occurred)
+   *  - error: Error that occurred during prepare (stops authorization/execution)
    *  - persistence: Optional configuration for persistent authorization caching
    */
   abstract prepare(...args: TArgs): Promise<{
     earlyReturn?: TResult;
-    displayData?: Record<string, unknown>;
+    displayData: Record<string, unknown>;
     executionData?: TExecutionData;
+    error?: Error;
     persistence?: {
       storageKey: string;
       persistData: any;
@@ -181,33 +185,26 @@ export abstract class ExternalOperation<
       return prepared.earlyReturn;
     }
 
+    // PHASE 2A: CREATE INTERACTION (displayData is always present now)
+    const interaction = await this.createInteraction(prepared.displayData);
+
+    // Check if prepare encountered an error
+    if (prepared.error) {
+      // Prepare failed - track error in interaction and throw
+      await this.updateInteractionFailure(interaction, prepared.error);
+      throw prepared.error;
+    }
+
     // Store persistence config in operation instance
     this.persistenceConfig = prepared.persistence;
 
-    // PHASE 2A: CREATE INTERACTION
-    const interaction = await this.createInteraction(prepared.displayData!);
-
     // PHASE 2B: REQUEST AUTHORIZATION
     this.setCurrentInteraction(interaction);
-    try {
-      await this.requestAuthorization(prepared.displayData!);
-    } catch (error) {
-      this.setCurrentInteraction(undefined);
-      this.persistenceConfig = undefined;
-      throw error;
-    }
+    await this.requestAuthorization(prepared.displayData);
 
     // PHASE 3: EXECUTE - Perform the action with interaction tracking
-    try {
-      const result = await this.execute(prepared.executionData!);
-      await this.updateInteractionSuccess(interaction);
-      return result;
-    } catch (error) {
-      await this.updateInteractionFailure(interaction, error);
-      throw error;
-    } finally {
-      this.setCurrentInteraction(undefined);
-      this.persistenceConfig = undefined;
-    }
+    const result = await this.execute(prepared.executionData!);
+    await this.updateInteractionSuccess(interaction);
+    return result;
   }
 }
