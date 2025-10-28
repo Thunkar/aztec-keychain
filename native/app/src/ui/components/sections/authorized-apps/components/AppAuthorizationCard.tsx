@@ -29,6 +29,7 @@ import {
 import { WalletContext } from "../../../../renderer";
 import { EditAccountAuthorizationDialog } from "../../../dialogs/EditAccountAuthorizationDialog";
 import { ExecutionTraceDialog } from "../../../dialogs/ExecutionTraceDialog";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
 
 interface AppAuthorizationCardProps {
   appId: string;
@@ -61,6 +62,9 @@ export function AppAuthorizationCard({
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [accountList, setAccountList] = useState<
+    Array<{ alias: string; item: string }>
+  >([]);
 
   useEffect(() => {
     loadAuthorizations();
@@ -69,8 +73,17 @@ export function AppAuthorizationCard({
   const loadAuthorizations = async () => {
     try {
       setLoading(true);
-      const auths = await walletAPI.getAppAuthorizations(appId);
+      // Load both in parallel and wait for both to complete
+      const [auths, accounts] = await Promise.all([
+        walletAPI.getAppAuthorizations(appId),
+        walletAPI.getAccounts(),
+      ]);
       setAuthorizations(auths);
+      setAccountList(accounts);
+      console.log("[AppAuthorizationCard] Loaded both auths and accounts:", {
+        auths,
+        accounts,
+      });
     } catch (err) {
       console.error("Failed to load app authorizations:", err);
     } finally {
@@ -204,10 +217,11 @@ export function AppAuthorizationCard({
               {accounts.length > 0 && (
                 <Box sx={{ mb: 2 }}>
                   <Accordion
-                    defaultExpanded
                     sx={{
-                      bgcolor: "background.paper",
+                      bgcolor: "rgba(0, 0, 0, 0.01)",
                       boxShadow: 1,
+                      border: "1px solid",
+                      borderColor: "divider",
                     }}
                   >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -221,21 +235,85 @@ export function AppAuthorizationCard({
                       </Box>
                     </AccordionSummary>
                     <AccordionDetails>
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1.5,
+                        }}
+                      >
                         {accounts.map(
-                          (acc: { alias: string; item: string }) => (
-                            <Chip
-                              key={acc.item}
-                              icon={<AccountCircle />}
-                              label={acc.alias}
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                fontFamily: "monospace",
-                                fontSize: "0.75rem",
-                              }}
-                            />
-                          )
+                          (acc: { alias: string; item: string }) => {
+                            const internalAccount = accountList.find(
+                              (a: { alias: string; item: AztecAddress }) =>
+                                a.item.equals(AztecAddress.fromString(acc.item))
+                            );
+
+                            return (
+                              <Box
+                                key={acc.item}
+                                sx={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 0.5,
+                                  p: 1.5,
+                                  bgcolor: "rgba(0, 0, 0, 0.01)",
+                                  borderRadius: 1,
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 1,
+                                  }}
+                                >
+                                  <AccountCircle
+                                    fontSize="small"
+                                    color="primary"
+                                  />
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      fontWeight: "medium",
+                                      fontFamily: "monospace",
+                                    }}
+                                  >
+                                    {internalAccount?.alias ||
+                                      "Unknown Account"}
+                                  </Typography>
+                                  <Chip
+                                    label={`→ ${acc.alias}`}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: "rgba(25, 118, 210, 0.08)",
+                                      color: "primary.main",
+                                      fontFamily: "monospace",
+                                      fontSize: "0.7rem",
+                                      fontWeight: "medium",
+                                      height: "20px",
+                                      "& .MuiChip-label": {
+                                        px: 1,
+                                      },
+                                    }}
+                                  />
+                                </Box>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{
+                                    fontFamily: "monospace",
+                                    ml: 3.5,
+                                  }}
+                                >
+                                  {acc.item.slice(0, 10)}...
+                                  {acc.item.slice(-8)}
+                                </Typography>
+                              </Box>
+                            );
+                          }
                         )}
                       </Box>
                     </AccordionDetails>
@@ -246,10 +324,11 @@ export function AppAuthorizationCard({
               {simulations.length > 0 && (
                 <Box sx={{ mb: 2 }}>
                   <Accordion
-                    defaultExpanded
                     sx={{
-                      bgcolor: "background.paper",
+                      bgcolor: "rgba(0, 0, 0, 0.01)",
                       boxShadow: 1,
+                      border: "1px solid",
+                      borderColor: "divider",
                     }}
                   >
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>

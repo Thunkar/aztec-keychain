@@ -68,12 +68,36 @@ function getMethodSubtitle(item: AuthorizationItem): string | null {
       return item.params.alias || item.params.address?.substring(0, 16) + "...";
     case "getAccounts":
       return "Access your wallet addresses";
-    case "sendTx":
-      return "Execute contract interaction";
-    case "simulateTx":
-      return "Simulate contract interaction (persistent)";
-    case "simulateUtility":
-      return "Simulate utility function (persistent)";
+    case "sendTx": {
+      // Show the transaction title if available
+      const title = item.params.title;
+      return title || "Execute contract interaction";
+    }
+    case "simulateTx": {
+      // Show the simulation details if available
+      const executionTrace = item.params.executionTrace;
+      if (executionTrace && typeof executionTrace === "object") {
+        const privateExecution = executionTrace.privateExecution;
+        if (privateExecution && typeof privateExecution === "object") {
+          const contractName = privateExecution.contract?.name || "Unknown";
+          const functionName = privateExecution.function || "unknown";
+          return `${contractName}::${functionName}`;
+        }
+      }
+      // Fallback to title if execution trace not available
+      const title = item.params.title;
+      return title || "Simulate contract interaction";
+    }
+    case "simulateUtility": {
+      // Show utility function details if available
+      const executionTrace = item.params.executionTrace;
+      if (executionTrace && typeof executionTrace === "object") {
+        const contractName = executionTrace.contractName || "Unknown";
+        const functionName = executionTrace.functionName || "unknown";
+        return `${contractName}::${functionName}`;
+      }
+      return "Simulate utility function";
+    }
     default:
       return null;
   }
@@ -224,6 +248,7 @@ export function AuthorizationDialog({
                   mb: 1,
                   border: state.approved ? "2px solid" : "1px solid",
                   borderColor: state.approved ? "primary.main" : "divider",
+                  bgcolor: "background.paper",
                 }}
               >
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>

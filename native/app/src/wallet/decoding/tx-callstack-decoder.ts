@@ -53,19 +53,34 @@ export class TxCallStackDecoder {
   constructor(private cache: DecodingCache) {}
 
   private async formatAndResolveValue(value: AbiDecoded): Promise<string> {
+    // Handle arrays recursively
+    if (Array.isArray(value)) {
+      const formattedElements = await Promise.all(
+        value.map(async (v) => await this.formatAndResolveValue(v))
+      );
+      return `[${formattedElements.join(", ")}]`;
+    }
+
     let formatted = formatAbiValue(value);
 
-    // Try to resolve addresses
-    if (value && typeof value === "object" && "toString" in value) {
-      const valueStr = value.toString();
-      if (valueStr.startsWith("0x") && valueStr.length === 66) {
-        try {
-          const addr = AztecAddress.fromString(valueStr);
-          const alias = await this.cache.getAddressAlias(addr);
-          formatted = `${alias} (${formatted.slice(0, 10)}...${formatted.slice(-8)})`;
-        } catch {
-          // Not a valid address, use original formatted value
-        }
+    // Try to resolve addresses - handle both string addresses and object addresses
+    let valueStr: string | null = null;
+
+    if (typeof value === "string") {
+      valueStr = value;
+    } else if (value && typeof value === "object" && "toString" in value) {
+      valueStr = value.toString();
+    }
+
+    if (valueStr && valueStr.startsWith("0x") && valueStr.length === 66) {
+      try {
+        const addr = AztecAddress.fromString(valueStr);
+        const alias = await this.cache.getAddressAlias(addr);
+        console.log('[formatAndResolveValue] Resolved address:', valueStr, '=>', alias);
+        formatted = `${alias} (${formatted.slice(0, 10)}...${formatted.slice(-8)})`;
+      } catch (error) {
+        console.log('[formatAndResolveValue] Failed to resolve address:', valueStr, error);
+        // Not a valid address, use original formatted value
       }
     }
 
@@ -458,6 +473,8 @@ export class TxCallStackDecoder {
     }
 
     try {
+      console.log('[formatUtilityArguments] Raw args:', args);
+
       // Retrieve contract metadata and artifact
       const metadata = await this.cache.getContractMetadata(contractAddress);
       if (!metadata.contractInstance) {
@@ -474,19 +491,63 @@ export class TxCallStackDecoder {
         throw new Error(`Function ${functionName} not found in artifact`);
       }
 
+      console.log('[formatUtilityArguments] Function ABI parameters:', functionAbi.parameters);
+
       // Args are already decoded values, just need to format and resolve addresses
-      return await Promise.all(
-        args.map(async (value, i) => ({
-          name: functionAbi.parameters[i]?.name || `arg_${i}`,
-          value: await this.formatAndResolveValue(value),
-        }))
+      const formatted = await Promise.all(
+        args.map(async (value, i) => {
+          const formattedValue = await this.formatAndResolveValue(value);
+          console.log(`[formatUtilityArguments] Arg ${i}:`, value, '=>', formattedValue);
+          return {
+            name: functionAbi.parameters[i]?.name || `arg_${i}`,
+            value: formattedValue,
+          };
+        })
       );
+
+      console.log('[formatUtilityArguments] Formatted result:', formatted);
+      return formatted;
     } catch (error) {
+      console.error('[formatUtilityArguments] Error formatting args:', error);
       // If formatting fails, return raw args
       return args.map((arg, i) => ({
         name: `arg_${i}`,
         value: JSON.stringify(arg),
       }));
+    }
+  }
+
+  /**
+   * Format utility function result for display with address resolution.
+   * Retrieves contract metadata and artifact, then formats result with address aliases.
+   */
+  async formatUtilityResult(
+    contractAddress: AztecAddress,
+    functionName: string,
+    result: any
+  ): Promise<string> {
+    try {
+      // Retrieve contract metadata and artifact
+      const metadata = await this.cache.getContractMetadata(contractAddress);
+      if (!metadata.contractInstance) {
+        throw new Error('No contract instance metadata found');
+      }
+
+      const artifact = await this.cache.getContractArtifact(
+        metadata.contractInstance.currentContractClassId
+      );
+
+      // Find the function in the artifact
+      const functionAbi = artifact.functions.find((f) => f.name === functionName);
+      if (!functionAbi) {
+        throw new Error(`Function ${functionName} not found in artifact`);
+      }
+
+      // Format the result value with address resolution
+      return await this.formatAndResolveValue(result);
+    } catch (error) {
+      // If formatting fails, return raw JSON
+      return JSON.stringify(result, null, 2);
     }
   }
 }

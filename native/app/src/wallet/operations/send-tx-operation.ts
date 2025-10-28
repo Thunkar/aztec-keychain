@@ -29,12 +29,6 @@ import type {
 import type { SimulateTxOperation } from "./simulate-tx-operation";
 import type { AuthWitness } from "@aztec/stdlib/auth-witness";
 
-// Readable transaction information with decoded data
-interface ReadableTxInformation {
-  callAuthorizations: ReadableCallAuthorization[];
-  executionTrace?: DecodedExecutionTrace;
-}
-
 // Arguments tuple for the operation
 type SendTxArgs = [executionPayload: ExecutionPayload, opts: SendOptions];
 

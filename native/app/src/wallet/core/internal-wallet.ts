@@ -19,7 +19,6 @@ import type { AuthorizationResponse } from "../types/authorization.ts";
 export type InternalAccount = Aliased<AztecAddress> & { type: AccountType };
 
 /**
- * InternalWallet extends ExternalWallet but:
  * 1. Skips all authorization checks (trusted internal GUI)
  * 2. Returns enriched data (e.g., account types)
  * 3. Provides additional internal-only methods

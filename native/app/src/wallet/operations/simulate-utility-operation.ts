@@ -11,13 +11,13 @@ import type { DecodingCache } from "../decoding/decoding-cache";
 import { TxCallStackDecoder } from "../decoding/tx-callstack-decoder";
 import { hashUtilityCall } from "../utils/simulation-utils";
 
-// Utility execution trace with decoded arguments
+// Utility execution trace with decoded arguments and formatted result
 interface UtilityExecutionTrace {
   functionName: string;
   args: unknown;
   contractAddress: string;
   contractName: string;
-  result: unknown;
+  result: string;
   isUtility: true;
 }
 
@@ -103,12 +103,17 @@ export class SimulateUtilityOperation extends ExternalOperation<
     // Get contract name for better display
     const contractName = await this.decodingCache.getAddressAlias(to);
 
-    // Format arguments using the TxCallStackDecoder
+    // Format arguments and result using the TxCallStackDecoder
     const decoder = new TxCallStackDecoder(this.decodingCache);
     const decodedArgs = await decoder.formatUtilityArguments(
       to,
       functionName,
       args
+    );
+    const formattedResult = await decoder.formatUtilityResult(
+      to,
+      functionName,
+      simulationResult.result
     );
 
     const executionTrace = {
@@ -116,7 +121,7 @@ export class SimulateUtilityOperation extends ExternalOperation<
       args: decodedArgs,
       contractAddress: to.toString(),
       contractName,
-      result: simulationResult.result,
+      result: formattedResult,
       isUtility: true as const,
     };
 

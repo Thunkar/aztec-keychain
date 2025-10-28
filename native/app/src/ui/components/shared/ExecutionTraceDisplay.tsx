@@ -1,579 +1,61 @@
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import Accordion from "@mui/material/Accordion";
-import AccordionSummary from "@mui/material/AccordionSummary";
-import AccordionDetails from "@mui/material/AccordionDetails";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import Chip from "@mui/material/Chip";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableRow from "@mui/material/TableRow";
-import CallMadeIcon from "@mui/icons-material/CallMade";
-import ScheduleIcon from "@mui/icons-material/Schedule";
-import PublicIcon from "@mui/icons-material/Public";
-import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import type {
   DecodedExecutionTrace,
-  ExecutionEvent,
-  PrivateCallEvent,
-  PublicEnqueueEvent,
 } from "../../../wallet/decoding/tx-callstack-decoder";
 import type { ReadableCallAuthorization } from "../../../wallet/decoding/call-authorization-formatter";
+import { FunctionCallDisplay } from "./FunctionCallDisplay";
+import { PrivateCallDisplay } from "./PrivateCallDisplay";
+
+// Utility execution trace type
+interface UtilityExecutionTrace {
+  functionName: string;
+  args: Array<{ name: string; value: string }>;
+  contractAddress: string;
+  contractName: string;
+  result: string;
+  isUtility: true;
+}
 
 interface ExecutionTraceDisplayProps {
-  trace: DecodedExecutionTrace;
+  trace: DecodedExecutionTrace | UtilityExecutionTrace;
   callAuthorizations?: ReadableCallAuthorization[];
-}
-
-// Helper to check if a call requires authorization
-function requiresAuthorization(
-  call: PrivateCallEvent,
-  authorizations?: ReadableCallAuthorization[]
-): boolean {
-  if (!authorizations || authorizations.length === 0) return false;
-
-  return authorizations.some(
-    (auth) =>
-      auth.contract.address === call.contract.address &&
-      auth.function === call.function
-  );
-}
-
-function PrivateCallDisplay({
-  call,
-  authorizations,
-}: {
-  call: PrivateCallEvent;
-  authorizations?: ReadableCallAuthorization[];
-}) {
-  const hasNestedEvents = call.nestedEvents.length > 0;
-  const hasReturnValues = call.returnValues.length > 0;
-  const hasArgs = call.args.length > 0;
-  const needsAuth = requiresAuthorization(call, authorizations);
-
-  return (
-    <Box
-      sx={{
-        ml: call.depth * 3,
-        mb: 1,
-        borderLeft: call.depth > 0 ? "2px solid" : "none",
-        borderColor: "primary.main",
-        pl: call.depth > 0 ? 2 : 0,
-      }}
-    >
-      <Accordion
-        sx={{
-          bgcolor: "background.default",
-          boxShadow: 1,
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              flexWrap: "wrap",
-              width: "100%",
-            }}
-          >
-            <CallMadeIcon fontSize="small" color="primary" />
-            <Typography
-              variant="body2"
-              sx={{ fontFamily: "monospace", fontWeight: "medium" }}
-            >
-              {call.contract.name}.{call.function}({hasArgs ? "..." : ""})
-            </Typography>
-            {needsAuth && (
-              <Chip
-                icon={<VpnKeyIcon />}
-                label="Requires Authorization"
-                size="small"
-                color="warning"
-                variant="filled"
-              />
-            )}
-            {call.isStaticCall && (
-              <Chip label="static" size="small" variant="outlined" />
-            )}
-            {hasReturnValues && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontFamily: "monospace", ml: "auto" }}
-              >
-                → {call.returnValues.map((rv) => rv.value).join(", ")}
-              </Typography>
-            )}
-          </Box>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Box>
-            {/* Arguments (if available) - Show first as most important */}
-            {hasArgs && (
-              <Box sx={{ mb: 2 }}>
-                <Typography
-                  variant="subtitle2"
-                  color="primary"
-                  gutterBottom
-                  sx={{ fontWeight: "bold" }}
-                >
-                  Arguments:
-                </Typography>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    bgcolor: "action.hover",
-                    borderRadius: 1,
-                    border: "1px solid",
-                    borderColor: "divider",
-                  }}
-                >
-                  <Table size="small">
-                    <TableBody>
-                      {call.args.map((arg, i) => (
-                        <TableRow key={i}>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              fontWeight: "medium",
-                              border: 0,
-                              py: 0.75,
-                              color: "primary.main",
-                            }}
-                          >
-                            {arg.name}
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              wordBreak: "break-all",
-                              border: 0,
-                              py: 0.75,
-                            }}
-                          >
-                            {arg.value}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Box>
-              </Box>
-            )}
-
-            {/* Return Values */}
-            {hasReturnValues && (
-              <Box sx={{ mb: 2 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  gutterBottom
-                >
-                  Return Values:
-                </Typography>
-                <Box
-                  sx={{
-                    p: 1,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                  }}
-                >
-                  <Table size="small">
-                    <TableBody>
-                      {call.returnValues.map((rv, i) => (
-                        <TableRow key={i}>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              fontWeight: "medium",
-                              border: 0,
-                              py: 0.5,
-                            }}
-                          >
-                            {rv.name}
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              wordBreak: "break-all",
-                              border: 0,
-                              py: 0.5,
-                            }}
-                          >
-                            {rv.value}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Box>
-              </Box>
-            )}
-
-            {/* Call Details */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Contract:
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
-              >
-                {call.contract.name}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontFamily: "monospace",
-                  wordBreak: "break-all",
-                  color: "text.secondary",
-                  display: "block",
-                }}
-              >
-                {call.contract.address}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Caller:
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
-              >
-                {call.caller.name}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">
-                Counters:
-              </Typography>
-              <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-                {call.counter.start} → {call.counter.end}
-              </Typography>
-            </Box>
-          </Box>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* Nested Events */}
-      {hasNestedEvents && (
-        <Box sx={{ mt: 1 }}>
-          {call.nestedEvents.map((event, i) => (
-            <ExecutionEventDisplay
-              key={i}
-              event={event}
-              authorizations={authorizations}
-            />
-          ))}
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-function PublicEnqueueDisplay({ enqueue }: { enqueue: PublicEnqueueEvent }) {
-  const hasArgs = enqueue.args?.length > 0;
-
-  return (
-    <Box
-      sx={{
-        ml: enqueue.depth * 3,
-        mb: 1,
-        p: 1.5,
-        bgcolor: "rgba(255, 152, 0, 0.15)",
-        borderRadius: 1,
-        borderLeft: "4px solid",
-        borderColor: "warning.main",
-      }}
-    >
-      <Box
-        sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
-      >
-        <PublicIcon fontSize="small" color="warning" />
-        <Typography
-          variant="body2"
-          sx={{ fontFamily: "monospace", fontWeight: "medium" }}
-        >
-          Enqueued Public: {enqueue.contract.name}.{enqueue.function}(
-          {hasArgs ? "..." : ""})
-        </Typography>
-        <Chip
-          icon={<ScheduleIcon />}
-          label={`counter: ${enqueue.counter}`}
-          size="small"
-          color="warning"
-          variant="outlined"
-        />
-        {enqueue.isStaticCall && (
-          <Chip label="static" size="small" variant="outlined" />
-        )}
-      </Box>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ display: "block", mt: 0.5 }}
-      >
-        Will execute on node after private execution completes
-      </Typography>
-
-      {/* Arguments (if available) */}
-      {hasArgs && (
-        <Box sx={{ mt: 1.5 }}>
-          <Typography
-            variant="caption"
-            color="warning.dark"
-            gutterBottom
-            sx={{ fontWeight: "bold" }}
-          >
-            Arguments:
-          </Typography>
-          <Box
-            sx={{
-              p: 1,
-              bgcolor: "background.paper",
-              borderRadius: 1,
-              mt: 0.5,
-            }}
-          >
-            <Table size="small">
-              <TableBody>
-                {enqueue.args.map((arg, i) => (
-                  <TableRow key={i}>
-                    <TableCell
-                      sx={{
-                        fontFamily: "monospace",
-                        fontWeight: "medium",
-                        border: 0,
-                        py: 0.5,
-                        color: "warning.dark",
-                      }}
-                    >
-                      {arg.name}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontFamily: "monospace",
-                        wordBreak: "break-all",
-                        border: 0,
-                        py: 0.5,
-                      }}
-                    >
-                      {arg.value}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Box>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
-function ExecutionEventDisplay({
-  event,
-  authorizations,
-}: {
-  event: ExecutionEvent;
-  authorizations?: ReadableCallAuthorization[];
-}) {
-  if (event.type === "private-call") {
-    return <PrivateCallDisplay call={event} authorizations={authorizations} />;
-  } else {
-    return <PublicEnqueueDisplay enqueue={event} />;
-  }
+  accordionBgColor?: string;
 }
 
 export function ExecutionTraceDisplay({
   trace,
   callAuthorizations,
+  accordionBgColor,
 }: ExecutionTraceDisplayProps) {
   // Check if this is a utility trace
   if ("isUtility" in trace && trace.isUtility) {
-    console.log('[ExecutionTraceDisplay] Utility trace:', {
-      functionName: trace.functionName,
-      contractName: trace.contractName,
-      args: trace.args,
-      argsLength: trace.args?.length,
-      result: trace.result
-    });
-    const hasArgs = trace.args && trace.args.length > 0;
-    const hasResult = trace.result !== undefined;
+    const utilityTrace = trace as UtilityExecutionTrace;
+
+    // Convert result to return values format (result is already formatted as a string)
+    const returnValues =
+      utilityTrace.result !== undefined && utilityTrace.result !== ""
+        ? [{ name: "result", value: utilityTrace.result }]
+        : [];
 
     return (
-      <Accordion
-        sx={{
-          bgcolor: "background.default",
-          boxShadow: 1,
-        }}
-        defaultExpanded
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              flexWrap: "wrap",
-              width: "100%",
-            }}
-          >
-            <CallMadeIcon fontSize="small" color="primary" />
-            <Typography
-              variant="body2"
-              sx={{ fontFamily: "monospace", fontWeight: "medium" }}
-            >
-              {trace.contractName}.{trace.functionName}()
-            </Typography>
-            <Chip
-              label="Utility"
-              size="small"
-              color="primary"
-              variant="outlined"
-              sx={{ ml: 1 }}
-            />
-            {hasResult && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontFamily: "monospace", ml: "auto" }}
-              >
-                → {Array.isArray(trace.result) ? `[${trace.result.length}]` : String(trace.result).slice(0, 20)}
-              </Typography>
-            )}
-          </Box>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Box>
-            {/* Contract Info */}
-            <Box sx={{ mb: 2 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                gutterBottom
-              >
-                Contract:
-              </Typography>
-              <Box
-                sx={{
-                  p: 1,
-                  bgcolor: "background.paper",
-                  borderRadius: 1,
-                  fontFamily: "monospace",
-                  fontSize: "0.85rem",
-                }}
-              >
-                {trace.contractName}
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ ml: 1 }}
-                >
-                  ({trace.contractAddress.slice(0, 10)}...
-                  {trace.contractAddress.slice(-8)})
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* Arguments */}
-            {hasArgs && (
-              <Box sx={{ mb: 2 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  gutterBottom
-                >
-                  Arguments:
-                </Typography>
-                <Box
-                  sx={{
-                    p: 1,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                  }}
-                >
-                  <Table size="small">
-                    <TableBody>
-                      {trace.args.map((arg: any, i: number) => (
-                        <TableRow key={i}>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              fontWeight: "medium",
-                              border: 0,
-                              py: 0.5,
-                            }}
-                          >
-                            {arg.name}
-                          </TableCell>
-                          <TableCell
-                            sx={{
-                              fontFamily: "monospace",
-                              border: 0,
-                              py: 0.5,
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            {arg.value}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Box>
-              </Box>
-            )}
-
-            {/* Return Values */}
-            {hasResult && (
-              <Box sx={{ mb: 2 }}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  gutterBottom
-                >
-                  Return Value:
-                </Typography>
-                <Box
-                  sx={{
-                    p: 1,
-                    bgcolor: "rgba(76, 175, 80, 0.05)",
-                    borderRadius: 1,
-                    borderLeft: "4px solid",
-                    borderColor: "success.main",
-                  }}
-                >
-                  <pre
-                    style={{
-                      margin: 0,
-                      fontFamily: "monospace",
-                      fontSize: "0.85rem",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                    }}
-                  >
-                    {JSON.stringify(trace.result, null, 2)}
-                  </pre>
-                </Box>
-              </Box>
-            )}
-          </Box>
-        </AccordionDetails>
-      </Accordion>
+      <FunctionCallDisplay
+        contractName={utilityTrace.contractName}
+        contractAddress={utilityTrace.contractAddress}
+        functionName={utilityTrace.functionName}
+        args={utilityTrace.args}
+        returnValues={returnValues}
+        typeLabel="Utility"
+        accordionBgColor={accordionBgColor}
+      />
     );
   }
 
   // Full transaction trace
+  const decodedTrace = trace as DecodedExecutionTrace;
   return (
     <PrivateCallDisplay
-      call={trace.privateExecution}
+      call={decodedTrace.privateExecution}
       authorizations={callAuthorizations}
+      accordionBgColor={accordionBgColor}
     />
   );
 }

@@ -52,7 +52,10 @@ export function ExecutionTraceDialog({
         </IconButton>
       </DialogTitle>
       <DialogContent dividers>
-        <ExecutionTraceDisplay trace={trace} />
+        <ExecutionTraceDisplay
+          trace={trace}
+          accordionBgColor="background.default"
+        />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
