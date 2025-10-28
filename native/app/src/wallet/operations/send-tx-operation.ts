@@ -180,14 +180,10 @@ export class SendTxOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: SendTxDisplayData,
-    interaction: WalletInteraction<WalletInteractionType>,
-    _persistence?: { storageKey: string; persistData: any }
+    displayData: SendTxDisplayData
   ): Promise<void> {
     // Update status to requesting authorization
-    await this.interactionManager.storeAndEmit(
-      interaction.update({ status: "REQUESTING AUTHORIZATION" })
-    );
+    await this.emitProgress("REQUESTING AUTHORIZATION");
 
     // Request authorization (never persisted for sendTx)
     await this.authorizationManager.requestAuthorization([
@@ -209,6 +205,9 @@ export class SendTxOperation extends ExternalOperation<
   async execute(executionData: {
     txRequest: TxExecutionRequest;
   }): Promise<TxHash> {
+    // Report proving stage
+    await this.emitProgress("PROVING");
+
     const provenTx = await this.pxe.proveTx(executionData.txRequest);
 
     const tx = await provenTx.toTx();
@@ -219,6 +218,9 @@ export class SendTxOperation extends ExternalOperation<
         `A settled tx with equal hash ${txHash.toString()} exists.`
       );
     }
+
+    // Report sending stage
+    await this.emitProgress("SENDING", `TxHash: ${txHash.toString()}`);
 
     await this.aztecNode.sendTx(tx).catch((err) => {
       throw this.contextualizeError(err, inspect(tx));

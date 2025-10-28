@@ -50,13 +50,6 @@ type ReadableTxInformation = {
 };
 
 export class ExternalWallet extends BaseNativeWallet {
-  // Operation instances
-  private registerContractOp: RegisterContractOperation;
-  private registerSenderOp: RegisterSenderOperation;
-  private simulateUtilityOp: SimulateUtilityOperation;
-  private simulateTxOp: SimulateTxOperation;
-  private sendTxOp: SendTxOperation;
-
   constructor(
     pxe: PXE,
     node: AztecNode,
@@ -73,29 +66,51 @@ export class ExternalWallet extends BaseNativeWallet {
     log: Logger
   ) {
     super(pxe, node, db, pendingAuthorizations, appId, chainInfo, log);
+  }
 
-    // Initialize operations
-    this.registerContractOp = new RegisterContractOperation(
-      pxe,
+  /**
+   * Factory method to create a fresh RegisterContractOperation instance.
+   */
+  private createRegisterContractOperation(): RegisterContractOperation {
+    return new RegisterContractOperation(
+      this.pxe,
       this.decodingCache,
       this.interactionManager,
       this.authorizationManager
     );
-    this.registerSenderOp = new RegisterSenderOperation(
-      pxe,
+  }
+
+  /**
+   * Factory method to create a fresh RegisterSenderOperation instance.
+   */
+  private createRegisterSenderOperation(): RegisterSenderOperation {
+    return new RegisterSenderOperation(
+      this.pxe,
       this.db,
       this.interactionManager,
       this.authorizationManager
     );
-    this.simulateUtilityOp = new SimulateUtilityOperation(
-      pxe,
+  }
+
+  /**
+   * Factory method to create a fresh SimulateUtilityOperation instance.
+   */
+  private createSimulateUtilityOperation(): SimulateUtilityOperation {
+    return new SimulateUtilityOperation(
+      this.pxe,
       this.db,
       this.decodingCache,
       this.interactionManager,
       this.authorizationManager
     );
-    this.simulateTxOp = new SimulateTxOperation(
-      pxe,
+  }
+
+  /**
+   * Factory method to create a fresh SimulateTxOperation instance.
+   */
+  private createSimulateTxOperation(): SimulateTxOperation {
+    return new SimulateTxOperation(
+      this.pxe,
       this.db,
       this.decodingCache,
       this.interactionManager,
@@ -104,17 +119,26 @@ export class ExternalWallet extends BaseNativeWallet {
       this.getDefaultFeeOptions.bind(this),
       this.getFakeAccountDataFor.bind(this),
       this.cancellableTransactions,
-      appId,
-      log
+      this.appId,
+      this.log
     );
-    this.sendTxOp = new SendTxOperation(
-      pxe,
-      node,
+  }
+
+  /**
+   * Factory method to create a fresh SendTxOperation instance.
+   * @param simulateTxOp - The SimulateTxOperation instance to use (may be fresh or shared)
+   */
+  private createSendTxOperation(
+    simulateTxOp: SimulateTxOperation
+  ): SendTxOperation {
+    return new SendTxOperation(
+      this.pxe,
+      this.aztecNode,
       this.db,
       this.decodingCache,
       this.interactionManager,
       this.authorizationManager,
-      this.simulateTxOp,
+      simulateTxOp,
       this.createAuthWit.bind(this),
       this.createTxExecutionRequestFromPayloadAndFee.bind(this),
       this.getDefaultFeeOptions.bind(this),
@@ -210,18 +234,16 @@ export class ExternalWallet extends BaseNativeWallet {
     artifact?: ContractArtifact,
     secretKey?: Fr
   ): Promise<ContractInstanceWithAddress> {
-    return await this.registerContractOp.executeStandalone(
-      instanceData,
-      artifact,
-      secretKey
-    );
+    const op = this.createRegisterContractOperation();
+    return await op.executeStandalone(instanceData, artifact, secretKey);
   }
 
   override async registerSender(
     address: AztecAddress,
     alias: string
   ): Promise<AztecAddress> {
-    return await this.registerSenderOp.executeStandalone(address, alias);
+    const op = this.createRegisterSenderOperation();
+    return await op.executeStandalone(address, alias);
   }
 
   override async getAddressBook(): Promise<Aliased<AztecAddress>[]> {
@@ -259,18 +281,22 @@ export class ExternalWallet extends BaseNativeWallet {
     exec: ExecutionPayload,
     opts: SendOptions
   ): Promise<TxHash> {
-    return await this.sendTxOp.executeStandalone(exec, opts);
+    const simulateTxOp = this.createSimulateTxOperation();
+    const op = this.createSendTxOperation(simulateTxOp);
+    return await op.executeStandalone(exec, opts);
   }
 
   override async batch<
     const T extends readonly BatchedMethod<keyof BatchableMethods>[],
   >(methods: T): Promise<BatchResults<T>> {
-    // Map of method names to operation instances
+    // Create fresh operation instances for batch execution to avoid state leakage
+    // Each operation in the batch gets its own clean instance
+    const simulateTxOp = this.createSimulateTxOperation();
     const operationMap = {
-      registerContract: this.registerContractOp,
-      registerSender: this.registerSenderOp,
-      simulateUtility: this.simulateUtilityOp,
-      sendTx: this.sendTxOp,
+      registerContract: this.createRegisterContractOperation(),
+      registerSender: this.createRegisterSenderOperation(),
+      simulateUtility: this.createSimulateUtilityOperation(),
+      sendTx: this.createSendTxOperation(simulateTxOp),
     } as const;
 
     type BatchMethodResult =
@@ -411,6 +437,9 @@ export class ExternalWallet extends BaseNativeWallet {
           prep.displayData!
         );
 
+        // Set current interaction for progress tracking
+        prep.operation.setCurrentInteraction(interaction);
+
         try {
           // Execute the operation
           result = await prep.operation.execute(prep.executionData!);
@@ -421,6 +450,9 @@ export class ExternalWallet extends BaseNativeWallet {
           // Update interaction on failure
           await prep.operation.updateInteractionFailure(interaction, error);
           throw error;
+        } finally {
+          // Clear current interaction
+          prep.operation.setCurrentInteraction(undefined);
         }
       }
 
@@ -438,7 +470,8 @@ export class ExternalWallet extends BaseNativeWallet {
     executionPayload: ExecutionPayload,
     opts: SimulateOptions
   ): Promise<TxSimulationResult> {
-    return await this.simulateTxOp.executeStandalone(executionPayload, opts);
+    const op = this.createSimulateTxOperation();
+    return await op.executeStandalone(executionPayload, opts);
   }
 
   /**
@@ -452,12 +485,7 @@ export class ExternalWallet extends BaseNativeWallet {
     authwits?: AuthWitness[],
     from?: AztecAddress
   ): Promise<UtilitySimulationResult> {
-    return await this.simulateUtilityOp.executeStandalone(
-      functionName,
-      args,
-      to,
-      authwits,
-      from
-    );
+    const op = this.createSimulateUtilityOperation();
+    return await op.executeStandalone(functionName, args, to, authwits, from);
   }
 }

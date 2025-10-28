@@ -127,9 +127,7 @@ export class RegisterContractOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: RegisterContractDisplayData,
-    _interaction: WalletInteraction<WalletInteractionType>,
-    _persistence?: { storageKey: string; persistData: any }
+    displayData: RegisterContractDisplayData
   ): Promise<void> {
     await this.authorizationManager.requestAuthorization([
       {

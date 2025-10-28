@@ -25,6 +25,7 @@ import { AuthorizeContractContent } from "../authorization/AuthorizeContractCont
 import { AuthorizeSenderContent } from "../authorization/AuthorizeSenderContent";
 import { AuthorizeAccountsContent } from "../authorization/AuthorizeAccountsContent";
 import { WalletContext } from "../../renderer";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
 
 interface AuthorizationDialogProps {
   request: AuthorizationRequest;
@@ -119,7 +120,7 @@ export function AuthorizationDialog({
   const { walletAPI } = useContext(WalletContext);
   const items = request.items;
   const [accountList, setAccountList] = useState<
-    Array<{ alias: string; item: string }>
+    Array<{ alias: string; item: AztecAddress }>
   >([]);
 
   // Load accounts for displaying "from" information
@@ -363,8 +364,10 @@ export function AuthorizationDialog({
                                 </Typography>
                                 {(() => {
                                   const fromAddress = item.params.from;
-                                  const account = accountList.find(
-                                    (a) => a.item === fromAddress
+                                  const account = accountList.find((a) =>
+                                    a.item.equals(
+                                      AztecAddress.fromString(fromAddress)
+                                    )
                                   );
                                   const internalAlias =
                                     account?.alias || "Unknown Account";

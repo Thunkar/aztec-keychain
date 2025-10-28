@@ -215,14 +215,10 @@ export class SimulateTxOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: SimulateTxDisplayData,
-    interaction: WalletInteraction<WalletInteractionType>,
-    persistence?: { storageKey: string; persistData: any }
+    displayData: SimulateTxDisplayData
   ): Promise<void> {
     // Update status to requesting authorization
-    await this.interactionManager.storeAndEmit(
-      interaction.update({ status: "REQUESTING AUTHORIZATION" })
-    );
+    await this.emitProgress("REQUESTING AUTHORIZATION");
 
     // Request authorization with optional persistent caching
     await this.authorizationManager.requestAuthorization([
@@ -238,7 +234,7 @@ export class SimulateTxOperation extends ExternalOperation<
           from: displayData.from.toString(),
         },
         timestamp: Date.now(),
-        persistence,
+        persistence: this.persistenceConfig,
       },
     ]);
   }
@@ -247,6 +243,8 @@ export class SimulateTxOperation extends ExternalOperation<
     executionData: SimulateTxExecutionData
   ): Promise<SimulateTxResult> {
     // Store the simulation result using the payload hash
+    await this.emitProgress("STORING SIMULATION");
+
     try {
       await this.db.storeTxSimulation(
         executionData.payloadHash,

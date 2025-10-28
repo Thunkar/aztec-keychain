@@ -159,14 +159,10 @@ export class SimulateUtilityOperation extends ExternalOperation<
   }
 
   async requestAuthorization(
-    displayData: SimulateUtilityDisplayData,
-    interaction: WalletInteraction<WalletInteractionType>,
-    persistence?: { storageKey: string; persistData: any }
+    displayData: SimulateUtilityDisplayData
   ): Promise<void> {
     // Update status to requesting authorization
-    await this.interactionManager.storeAndEmit(
-      interaction.update({ status: "REQUESTING AUTHORIZATION" })
-    );
+    await this.emitProgress("REQUESTING AUTHORIZATION");
 
     // Request authorization with optional persistent caching
     await this.authorizationManager.requestAuthorization([
@@ -180,7 +176,7 @@ export class SimulateUtilityOperation extends ExternalOperation<
           isUtility: true,
         },
         timestamp: Date.now(),
-        persistence,
+        persistence: this.persistenceConfig,
       },
     ]);
   }
