@@ -44,6 +44,7 @@ interface SendTxExecutionData {
 type SendTxDisplayData = {
   payloadHash: string;
   title: string;
+  from: AztecAddress;
   callAuthorizations: ReadableCallAuthorization[];
   executionTrace?: DecodedExecutionTrace;
 };
@@ -151,6 +152,7 @@ export class SendTxOperation extends ExternalOperation<
       displayData: {
         payloadHash,
         title,
+        from: opts.from,
         callAuthorizations,
         executionTrace,
       },
@@ -196,6 +198,8 @@ export class SendTxOperation extends ExternalOperation<
         params: {
           callAuthorizations: displayData.callAuthorizations,
           executionTrace: displayData.executionTrace,
+          title: displayData.title,
+          from: displayData.from.toString(),
         },
         timestamp: Date.now(),
       },

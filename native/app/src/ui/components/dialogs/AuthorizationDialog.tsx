@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -11,6 +11,9 @@ import AccordionSummary from "@mui/material/AccordionSummary";
 import AccordionDetails from "@mui/material/AccordionDetails";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Checkbox from "@mui/material/Checkbox";
+import Chip from "@mui/material/Chip";
+import Card from "@mui/material/Card";
+import { Apps as AppsIcon, AccountCircle } from "@mui/icons-material";
 import type {
   AuthorizationRequest,
   AuthorizationItemResponse,
@@ -21,6 +24,7 @@ import { AuthorizeSimulateTxContent } from "../authorization/AuthorizeSimulateTx
 import { AuthorizeContractContent } from "../authorization/AuthorizeContractContent";
 import { AuthorizeSenderContent } from "../authorization/AuthorizeSenderContent";
 import { AuthorizeAccountsContent } from "../authorization/AuthorizeAccountsContent";
+import { WalletContext } from "../../renderer";
 
 interface AuthorizationDialogProps {
   request: AuthorizationRequest;
@@ -74,7 +78,12 @@ function getMethodSubtitle(item: AuthorizationItem): string | null {
       return title || "Execute contract interaction";
     }
     case "simulateTx": {
-      // Show the simulation details if available
+      // Show the precomputed title (filters out wallet calls, shows user-initiated calls)
+      const title = item.params.title;
+      if (title && title !== "Transaction") {
+        return title;
+      }
+      // Fallback to extracting from execution trace if title not available
       const executionTrace = item.params.executionTrace;
       if (executionTrace && typeof executionTrace === "object") {
         const privateExecution = executionTrace.privateExecution;
@@ -84,9 +93,7 @@ function getMethodSubtitle(item: AuthorizationItem): string | null {
           return `${contractName}::${functionName}`;
         }
       }
-      // Fallback to title if execution trace not available
-      const title = item.params.title;
-      return title || "Simulate contract interaction";
+      return "Simulate contract interaction";
     }
     case "simulateUtility": {
       // Show utility function details if available
@@ -109,7 +116,24 @@ export function AuthorizationDialog({
   onDeny,
   queueLength = 1,
 }: AuthorizationDialogProps) {
+  const { walletAPI } = useContext(WalletContext);
   const items = request.items;
+  const [accountList, setAccountList] = useState<
+    Array<{ alias: string; item: string }>
+  >([]);
+
+  // Load accounts for displaying "from" information
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        const accounts = await walletAPI.getAccounts();
+        setAccountList(accounts);
+      } catch (err) {
+        console.error("Failed to load accounts:", err);
+      }
+    };
+    loadAccounts();
+  }, [walletAPI]);
 
   const [itemStates, setItemStates] = useState<Map<string, ItemState>>(
     new Map(
@@ -278,6 +302,107 @@ export function AuthorizationDialog({
 
                 <AccordionDetails>
                   <Box sx={{ pl: 5 }}>
+                    {/* Prominent info card for sendTx and simulateTx */}
+                    {(item.method === "sendTx" ||
+                      item.method === "simulateTx") &&
+                      item.params.from && (
+                        <Card
+                          sx={{
+                            mb: 2,
+                            bgcolor: "action.hover",
+                            border: "2px solid",
+                            borderColor: "primary.main",
+                          }}
+                        >
+                          <Box sx={{ p: 2 }}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 1.5,
+                              }}
+                            >
+                              {/* App Info */}
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1,
+                                }}
+                              >
+                                <AppsIcon fontSize="small" color="primary" />
+                                <Typography variant="body2" fontWeight="medium">
+                                  App:
+                                </Typography>
+                                <Chip
+                                  label={request.appId}
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 600,
+                                    bgcolor: "rgba(25, 118, 210, 0.08)",
+                                    color: "primary.main",
+                                    border: "1px solid",
+                                    borderColor: "primary.main",
+                                  }}
+                                />
+                              </Box>
+                              {/* From Account Info */}
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1,
+                                }}
+                              >
+                                <AccountCircle
+                                  fontSize="small"
+                                  color="primary"
+                                />
+                                <Typography variant="body2" fontWeight="medium">
+                                  From:
+                                </Typography>
+                                {(() => {
+                                  const fromAddress = item.params.from;
+                                  const account = accountList.find(
+                                    (a) => a.item === fromAddress
+                                  );
+                                  const internalAlias =
+                                    account?.alias || "Unknown Account";
+                                  const formattedAddress = fromAddress
+                                    ? `${fromAddress.slice(0, 10)}...${fromAddress.slice(-8)}`
+                                    : "Unknown";
+                                  return (
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 1,
+                                      }}
+                                    >
+                                      <Typography
+                                        variant="body2"
+                                        fontWeight="bold"
+                                      >
+                                        {internalAlias}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          fontFamily: "monospace",
+                                          color: "text.secondary",
+                                        }}
+                                      >
+                                        ({formattedAddress})
+                                      </Typography>
+                                    </Box>
+                                  );
+                                })()}
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Card>
+                      )}
+
                     {item.method === "sendTx" && (
                       <AuthorizeSendTxContent
                         request={item}

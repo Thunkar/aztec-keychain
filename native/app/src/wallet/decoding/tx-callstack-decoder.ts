@@ -76,10 +76,8 @@ export class TxCallStackDecoder {
       try {
         const addr = AztecAddress.fromString(valueStr);
         const alias = await this.cache.getAddressAlias(addr);
-        console.log('[formatAndResolveValue] Resolved address:', valueStr, '=>', alias);
         formatted = `${alias} (${formatted.slice(0, 10)}...${formatted.slice(-8)})`;
       } catch (error) {
-        console.log('[formatAndResolveValue] Failed to resolve address:', valueStr, error);
         // Not a valid address, use original formatted value
       }
     }
@@ -473,12 +471,12 @@ export class TxCallStackDecoder {
     }
 
     try {
-      console.log('[formatUtilityArguments] Raw args:', args);
+      console.log("[formatUtilityArguments] Raw args:", args);
 
       // Retrieve contract metadata and artifact
       const metadata = await this.cache.getContractMetadata(contractAddress);
       if (!metadata.contractInstance) {
-        throw new Error('No contract instance metadata found');
+        throw new Error("No contract instance metadata found");
       }
 
       const artifact = await this.cache.getContractArtifact(
@@ -486,18 +484,28 @@ export class TxCallStackDecoder {
       );
 
       // Find the function in the artifact
-      const functionAbi = artifact.functions.find((f) => f.name === functionName);
+      const functionAbi = artifact.functions.find(
+        (f) => f.name === functionName
+      );
       if (!functionAbi) {
         throw new Error(`Function ${functionName} not found in artifact`);
       }
 
-      console.log('[formatUtilityArguments] Function ABI parameters:', functionAbi.parameters);
+      console.log(
+        "[formatUtilityArguments] Function ABI parameters:",
+        functionAbi.parameters
+      );
 
       // Args are already decoded values, just need to format and resolve addresses
       const formatted = await Promise.all(
         args.map(async (value, i) => {
           const formattedValue = await this.formatAndResolveValue(value);
-          console.log(`[formatUtilityArguments] Arg ${i}:`, value, '=>', formattedValue);
+          console.log(
+            `[formatUtilityArguments] Arg ${i}:`,
+            value,
+            "=>",
+            formattedValue
+          );
           return {
             name: functionAbi.parameters[i]?.name || `arg_${i}`,
             value: formattedValue,
@@ -505,10 +513,10 @@ export class TxCallStackDecoder {
         })
       );
 
-      console.log('[formatUtilityArguments] Formatted result:', formatted);
+      console.log("[formatUtilityArguments] Formatted result:", formatted);
       return formatted;
     } catch (error) {
-      console.error('[formatUtilityArguments] Error formatting args:', error);
+      console.error("[formatUtilityArguments] Error formatting args:", error);
       // If formatting fails, return raw args
       return args.map((arg, i) => ({
         name: `arg_${i}`,
@@ -530,7 +538,7 @@ export class TxCallStackDecoder {
       // Retrieve contract metadata and artifact
       const metadata = await this.cache.getContractMetadata(contractAddress);
       if (!metadata.contractInstance) {
-        throw new Error('No contract instance metadata found');
+        throw new Error("No contract instance metadata found");
       }
 
       const artifact = await this.cache.getContractArtifact(
@@ -538,7 +546,9 @@ export class TxCallStackDecoder {
       );
 
       // Find the function in the artifact
-      const functionAbi = artifact.functions.find((f) => f.name === functionName);
+      const functionAbi = artifact.functions.find(
+        (f) => f.name === functionName
+      );
       if (!functionAbi) {
         throw new Error(`Function ${functionName} not found in artifact`);
       }

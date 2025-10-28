@@ -100,7 +100,7 @@ export function AuthorizeAccountsContent({
               borderColor: account.selected ? "primary.main" : "divider",
               borderRadius: 1,
               bgcolor: account.selected
-                ? "action.selected"
+                ? "action.hover"
                 : "background.paper",
             }}
           >

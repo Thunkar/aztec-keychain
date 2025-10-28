@@ -69,6 +69,7 @@ interface SimulateTxExecutionData {
 type SimulateTxDisplayData = {
   payloadHash: string;
   title: string;
+  from: AztecAddress;
   decoded: ReadableTxInformation;
 } & Record<string, unknown>;
 
@@ -180,7 +181,7 @@ export class SimulateTxOperation extends ExternalOperation<
     const decoded = await decodingService.decodeTransaction(simulationResult);
 
     return {
-      displayData: { payloadHash, title, decoded },
+      displayData: { payloadHash, title, from: opts.from, decoded },
       executionData: {
         simulationResult,
         txRequest,
@@ -233,6 +234,8 @@ export class SimulateTxOperation extends ExternalOperation<
           payloadHash: displayData.payloadHash,
           callAuthorizations: displayData.decoded.callAuthorizations,
           executionTrace: displayData.decoded.executionTrace,
+          title: displayData.title,
+          from: displayData.from.toString(),
         },
         timestamp: Date.now(),
         persistence,
