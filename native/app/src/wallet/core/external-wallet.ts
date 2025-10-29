@@ -308,7 +308,6 @@ export class ExternalWallet extends BaseNativeWallet {
 
       // Create a fresh operation instance for this specific batch item
       let operation: ExternalOperation<any, any, any>;
-      const simulateTxOp = this.createSimulateTxOperation();
 
       switch (name) {
         case "registerContract":
@@ -321,6 +320,8 @@ export class ExternalWallet extends BaseNativeWallet {
           operation = this.createSimulateUtilityOperation();
           break;
         case "sendTx":
+          // Only create simulateTxOp when needed for sendTx operations
+          const simulateTxOp = this.createSimulateTxOperation();
           operation = this.createSendTxOperation(simulateTxOp);
           break;
         default:
