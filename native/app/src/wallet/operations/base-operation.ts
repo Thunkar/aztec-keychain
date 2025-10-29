@@ -16,20 +16,14 @@ export interface PersistenceConfig {
 /**
  * Result from the prepare phase of an operation.
  *
- * @template TResult - The final result type of the operation
+ * @template TResult - The final result type of the operation (unused but kept for backwards compatibility)
  * @template TDisplayData - The display data type for the UI
  * @template TExecutionData - The execution data type for the execute phase
  */
 export interface PrepareResult<TResult, TDisplayData, TExecutionData> {
   /**
-   * If set, the operation can return early without authorization/execution.
-   * Used for cached results or when the operation is already complete.
-   */
-  earlyReturn?: TResult;
-
-  /**
    * Data to display in the UI and authorization dialog.
-   * ALWAYS required, even if an error occurred.
+   * Always complete and accurate - never fake/placeholder data.
    */
   displayData: TDisplayData;
 
@@ -38,12 +32,6 @@ export interface PrepareResult<TResult, TDisplayData, TExecutionData> {
    * Only set if prepare was successful and execution is needed.
    */
   executionData?: TExecutionData;
-
-  /**
-   * Error that occurred during prepare phase.
-   * If set, authorization and execution will be skipped.
-   */
-  error?: Error;
 
   /**
    * Optional configuration for persistent authorization caching.
@@ -86,37 +74,54 @@ export abstract class ExternalOperation<
   protected interaction?: WalletInteraction<WalletInteractionType>;
 
   /**
-   * PHASE 1: PREPARE
+   * PHASE 0: CHECK
+   * Runs BEFORE interaction creation to determine if an early return is possible.
+   * Performs lightweight checks like:
+   * - Is resource already registered?
+   * - Is cached result available?
+   * - Can operation be skipped?
+   *
+   * If this returns a value, ALL subsequent phases are bypassed (no interaction created).
+   * If this returns undefined, normal flow continues: createInteraction → prepare → authorize → execute
+   *
+   * @param args - Operation arguments
+   * @returns The early return value if operation can skip, undefined otherwise
+   */
+  abstract check(...args: TArgs): Promise<TResult | undefined>;
+
+  /**
+   * PHASE 1: CREATE INTERACTION
+   * Create the interaction object for tracking this operation.
+   * Called with raw arguments BEFORE prepare(), so cannot use prepared data.
+   * Should generate a simple/generic title and description from arguments only.
+   * Operations should use their injected interaction manager from constructor.
+   *
+   * @param args - Raw operation arguments
+   * @returns The created interaction
+   */
+  abstract createInteraction(
+    ...args: TArgs
+  ): Promise<WalletInteraction<WalletInteractionType>>;
+
+  /**
+   * PHASE 2: PREPARE
    * Pure logic with no side effects.
-   * Must ALWAYS return displayData (even on error) so interaction can be created.
-   * If an error occurs, catch it and return via error field with minimal displayData.
+   * Should throw errors naturally - no need to catch and return in error field.
    *
    * @param args - Arguments for the operation
-   * @returns PrepareResult containing earlyReturn, displayData, executionData, error, and persistence config
+   * @returns PrepareResult containing earlyReturn, displayData, executionData, and persistence config
    */
   abstract prepare(
     ...args: TArgs
   ): Promise<PrepareResult<TResult, TDisplayData, TExecutionData>>;
 
   /**
-   * PHASE 2A: CREATE INTERACTION (Standalone only)
-   * Create the interaction object for tracking this operation.
-   * Operations should use their injected interaction manager from constructor.
-   *
-   * @param displayData - Data to show in interaction
-   * @returns The created interaction
-   */
-  abstract createInteraction(
-    displayData: TDisplayData
-  ): Promise<WalletInteraction<WalletInteractionType>>;
-
-  /**
    * PHASE 2B: REQUEST AUTHORIZATION (Standalone only)
    * Request user permission for this operation.
    * Operations should use their injected authorization manager from constructor.
+   * Can call emitProgress() to report status updates (uses this.interaction set by orchestrator).
    *
    * @param displayData - Data to show in authorization dialog
-   * @param interaction - The current interaction for progress tracking
    * @param persistence - Optional persistence configuration for authorization caching
    * @returns Promise that resolves when authorization is granted or rejects if denied
    */
@@ -147,103 +152,70 @@ export abstract class ExternalOperation<
 
   /**
    * Emit a progress update for the current execution interaction.
-   * Safe to call from execute() or requestAuthorization() - uses the interaction from execution context.
+   * Safe to call from execute(), requestAuthorization(), or orchestrators.
+   * Uses the interaction from execution context set by setCurrentInteraction().
    *
    * @param status - The status message to display
    * @param description - Optional additional description
+   * @param complete - Whether the operation is complete
+   * @param updates - Optional additional interaction updates (title, etc.)
    */
-  protected async emitProgress(
+  async emitProgress(
     status: string,
-    description?: string
+    description?: string,
+    complete?: boolean,
+    updates?: Partial<{
+      title: string;
+      [key: string]: unknown;
+    }>
   ): Promise<void> {
     if (this.interaction) {
       await this.interactionManager.storeAndEmit(
-        this.interaction.update({ status, description })
+        this.interaction.update({ status, description, complete, ...updates })
       );
     }
   }
 
   /**
-   * Get success status message for interaction updates.
-   */
-  abstract getSuccessStatus(): string;
-
-  /**
-   * Get failure status message for interaction updates.
-   */
-  abstract getFailureStatus(): string;
-
-  /**
-   * Update interaction on success.
-   * Uses the operation's interactionManager and getSuccessStatus().
-   *
-   * @param interaction - The interaction to update
-   */
-  async updateInteractionSuccess(
-    interaction: WalletInteraction<WalletInteractionType>
-  ): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        status: this.getSuccessStatus(),
-        complete: true,
-      })
-    );
-  }
-
-  /**
-   * Update interaction on failure.
-   * Uses the operation's interactionManager and getFailureStatus().
-   *
-   * @param interaction - The interaction to update
-   * @param error - The error that occurred
-   */
-  async updateInteractionFailure(
-    interaction: WalletInteraction<WalletInteractionType>,
-    error: unknown
-  ): Promise<void> {
-    await this.interactionManager.storeAndEmit(
-      interaction.update({
-        complete: true,
-        status: this.getFailureStatus(),
-        description: error instanceof Error ? error.message : String(error),
-      })
-    );
-  }
-
-  /**
-   * Standalone execution flow: prepare → createInteraction → requestAuthorization → execute
+   * Standalone execution flow: check → createInteraction → prepare → requestAuthorization → execute
+   * All phases wrapped in unified error handling.
    *
    * @param args - Arguments for the operation
    * @returns Result of the operation
    */
   async executeStandalone(...args: TArgs): Promise<TResult> {
-    // PHASE 1: PREPARE
-    const prepared = await this.prepare(...args);
-
-    // Early return if no authorization needed
-    if (prepared.earlyReturn !== undefined) {
-      return prepared.earlyReturn;
+    // PHASE 0: CHECK (before creating interaction)
+    const earlyResult = await this.check(...args);
+    if (earlyResult !== undefined) {
+      // Early return - skip all other phases, no interaction created
+      return earlyResult;
     }
 
-    // PHASE 2A: CREATE INTERACTION (displayData is always present now)
-    const interaction = await this.createInteraction(prepared.displayData);
-
-    // Set interaction context for emitProgress calls
+    // PHASE 1: CREATE INTERACTION (with simple title from args)
+    const interaction = await this.createInteraction(...args);
     this.setCurrentInteraction(interaction);
 
-    // Check if prepare encountered an error
-    if (prepared.error) {
-      // Prepare failed - track error in interaction and throw
-      await this.updateInteractionFailure(interaction, prepared.error);
-      throw prepared.error;
+    try {
+      // PHASE 2: PREPARE (throws on error)
+      await this.emitProgress("PREPARING");
+      const prepared = await this.prepare(...args);
+
+      // PHASE 3: REQUEST AUTHORIZATION (throws on error)
+      await this.requestAuthorization(
+        prepared.displayData,
+        prepared.persistence
+      );
+
+      // PHASE 4: EXECUTE (throws on error, should set SUCCESS state before returning)
+      const result = await this.execute(prepared.executionData!);
+      return result;
+    } catch (error) {
+      // Unified error handling for all phases
+      const description = error instanceof Error ? error.message : String(error);
+      await this.emitProgress("ERROR", description, true);
+      throw error;
+    } finally {
+      this.setCurrentInteraction(undefined);
     }
-
-    // PHASE 2B: REQUEST AUTHORIZATION
-    await this.requestAuthorization(prepared.displayData, prepared.persistence);
-
-    // PHASE 3: EXECUTE - Perform the action with interaction tracking
-    const result = await this.execute(prepared.executionData!);
-    await this.updateInteractionSuccess(interaction);
-    return result;
   }
 }

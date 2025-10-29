@@ -80,6 +80,56 @@ export class RegisterContractOperation extends ExternalOperation<
     this.interactionManager = interactionManager;
   }
 
+  async check(
+    instanceData: RegisterContractInstanceData,
+    artifact?: ContractArtifact,
+    _secretKey?: Fr
+  ): Promise<RegisterContractResult | undefined> {
+    // Resolve contract address
+    const contractAddress = await this.decodingCache.resolveContractAddress(
+      instanceData,
+      artifact
+    );
+
+    // Check if already registered (early return case)
+    const metadata = await this.pxe.getContractMetadata(contractAddress);
+    if (metadata.contractInstance) {
+      return metadata.contractInstance; // Early return - no interaction created
+    }
+
+    return undefined; // Continue with normal flow
+  }
+
+  async createInteraction(
+    instanceData: RegisterContractInstanceData,
+    artifact?: ContractArtifact,
+    _secretKey?: Fr
+  ): Promise<WalletInteraction<WalletInteractionType>> {
+    // Create interaction with simple title from args only
+    const contractAddress = await this.decodingCache.resolveContractAddress(
+      instanceData,
+      artifact
+    );
+
+    const contractName = await this.decodingCache.resolveContractName(
+      instanceData,
+      artifact,
+      contractAddress
+    );
+
+    const interaction = WalletInteraction.from({
+      type: "registerContract",
+      status: "PREPARING",
+      complete: false,
+      title: `Register ${contractName}`,
+      description: `Address: ${contractAddress.toString()}`,
+    });
+
+    await this.interactionManager.storeAndEmit(interaction);
+
+    return interaction;
+  }
+
   async prepare(
     instanceData: RegisterContractInstanceData,
     artifact?: ContractArtifact,
@@ -97,15 +147,6 @@ export class RegisterContractOperation extends ExternalOperation<
       artifact
     );
 
-    // Check if already registered (early return case)
-    const metadata = await this.pxe.getContractMetadata(contractAddress);
-    if (metadata.contractInstance) {
-      return {
-        displayData: { contractAddress, contractName: "Already Registered" },
-        earlyReturn: metadata.contractInstance,
-      };
-    }
-
     // Resolve contract name for display
     const contractName = await this.decodingCache.resolveContractName(
       instanceData,
@@ -119,26 +160,11 @@ export class RegisterContractOperation extends ExternalOperation<
     };
   }
 
-  async createInteraction(
-    displayData: RegisterContractDisplayData
-  ): Promise<WalletInteraction<WalletInteractionType>> {
-    const interaction = WalletInteraction.from({
-      type: "registerContract",
-      status: "REGISTERING",
-      complete: false,
-      title: `Register ${displayData.contractName}`,
-    });
-
-    await this.interactionManager.storeAndEmit(interaction);
-
-    return interaction;
-  }
-
   async requestAuthorization(
     displayData: RegisterContractDisplayData,
     _persistence?: PersistenceConfig
   ): Promise<void> {
-    // Update status to requesting authorization
+    // Update interaction with detailed title and status
     await this.emitProgress("REQUESTING AUTHORIZATION");
 
     await this.authorizationManager.requestAuthorization([
@@ -226,14 +252,7 @@ export class RegisterContractOperation extends ExternalOperation<
       );
     }
 
+    await this.emitProgress("SUCCESS", undefined, true);
     return instance;
-  }
-
-  getSuccessStatus(): string {
-    return "REGISTERED";
-  }
-
-  getFailureStatus(): string {
-    return "REGISTRATION FAILED";
   }
 }

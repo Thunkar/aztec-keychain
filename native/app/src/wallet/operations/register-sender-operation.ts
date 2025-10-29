@@ -57,6 +57,32 @@ export class RegisterSenderOperation extends ExternalOperation<
     this.interactionManager = interactionManager;
   }
 
+  async check(
+    _address: AztecAddress,
+    _alias: string
+  ): Promise<RegisterSenderResult | undefined> {
+    // No early return checks for this operation
+    return undefined;
+  }
+
+  async createInteraction(
+    address: AztecAddress,
+    _alias: string
+  ): Promise<WalletInteraction<WalletInteractionType>> {
+    // Create interaction with simple title from args only
+    const interaction = WalletInteraction.from({
+      type: "registerSender",
+      status: "PREPARING",
+      complete: false,
+      title: "Register Sender",
+      description: `Address: ${address.toString()}`,
+    });
+
+    await this.interactionManager.storeAndEmit(interaction);
+
+    return interaction;
+  }
+
   async prepare(
     address: AztecAddress,
     alias: string
@@ -73,27 +99,14 @@ export class RegisterSenderOperation extends ExternalOperation<
     };
   }
 
-  async createInteraction(
-    displayData: RegisterSenderDisplayData
-  ): Promise<WalletInteraction<WalletInteractionType>> {
-    const interaction = WalletInteraction.from({
-      type: "registerSender",
-      status: "REGISTERING",
-      complete: false,
-      title: `Register sender ${displayData.alias}`,
-    });
-
-    await this.interactionManager.storeAndEmit(interaction);
-
-    return interaction;
-  }
-
   async requestAuthorization(
     displayData: RegisterSenderDisplayData,
     _persistence?: PersistenceConfig
   ): Promise<void> {
-    // Update status to requesting authorization
-    await this.emitProgress("REQUESTING AUTHORIZATION");
+    // Update interaction with detailed title and status
+    await this.emitProgress("REQUESTING AUTHORIZATION", undefined, false, {
+      title: `Register sender ${displayData.alias}`,
+    });
 
     await this.authorizationManager.requestAuthorization([
       {
@@ -116,14 +129,9 @@ export class RegisterSenderOperation extends ExternalOperation<
     await this.db.storeSender(executionData.address, executionData.alias);
 
     // Register with PXE
-    return await this.pxe.registerSender(executionData.address);
-  }
+    const result = await this.pxe.registerSender(executionData.address);
 
-  getSuccessStatus(): string {
-    return "REGISTERED";
-  }
-
-  getFailureStatus(): string {
-    return "REGISTRATION FAILED";
+    await this.emitProgress("SUCCESS", undefined, true);
+    return result;
   }
 }

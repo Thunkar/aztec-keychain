@@ -281,176 +281,218 @@ export class ExternalWallet extends BaseNativeWallet {
   override async batch<
     const T extends readonly BatchedMethod<keyof BatchableMethods>[],
   >(methods: T): Promise<BatchResults<T>> {
-    // Create fresh operation instances for batch execution to avoid state leakage
-    // Each operation in the batch gets its own clean instance
-    const simulateTxOp = this.createSimulateTxOperation();
-    const operationMap = {
-      registerContract: this.createRegisterContractOperation(),
-      registerSender: this.createRegisterSenderOperation(),
-      simulateUtility: this.createSimulateUtilityOperation(),
-      sendTx: this.createSendTxOperation(simulateTxOp),
-    } as const;
-
     type BatchMethodResult =
       | ContractInstanceWithAddress
       | TxHash
       | AztecAddress
       | UtilitySimulationResult;
 
-    // ========================================================================
-    // PHASE 1: PREPARE - Call prepare() on all operations
-    // ========================================================================
-    interface PreparedOperation {
+    interface BatchItem {
       operation: ExternalOperation<any, any, any>;
       originalName: string;
-      displayData?: Record<string, unknown>;
-      executionData?: any;
+      args: any[];
       earlyReturn?: any;
       error?: any;
+      displayData?: Record<string, unknown>;
+      executionData?: any;
       persistence?: { storageKey: string; persistData: any };
     }
 
-    const prepared: PreparedOperation[] = [];
+    const items: BatchItem[] = [];
 
+    // ========================================================================
+    // PHASE 0: CHECK & CREATE OPERATIONS - One instance per batch item
+    // ========================================================================
     for (const methodCall of methods) {
       const { name, args } = methodCall;
-      const operation = operationMap[name as keyof typeof operationMap];
 
-      if (!operation) {
-        // Method doesn't have an operation (e.g., getAccounts, getAddressBook)
-        // Fall back to direct execution
-        prepared.push({
-          operation: null as any,
-          originalName: name,
-          error: new Error(`Method ${name} is not supported in batch`),
-        });
-        continue;
+      // Create a fresh operation instance for this specific batch item
+      let operation: ExternalOperation<any, any, any>;
+      const simulateTxOp = this.createSimulateTxOperation();
+
+      switch (name) {
+        case "registerContract":
+          operation = this.createRegisterContractOperation();
+          break;
+        case "registerSender":
+          operation = this.createRegisterSenderOperation();
+          break;
+        case "simulateUtility":
+          operation = this.createSimulateUtilityOperation();
+          break;
+        case "sendTx":
+          operation = this.createSendTxOperation(simulateTxOp);
+          break;
+        default:
+          items.push({
+            operation: null as any,
+            originalName: name,
+            args,
+            error: new Error(`Method ${name} is not supported in batch`),
+          });
+          continue;
       }
 
       try {
-        // Call prepare with the method's arguments
-        const result = await (operation as any).prepare(...args);
+        // Run check phase
+        const earlyResult = await (operation as any).check(...args);
 
-        prepared.push({
-          operation,
-          originalName: name,
-          displayData: result.displayData,
-          executionData: result.executionData,
-          earlyReturn: result.earlyReturn,
-          persistence: result.persistence,
-        });
+        if (earlyResult !== undefined) {
+          // Early return - no interaction needed
+          items.push({
+            operation,
+            originalName: name,
+            args,
+            earlyReturn: earlyResult,
+          });
+        } else {
+          // Normal flow - will create interaction and proceed
+          items.push({
+            operation,
+            originalName: name,
+            args,
+          });
+        }
       } catch (error) {
-        // Prepare failed - store error to throw later
-        prepared.push({
+        items.push({
           operation,
           originalName: name,
+          args,
           error,
         });
       }
     }
 
     // ========================================================================
-    // PHASE 2: Filter items needing authorization
+    // PHASE 1: CREATE INTERACTIONS - For items without early return
     // ========================================================================
-    const items: AuthorizationItem[] = [];
-    const itemIndexMap = new Map<string, number>(); // itemId -> prepared index
-
-    for (let i = 0; i < prepared.length; i++) {
-      const prep = prepared[i];
-
-      // Skip if early return or error
-      if (prep.earlyReturn !== undefined || prep.error) {
+    for (const item of items) {
+      if (item.earlyReturn !== undefined || item.error) {
         continue;
       }
 
-      // Create authorization item with persistence config from prepare
+      try {
+        const interaction = await (item.operation as any).createInteraction(
+          ...item.args
+        );
+        item.operation.setCurrentInteraction(interaction);
+      } catch (error) {
+        item.error = error;
+      }
+    }
+
+    // ========================================================================
+    // PHASE 2: PREPARE - Call prepare() on all operations
+    // ========================================================================
+    for (const item of items) {
+      if (item.earlyReturn !== undefined || item.error) {
+        continue;
+      }
+
+      try {
+        await item.operation.emitProgress("PREPARING");
+        const result = await (item.operation as any).prepare(...item.args);
+
+        item.displayData = result.displayData;
+        item.executionData = result.executionData;
+        item.persistence = result.persistence;
+      } catch (error) {
+        const description =
+          error instanceof Error ? error.message : String(error);
+        await item.operation.emitProgress("ERROR", description, true);
+        item.error = error;
+      }
+    }
+
+    // ========================================================================
+    // PHASE 3: REQUEST AUTHORIZATION - Batch all items together
+    // ========================================================================
+    const authItems: AuthorizationItem[] = [];
+    const authItemMap = new Map<string, number>(); // itemId -> items index
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+
+      if (item.earlyReturn !== undefined || item.error) {
+        continue;
+      }
+
       const itemId = Fr.random().toString();
-      items.push({
+      authItems.push({
         id: itemId,
         appId: this.appId,
-        method: prep.originalName,
-        params: prep.displayData,
+        method: item.originalName,
+        params: item.displayData!,
         timestamp: Date.now(),
-        persistence: prep.persistence, // Include persistence config directly
+        persistence: item.persistence,
       });
 
-      itemIndexMap.set(itemId, i);
+      authItemMap.set(itemId, i);
     }
 
-    // ========================================================================
-    // PHASE 3: Request authorization
-    // ========================================================================
     let response: AuthorizationResponse | null = null;
 
-    if (items.length > 0) {
-      response = await this.authorizationManager.requestAuthorization(items);
+    if (authItems.length > 0) {
+      // Update all interactions to "REQUESTING AUTHORIZATION"
+      for (const item of items) {
+        if (item.earlyReturn === undefined && !item.error) {
+          await item.operation.emitProgress("REQUESTING AUTHORIZATION");
+        }
+      }
+
+      response = await this.authorizationManager.requestAuthorization(authItems);
     }
 
     // ========================================================================
-    // PHASE 4: EXECUTE - Call execute() with interaction tracking on all operations
+    // PHASE 4: EXECUTE - Run execute() on all authorized operations
     // ========================================================================
-    type ResultWrapper = { name: string; result: BatchMethodResult };
-    const results: ResultWrapper[] = [];
+    const results: { name: string; result: BatchMethodResult }[] = [];
 
-    for (let i = 0; i < prepared.length; i++) {
-      const prep = prepared[i];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       let result: BatchMethodResult;
 
-      // Handle early returns
-      if (prep.earlyReturn !== undefined) {
-        result = prep.earlyReturn;
-      }
-      // Handle prepare errors
-      else if (prep.error) {
-        throw prep.error;
-      }
-      // Execute the operation
-      else {
-        // Find the authorization item for this operation
+      if (item.earlyReturn !== undefined) {
+        // Early return - just use the cached result
+        result = item.earlyReturn;
+      } else if (item.error) {
+        // Error occurred in earlier phase
+        throw item.error;
+      } else {
+        // Check authorization
         let itemId: string | undefined;
-        for (const [id, index] of itemIndexMap.entries()) {
+        for (const [id, index] of authItemMap.entries()) {
           if (index === i) {
             itemId = id;
             break;
           }
         }
 
-        // Verify authorization if needed
         if (itemId && response) {
           const itemResponse = response.itemResponses[itemId];
           if (!itemResponse || !itemResponse.approved) {
-            throw new Error(`Authorization denied for ${prep.originalName}`);
+            await item.operation.emitProgress(
+              "ERROR",
+              "Authorization denied",
+              true
+            );
+            throw new Error(`Authorization denied for ${item.originalName}`);
           }
         }
 
-        // Execute with interaction tracking
-        // Create interaction
-        const interaction = await prep.operation.createInteraction(
-          prep.displayData!
-        );
-
-        // Set current interaction for progress tracking
-        prep.operation.setCurrentInteraction(interaction);
-
+        // Execute the operation
         try {
-          // Execute the operation
-          result = await prep.operation.execute(prep.executionData!);
-
-          // Update interaction on success
-          await prep.operation.updateInteractionSuccess(interaction);
+          result = await item.operation.execute(item.executionData!);
         } catch (error) {
-          // Update interaction on failure
-          await prep.operation.updateInteractionFailure(interaction, error);
+          const description =
+            error instanceof Error ? error.message : String(error);
+          await item.operation.emitProgress("ERROR", description, true);
           throw error;
-        } finally {
-          // Clear current interaction
-          prep.operation.setCurrentInteraction(undefined);
         }
       }
 
-      // Wrap result for BatchResults type
       results.push({
-        name: prep.originalName,
+        name: item.originalName,
         result,
       });
     }

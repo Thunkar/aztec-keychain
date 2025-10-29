@@ -98,100 +98,28 @@ export class SendTxOperation extends ExternalOperation<
     this.interactionManager = interactionManager;
   }
 
-  async prepare(
-    executionPayload: ExecutionPayload,
-    opts: SendOptions
-  ): Promise<
-    PrepareResult<SendTxResult, SendTxDisplayData, SendTxExecutionData>
-  > {
-    const payloadHash = hashExecutionPayload(executionPayload);
-
-    try {
-      const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
-
-      // Use simulateTx operation's prepare method
-      const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
-
-      // Check if simulation failed
-      if (prepared.error) {
-        // Simulation failed - return error with minimal display data
-        return {
-          displayData: {
-            payloadHash,
-            title: "Send Transaction",
-            from: opts.from,
-            callAuthorizations: [],
-            executionTrace: undefined,
-          },
-          error: new Error(`Simulation failed: ${prepared.error.message}`),
-        };
-      }
-
-      // Decode simulation results
-      const { callAuthorizations, executionTrace } =
-        prepared.executionData!.decoded;
-
-      // Create auth witnesses for call authorizations
-      const authWitnesses = await Promise.all(
-        callAuthorizations.map((auth) =>
-          this.createAuthWit(opts.from, {
-            caller: auth.rawData.caller,
-            call: auth.rawData.functionCall,
-          })
-        )
-      );
-      executionPayload.authWitnesses.push(...authWitnesses);
-
-      // Create transaction request
-      const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
-        executionPayload,
-        opts.from,
-        fee
-      );
-
-      const title = await generateSimulationTitle(
-        executionPayload,
-        this.decodingCache,
-        opts.from,
-        opts.fee?.embeddedPaymentMethodFeePayer
-      );
-
-      return {
-        displayData: {
-          payloadHash,
-          title,
-          from: opts.from,
-          callAuthorizations,
-          executionTrace,
-        },
-        executionData: {
-          txRequest,
-        },
-      };
-    } catch (error) {
-      // Unexpected error during prepare - return with minimal display data
-      return {
-        displayData: {
-          payloadHash,
-          title: "Send Transaction",
-          from: opts.from,
-          callAuthorizations: [],
-          executionTrace: undefined,
-        },
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
+  async check(
+    _executionPayload: ExecutionPayload,
+    _opts: SendOptions
+  ): Promise<SendTxResult | undefined> {
+    // No early return checks for this operation
+    return undefined;
   }
 
   async createInteraction(
-    displayData: SendTxDisplayData
+    executionPayload: ExecutionPayload,
+    opts: SendOptions
   ): Promise<WalletInteraction<WalletInteractionType>> {
+    // Create interaction with simple title from args only
+    const payloadHash = hashExecutionPayload(executionPayload);
+
     const interaction = WalletInteraction.from({
-      id: displayData.payloadHash,
+      id: payloadHash,
       type: "sendTx",
-      title: displayData.title,
+      title: "Send Transaction",
+      description: `From: ${opts.from.toString()}`,
       complete: false,
-      status: "CREATING",
+      status: "PREPARING",
       timestamp: Date.now(),
     });
 
@@ -200,12 +128,69 @@ export class SendTxOperation extends ExternalOperation<
     return interaction;
   }
 
+  async prepare(
+    executionPayload: ExecutionPayload,
+    opts: SendOptions
+  ): Promise<
+    PrepareResult<SendTxResult, SendTxDisplayData, SendTxExecutionData>
+  > {
+    const payloadHash = hashExecutionPayload(executionPayload);
+    const fee = await this.getDefaultFeeOptions(opts.from, opts.fee);
+
+    // Use simulateTx operation's prepare method (will throw if simulation fails)
+    const prepared = await this.simulateTxOp.prepare(executionPayload, opts);
+
+    // Decode simulation results
+    const { callAuthorizations, executionTrace } =
+      prepared.executionData!.decoded;
+
+    // Create auth witnesses for call authorizations
+    const authWitnesses = await Promise.all(
+      callAuthorizations.map((auth) =>
+        this.createAuthWit(opts.from, {
+          caller: auth.rawData.caller,
+          call: auth.rawData.functionCall,
+        })
+      )
+    );
+    executionPayload.authWitnesses.push(...authWitnesses);
+
+    // Create transaction request
+    const txRequest = await this.createTxExecutionRequestFromPayloadAndFee(
+      executionPayload,
+      opts.from,
+      fee
+    );
+
+    const title = await generateSimulationTitle(
+      executionPayload,
+      this.decodingCache,
+      opts.from,
+      opts.fee?.embeddedPaymentMethodFeePayer
+    );
+
+    return {
+      displayData: {
+        payloadHash,
+        title,
+        from: opts.from,
+        callAuthorizations,
+        executionTrace,
+      },
+      executionData: {
+        txRequest,
+      },
+    };
+  }
+
   async requestAuthorization(
     displayData: SendTxDisplayData,
     _persistence?: PersistenceConfig
   ): Promise<void> {
-    // Update status to requesting authorization
-    await this.emitProgress("REQUESTING AUTHORIZATION");
+    // Update interaction with detailed title and status
+    await this.emitProgress("REQUESTING AUTHORIZATION", undefined, false, {
+      title: displayData.title,
+    });
 
     // Request authorization (never persisted for sendTx)
     await this.authorizationManager.requestAuthorization([
@@ -248,14 +233,7 @@ export class SendTxOperation extends ExternalOperation<
       throw this.contextualizeError(err, inspect(tx));
     });
 
+    await this.emitProgress("SENT", undefined, true);
     return txHash;
-  }
-
-  getSuccessStatus(): string {
-    return "SENT";
-  }
-
-  getFailureStatus(): string {
-    return "SENDING FAILED";
   }
 }

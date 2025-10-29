@@ -84,6 +84,42 @@ export class SimulateUtilityOperation extends ExternalOperation<
     this.interactionManager = interactionManager;
   }
 
+  async check(
+    _functionName: string,
+    _args: unknown[],
+    _to: AztecAddress,
+    _authwits?: AuthWitness[],
+    _from?: AztecAddress
+  ): Promise<SimulateUtilityResult | undefined> {
+    // No early return checks for this operation
+    return undefined;
+  }
+
+  async createInteraction(
+    functionName: string,
+    args: unknown[],
+    to: AztecAddress,
+    _authwits?: AuthWitness[],
+    from?: AztecAddress
+  ): Promise<WalletInteraction<WalletInteractionType>> {
+    // Create interaction with simple title from args only
+    const payloadHash = hashUtilityCall(functionName, args, to, from);
+
+    const interaction = WalletInteraction.from({
+      id: payloadHash,
+      type: "simulateUtility",
+      title: `Simulate Utility: ${functionName}`,
+      description: `Contract: ${to.toString()}`,
+      complete: false,
+      status: "PREPARING",
+      timestamp: Date.now(),
+    });
+
+    await this.interactionManager.storeAndEmit(interaction);
+
+    return interaction;
+  }
+
   async prepare(
     functionName: string,
     args: unknown[],
@@ -97,107 +133,68 @@ export class SimulateUtilityOperation extends ExternalOperation<
       SimulateUtilityExecutionData
     >
   > {
-    // Generate hash for deduplication (needed even on error)
+    // NO TRY-CATCH - let errors throw naturally!
+
+    // Generate hash for deduplication
     const payloadHash = hashUtilityCall(functionName, args, to, from);
 
-    try {
-      // Simulate the utility function
-      const simulationResult = await this.pxe.simulateUtility(
-        functionName,
-        args,
-        to,
-        authwits,
-        from
-      );
+    // Simulate the utility function
+    const simulationResult = await this.pxe.simulateUtility(
+      functionName,
+      args,
+      to,
+      authwits,
+      from
+    );
 
-      // Get contract name for better display
-      const contractName = await this.decodingCache.getAddressAlias(to);
+    // Get contract name for better display
+    const contractName = await this.decodingCache.getAddressAlias(to);
 
-      // Format arguments and result using the TxCallStackDecoder
-      const decoder = new TxCallStackDecoder(this.decodingCache);
-      const decodedArgs = await decoder.formatUtilityArguments(
-        to,
-        functionName,
-        args
-      );
-      const formattedResult = await decoder.formatUtilityResult(
-        to,
-        functionName,
-        simulationResult.result
-      );
+    // Format arguments and result using the TxCallStackDecoder
+    const decoder = new TxCallStackDecoder(this.decodingCache);
+    const decodedArgs = await decoder.formatUtilityArguments(
+      to,
+      functionName,
+      args
+    );
+    const formattedResult = await decoder.formatUtilityResult(
+      to,
+      functionName,
+      simulationResult.result
+    );
 
-      const executionTrace = {
-        functionName,
-        args: decodedArgs,
-        contractAddress: to.toString(),
-        contractName,
-        result: formattedResult,
-        isUtility: true as const,
-      };
+    const executionTrace = {
+      functionName,
+      args: decodedArgs,
+      contractAddress: to.toString(),
+      contractName,
+      result: formattedResult,
+      isUtility: true as const,
+    };
 
-      const title = `${contractName}.${functionName}`;
+    const title = `${contractName}.${functionName}`;
 
-      return {
-        displayData: { payloadHash, executionTrace, title, contractName },
-        executionData: { simulationResult, executionTrace, payloadHash },
-        persistence: {
-          storageKey: `simulateUtility:${payloadHash}`,
-          persistData: { title },
-        },
-      };
-    } catch (error) {
-      // Simulation failed - return error with minimal display data
-      const contractName = await this.decodingCache
-        .getAddressAlias(to)
-        .catch(() => "Unknown Contract");
-      const title = `${contractName}.${functionName}`;
+    // Store the utility trace for display
+    await this.db.storeUtilityTrace(payloadHash, executionTrace);
 
-      return {
-        displayData: {
-          payloadHash,
-          executionTrace: {
-            functionName,
-            args: [],
-            contractAddress: to.toString(),
-            contractName,
-            result: "Error during simulation",
-            isUtility: true as const,
-          },
-          title,
-          contractName,
-        },
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
-  }
-
-  async createInteraction(
-    displayData: SimulateUtilityDisplayData
-  ): Promise<WalletInteraction<WalletInteractionType>> {
-    // Create interaction with payload hash as ID for deduplication
-    const interaction = WalletInteraction.from({
-      id: displayData.payloadHash,
-      type: "simulateUtility",
-      title: displayData.title,
-      complete: false,
-      status: "SIMULATING",
-      timestamp: Date.now(),
-    });
-
-    await this.interactionManager.storeAndEmit(interaction);
-
-    // Store the utility trace for later display
-    await this.db.storeUtilityTrace(interaction.id, displayData.executionTrace);
-
-    return interaction;
+    return {
+      displayData: { payloadHash, executionTrace, title, contractName },
+      executionData: { simulationResult, executionTrace, payloadHash },
+      persistence: {
+        storageKey: `simulateUtility:${payloadHash}`,
+        persistData: { title },
+      },
+    };
   }
 
   async requestAuthorization(
     displayData: SimulateUtilityDisplayData,
     persistence?: PersistenceConfig
   ): Promise<void> {
-    // Update status to requesting authorization
-    await this.emitProgress("REQUESTING AUTHORIZATION");
+    // Update interaction with detailed title and status
+    await this.emitProgress("REQUESTING AUTHORIZATION", undefined, false, {
+      title: displayData.title,
+    });
 
     // Request authorization with optional persistent caching
     await this.authorizationManager.requestAuthorization([
@@ -221,14 +218,7 @@ export class SimulateUtilityOperation extends ExternalOperation<
   ): Promise<SimulateUtilityResult> {
     // Execution is just returning the simulation result
     // The actual simulation happened in prepare phase
+    await this.emitProgress("SUCCESS", undefined, true);
     return executionData.simulationResult;
-  }
-
-  getSuccessStatus(): string {
-    return "SIMULATED";
-  }
-
-  getFailureStatus(): string {
-    return "SIMULATION FAILED";
   }
 }
