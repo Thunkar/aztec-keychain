@@ -8,6 +8,7 @@ import { randomBytes } from "@aztec/foundation/crypto";
 import { AccountBox } from "./components/AccountBox.tsx";
 import { DraggableFab } from "../../shared/DraggableFab.tsx";
 import { WalletContext } from "../../../renderer";
+import { useNetwork } from "../../../contexts/NetworkContext";
 import type { InternalAccount } from "../../../../wallet/core/internal-wallet";
 
 export function AccountsManager() {
@@ -15,6 +16,7 @@ export function AccountsManager() {
   const [error, setError] = useState<string | null>(null);
 
   const { walletAPI } = useContext(WalletContext);
+  const { currentNetwork } = useNetwork();
 
   const loadAccounts = async () => {
     const accounts = await walletAPI.getAccounts();
@@ -23,7 +25,7 @@ export function AccountsManager() {
 
   useEffect(() => {
     loadAccounts();
-  }, []);
+  }, [currentNetwork.id, walletAPI]); // Reload when network changes
 
   const handleCreateAccount = async () => {
     try {

@@ -1,10 +1,12 @@
 import { useContext, useEffect, useState } from "react";
 import { Box, Typography, Alert, CircularProgress } from "@mui/material";
 import { WalletContext } from "../../../renderer";
+import { useNetwork } from "../../../contexts/NetworkContext";
 import { AppAuthorizationCard } from "./components/AppAuthorizationCard";
 
 export function AuthorizedApps() {
   const { walletAPI } = useContext(WalletContext);
+  const { currentNetwork } = useNetwork();
   const [apps, setApps] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function AuthorizedApps() {
 
   useEffect(() => {
     loadApps();
-  }, []);
+  }, [currentNetwork.id, walletAPI]); // Reload when network changes
 
   const handleRevoke = async (appId: string) => {
     try {

@@ -1,4 +1,4 @@
-import { StrictMode, createContext } from "react";
+import { StrictMode, createContext, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import {
@@ -11,7 +11,8 @@ import { colors } from "./styles.js";
 import { App } from "../ui/App.js";
 import { WalletApi } from "../ui/utils/wallet-api.js";
 import type { InternalWalletInterface } from "../ipc/wallet-internal-proxy.js";
-import { Fr } from "@aztec/aztec.js/fields";
+import { NetworkProvider, useNetwork } from "./contexts/NetworkContext.js";
+import { networkToChainInfo } from "../config/networks.js";
 
 const themeOptions: ThemeOptions = {
   palette: {
@@ -37,18 +38,33 @@ export const WalletContext = createContext<{
   walletAPI: InternalWalletInterface;
 }>({ walletAPI: null! });
 
+function WalletProviderWrapper() {
+  const { currentNetwork } = useNetwork();
+  const chainInfo = networkToChainInfo(currentNetwork);
+
+  // Create wallet API with current network's chain info
+  const walletAPI = useMemo(
+    () => WalletApi.create(chainInfo.chainId, chainInfo.version),
+    [currentNetwork.id] // Recreate when network changes
+  );
+
+  const walletContext = useMemo(() => ({ walletAPI }), [walletAPI]);
+
+  return (
+    <WalletContext.Provider value={walletContext}>
+      <CssBaseline />
+      <App />
+    </WalletContext.Provider>
+  );
+}
+
 function Root() {
-  const walletAPI = WalletApi.create(new Fr(31337), new Fr(0));
-  const initialContext = {
-    walletAPI,
-  };
   return (
     <StrictMode>
       <ThemeProvider theme={theme}>
-        <WalletContext.Provider value={initialContext}>
-          <CssBaseline />
-          <App />
-        </WalletContext.Provider>
+        <NetworkProvider>
+          <WalletProviderWrapper />
+        </NetworkProvider>
       </ThemeProvider>
     </StrictMode>
   );

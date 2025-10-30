@@ -24,6 +24,7 @@ import type {
 } from "../wallet/types/authorization.ts";
 import type { Logger } from "pino";
 import { InternalWallet } from "../wallet/core/internal-wallet.ts";
+import { getNetworkByChainId } from "../config/networks.ts";
 
 console.log(process.env);
 
@@ -31,13 +32,6 @@ const ChainInfoSchema = z.object({
   chainId: schemas.Fr,
   version: schemas.Fr,
 });
-
-const chainInfoToNodeURL = {
-  31337: "http://localhost:8080",
-  1115111: {
-    1714840162: "https://rpc.testnet.aztec-labs.com/",
-  },
-};
 
 const RUNNING_SESSIONS = new Map<
   string,
@@ -50,13 +44,16 @@ async function init(
   internalPort: MessagePortMain,
   logPort: MessagePortMain
 ) {
-  const nodeURL =
-    typeof chainInfoToNodeURL[chainInfo.chainId.toNumber()] === "string"
-      ? chainInfoToNodeURL[chainInfo.chainId.toNumber()]
-      : chainInfoToNodeURL[chainInfo.chainId.toNumber()][
-          chainInfo.version.toNumber()
-        ];
-  const node = createAztecNodeClient(nodeURL);
+  const network = getNetworkByChainId(
+    chainInfo.chainId.toNumber(),
+    chainInfo.version.toNumber()
+  );
+  if (!network) {
+    throw new Error(
+      `Unknown network: chainId=${chainInfo.chainId.toNumber()}, version=${chainInfo.version.toNumber()}`
+    );
+  }
+  const node = createAztecNodeClient(network.nodeUrl!);
   if (chainInfo.version.equals(new Fr(0))) {
     const { rollupVersion } = await node.getNodeInfo();
     chainInfo.version = new Fr(rollupVersion);
@@ -152,6 +149,10 @@ async function init(
             origin: "wallet",
             type: "wallet-update",
             content: event.detail,
+            chainInfo: {
+              chainId: chainInfo.chainId.toString(),
+              version: chainInfo.version.toString(),
+            },
           });
         });
 
@@ -162,6 +163,10 @@ async function init(
               origin: "wallet",
               type: "authorization-request",
               content: event.detail,
+              chainInfo: {
+                chainId: chainInfo.chainId.toString(),
+                version: chainInfo.version.toString(),
+              },
             });
           }
         );

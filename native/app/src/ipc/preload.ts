@@ -48,13 +48,13 @@ contextBridge.exposeInMainWorld("walletAPI", {
     return ipcRenderer.invoke("revokeAppAuthorizations", stringifiedArgs);
   },
   onWalletUpdate(callback) {
-    return ipcRenderer.on("wallet-update", (_event, stringifiedEvent) =>
-      callback(stringifiedEvent)
+    return ipcRenderer.on("wallet-update", (_event, eventData) =>
+      callback(eventData)
     );
   },
   onAuthorizationRequest(callback) {
-    return ipcRenderer.on("authorization-request", (_event, stringifiedEvent) =>
-      callback(stringifiedEvent)
+    return ipcRenderer.on("authorization-request", (_event, eventData) =>
+      callback(eventData)
     );
   },
   resolveAuthorization(stringifiedArgs: string) {

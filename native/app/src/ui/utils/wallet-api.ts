@@ -7,8 +7,26 @@ import { jsonStringify } from "@aztec/foundation/json-rpc";
 
 export class WalletApi {
   private constructor(chainId: Fr, version: Fr) {
-    const safeCallback = (callback: any) => (stringifiedEvent: any) => {
-      const event = JSON.parse(stringifiedEvent.content);
+    const safeCallback = (callback: any) => (eventData: any) => {
+      if (eventData.chainInfo) {
+        const { chainId: eventChainId, version: eventVersion } =
+          eventData.chainInfo;
+        const currentChainId = chainId.toString();
+        const currentVersion = version.toString();
+
+        // Check chainId match
+        if (eventChainId !== currentChainId) {
+          return;
+        }
+
+        // Check version match - if current version is 0, accept any version for same chainId
+        // This handles auto-detected rollup versions
+        if (!version.isZero() && eventVersion !== currentVersion) {
+          return;
+        }
+      }
+
+      const event = JSON.parse(eventData.content);
       callback(event);
     };
     return new Proxy(

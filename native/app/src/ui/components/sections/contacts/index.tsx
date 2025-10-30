@@ -12,6 +12,7 @@ import TextField from "@mui/material/TextField";
 import { ContactBox } from "./components/ContactBox.tsx";
 import { DraggableFab } from "../../shared/DraggableFab.tsx";
 import { WalletContext } from "../../../renderer";
+import { useNetwork } from "../../../contexts/NetworkContext";
 
 export function ContactsManager() {
   const [contacts, setContacts] = useState<Aliased<AztecAddress>[]>([]);
@@ -20,6 +21,7 @@ export function ContactsManager() {
   const [newContactAddress, setNewContactAddress] = useState("");
 
   const { walletAPI } = useContext(WalletContext);
+  const { currentNetwork } = useNetwork();
 
   const loadContacts = async () => {
     const senders = await walletAPI.getAddressBook();
@@ -28,7 +30,7 @@ export function ContactsManager() {
 
   useEffect(() => {
     loadContacts();
-  }, []);
+  }, [currentNetwork.id, walletAPI]); // Reload when network changes
 
   const handleAddContact = async () => {
     if (!newContactAlias || !newContactAddress) {

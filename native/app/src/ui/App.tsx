@@ -17,6 +17,7 @@ import { AccountsManager } from "./components/sections/accounts/index.tsx";
 import { ContactsManager } from "./components/sections/contacts/index.tsx";
 import { AuthorizedApps } from "./components/sections/authorized-apps/index.tsx";
 import { AuthorizationDialog } from "./components/dialogs/AuthorizationDialog.tsx";
+import { NetworkSelector } from "./components/NetworkSelector.tsx";
 
 import type {
   WalletInteraction,
@@ -24,6 +25,7 @@ import type {
 } from "../wallet/types/wallet-interaction.ts";
 import type { AuthorizationRequest } from "../wallet/types/authorization.ts";
 import { WalletContext } from "./renderer.tsx";
+import { useNetwork } from "./contexts/NetworkContext.tsx";
 
 const INTERACTIONS_PANEL_WIDTH = 400;
 const INTERACTIONS_PANEL_MIN_WIDTH = 300;
@@ -59,6 +61,7 @@ export function App() {
   const currentAuth = authQueue[0] || null;
 
   const { walletAPI } = useContext(WalletContext);
+  const { currentNetwork } = useNetwork();
 
   const loadInteractions = async () => {
     const interactions = await walletAPI.getInteractions();
@@ -66,6 +69,10 @@ export function App() {
   };
 
   useEffect(() => {
+    // Clear state when network changes
+    setInteractions([]);
+    setAuthQueue([]);
+
     loadInteractions();
     walletAPI.onWalletUpdate((interaction) => {
       setInteractions((prevEvents) => {
@@ -92,7 +99,7 @@ export function App() {
         return [...prev, request];
       });
     });
-  }, []);
+  }, [currentNetwork.id, walletAPI]); // Reload when network changes
 
   const handleMenuToggle = () => {
     setMenuOpen(!menuOpen);
@@ -352,6 +359,7 @@ export function App() {
             <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
               Aztec Keychain
             </Typography>
+            <NetworkSelector />
           </Toolbar>
         </AppBar>
 
